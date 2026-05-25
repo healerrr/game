@@ -1,5 +1,6 @@
 <template>
-  <section class="gd-board">
+  <div class="game-wrapper" :class="{ 'force-landscape': isPortrait }">
+    <section class="gd-board">
     <!-- 顶部信息栏 -->
     <header class="gd-info-bar">
       <button class="back-btn" @click="$emit('back')" aria-label="返回">
@@ -85,7 +86,8 @@
     <transition name="fade">
       <div v-if="toast" class="toast">{{ toast }}</div>
     </transition>
-  </section>
+    </section>
+  </div>
 </template>
 
 <script setup>
@@ -109,6 +111,7 @@ const canvasWrapRef = ref(null)
 const handRef = ref(null)
 const countdown = ref(30)
 const hintIndex = ref(-1)
+const isPortrait = ref(false)
 
 let renderer = null
 let rafId = null
@@ -738,6 +741,10 @@ function stopTimer() {
   if (timerInterval) { clearInterval(timerInterval); timerInterval = null }
 }
 
+function checkOrientation() {
+  isPortrait.value = window.innerHeight > window.innerWidth && window.innerWidth < 768
+}
+
 // --- Lifecycle ---
 onMounted(async () => {
   await nextTick()
@@ -749,6 +756,16 @@ onMounted(async () => {
   } else {
     window.addEventListener('resize', sizeCanvas)
   }
+  // 强制横屏检测
+  checkOrientation()
+  window.addEventListener('resize', checkOrientation)
+  window.addEventListener('orientationchange', checkOrientation)
+  // 尝试使用 Screen Orientation API（部分浏览器支持）
+  try {
+    if (screen.orientation && typeof screen.orientation.lock === 'function') {
+      screen.orientation.lock('landscape').catch(() => {})
+    }
+  } catch (e) { /* ignore */ }
 })
 
 onBeforeUnmount(() => {
@@ -756,6 +773,13 @@ onBeforeUnmount(() => {
   if (rafId) cancelAnimationFrame(rafId)
   if (resizeObserver) resizeObserver.disconnect()
   else window.removeEventListener('resize', sizeCanvas)
+  window.removeEventListener('resize', checkOrientation)
+  window.removeEventListener('orientationchange', checkOrientation)
+  try {
+    if (screen.orientation && typeof screen.orientation.unlock === 'function') {
+      screen.orientation.unlock()
+    }
+  } catch (e) { /* ignore */ }
 })
 
 watch(() => props.gs, () => {
@@ -771,10 +795,29 @@ watch(() => props.gs?.currentPlayer, () => {
 </script>
 
 <style scoped>
-.gd-board {
+/* 强制横屏外层容器 */
+.game-wrapper {
   width: 100%;
   height: 100vh;
-  max-height: 100vh;
+  overflow: hidden;
+}
+
+.game-wrapper.force-landscape {
+  position: fixed;
+  top: 0;
+  left: 100vw;
+  width: 100vh;
+  height: 100vw;
+  transform: rotate(90deg);
+  transform-origin: top left;
+  overflow: hidden;
+  z-index: 100;
+}
+
+.gd-board {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -833,6 +876,8 @@ watch(() => props.gs?.currentPlayer, () => {
   flex: 0 0 auto;
   min-height: 140px;
   max-height: 200px;
+  /* 占比限制：底部区域不超过屏幕高度的 35% */
+  max-height: 35vh;
   display: flex;
   align-items: stretch;
   background: linear-gradient(180deg, #0f3d26 0%, #0a2e1a 100%);
@@ -893,6 +938,13 @@ watch(() => props.gs?.currentPlayer, () => {
   transition: transform 0.15s ease;
   border-radius: 8px;
 }
+/* 扩大触摸热区，便于手机端点击 */
+.card-slot::after {
+  content: '';
+  position: absolute;
+  inset: -10px -6px;
+  z-index: -1;
+}
 .card-slot:hover { transform: translateY(-4px); }
 .card-slot.selected { transform: translateY(-15px); }
 .card-slot.selected::after {
@@ -938,11 +990,13 @@ watch(() => props.gs?.currentPlayer, () => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 10px;
 }
 
 .action-buttons button {
   width: 60px; height: 34px;
+  min-width: 64px;
+  min-height: 44px;
   border-radius: 17px; border: none;
   color: #fff; font-size: 13px; font-weight: 700;
   cursor: pointer; position: relative;
@@ -1009,4 +1063,52 @@ watch(() => props.gs?.currentPlayer, () => {
   .card-slot :deep(.playing-card) { width: 44px; height: 62px; }
   .card-group { width: 46px; }
 }
+
+/* 手机竖屏适配 */
+@media (max-width: 414px) {
+  .bottom-zone {
+    min-height: 100px;
+    max-height: 140px;
+    padding: 4px;
+  }
+  .card-slot :deep(.playing-card) {
+    width: 42px;
+    height: 60px;
+  }
+  .card-group {
+    width: 44px;
+  }
+  .hand-groups {
+    gap: 3px;
+  }
+  .action-buttons {
+    gap: 8px;
+  }
+  .action-buttons button {
+    min-width: 52px;
+    min-height: 38px;
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+  .top-info-bar {
+    font-size: 12px;
+    height: 36px;
+  }
+}
+
+@media (max-width: 375px) {
+  .bottom-zone {
+    min-height: 90px;
+    max-height: 120px;
+  }
+  .card-slot :deep(.playing-card) {
+    width: 38px;
+    height: 54px;
+  }
+  .card-group {
+    width: 40px;
+  }
+}
+
+/* 横屏锁定提示 (旧覆盖层已移除，保留 fade 过渡) */
 </style>

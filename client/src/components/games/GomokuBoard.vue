@@ -35,6 +35,10 @@
           @click="handleCanvasClick"
           @mousemove="handleCanvasMove"
           @mouseleave="hideHoverPiece"
+          @touchstart.prevent="handleTouchStart"
+          @touchmove.prevent="handleTouchMove"
+          @touchend.prevent="handleTouchEnd"
+          @touchcancel.prevent="handleTouchEnd"
         ></canvas>
       </div>
 
@@ -295,28 +299,59 @@ function getCellFromPosition(px, py) {
   return null
 }
 
-function handleCanvasClick(event) {
+function handleBoardInteraction(px, py) {
   if (!isMyTurn.value) return
-  const rect = boardCanvas.value.getBoundingClientRect()
-  const cell = getCellFromPosition(event.clientX - rect.left, event.clientY - rect.top)
+  const cell = getCellFromPosition(px, py)
   if (cell && board.value[cell.x][cell.y] === 0) {
     hintMove.value = null
     emit('action', { type: 'place', x: cell.x, y: cell.y })
   }
 }
 
-function handleCanvasMove(event) {
+function handleBoardHover(px, py) {
   if (!isMyTurn.value) {
     hideHoverPiece()
     return
   }
-  const rect = boardCanvas.value.getBoundingClientRect()
-  const cell = getCellFromPosition(event.clientX - rect.left, event.clientY - rect.top)
+  const cell = getCellFromPosition(px, py)
   if (cell && board.value[cell.x][cell.y] === 0) {
     hoverPos.value = cell
   } else {
     hideHoverPiece()
   }
+}
+
+function handleCanvasClick(event) {
+  const rect = boardCanvas.value.getBoundingClientRect()
+  handleBoardInteraction(event.clientX - rect.left, event.clientY - rect.top)
+}
+
+function handleCanvasMove(event) {
+  const rect = boardCanvas.value.getBoundingClientRect()
+  handleBoardHover(event.clientX - rect.left, event.clientY - rect.top)
+}
+
+function handleTouchStart(event) {
+  if (!event.touches || event.touches.length === 0) return
+  const touch = event.touches[0]
+  const rect = boardCanvas.value.getBoundingClientRect()
+  const x = touch.clientX - rect.left
+  const y = touch.clientY - rect.top
+  handleBoardHover(x, y)
+  handleBoardInteraction(x, y)
+}
+
+function handleTouchMove(event) {
+  if (!event.touches || event.touches.length === 0) return
+  const touch = event.touches[0]
+  const rect = boardCanvas.value.getBoundingClientRect()
+  const x = touch.clientX - rect.left
+  const y = touch.clientY - rect.top
+  handleBoardHover(x, y)
+}
+
+function handleTouchEnd() {
+  hideHoverPiece()
 }
 
 function hideHoverPiece() {
@@ -470,6 +505,10 @@ watch([board, lastMoveX, lastMoveY, hoverPos, isMyTurn, myIndex, hintMove], () =
   border-radius: 18px;
   box-shadow: inset 0 0 0 3px rgba(160, 106, 38, 0.3);
   cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .tool-row {

@@ -1,5 +1,5 @@
 <template>
-  <main class="game-room">
+  <main class="game-room" :class="{ 'fullscreen-game': isFullscreenGame }">
     <header class="game-header">
       <button class="back-btn" @click="backToLobby">‹</button>
       <h1>{{ gameLabel }}</h1>
@@ -329,6 +329,7 @@ let dcHandler = null
 
 const gameType = computed(() => gameState.currentRoom?.gameType)
 const roomPlayers = computed(() => gameState.currentRoom?.players || [])
+const isFullscreenGame = computed(() => ['guandan', 'mahjong'].includes(gameType.value))
 
 const gameLabel = computed(() => {
   const labels = {
@@ -579,23 +580,38 @@ watch(() => roomId.value, () => {
 
 <style scoped>
 .game-room {
-  min-height: 100vh;
-  padding: 14px;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
   color: #fff;
 }
 
+.game-room.fullscreen-game {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  padding: 0;
+}
+
+.game-room.fullscreen-game .game-header {
+  display: none;
+}
+
 .game-header {
-  min-height: 54px;
-  border-radius: 18px;
+  min-height: 36px;
+  border-radius: 12px;
   display: grid;
-  grid-template-columns: 52px 1fr auto;
+  grid-template-columns: 36px 1fr auto;
   align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  margin-bottom: 12px;
+  gap: 8px;
+  padding: 4px 8px;
+  margin: 8px 8px 6px;
   background: linear-gradient(180deg, rgba(15, 108, 255, 0.94), rgba(4, 78, 217, 0.96));
   border: 1px solid rgba(255, 255, 255, 0.5);
-  box-shadow: 0 10px 22px rgba(8, 64, 164, 0.34);
+  box-shadow: 0 6px 14px rgba(8, 64, 164, 0.34);
 }
 
 .game-header h1 {
@@ -607,24 +623,25 @@ watch(() => roomId.value, () => {
 }
 
 .back-btn {
-  width: 42px;
-  height: 42px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   background: linear-gradient(180deg, #f9fcff, #ddeafe);
   color: #1a5dcf;
-  font-size: 32px;
+  font-size: 22px;
   font-weight: 700;
   line-height: 1;
   border: 1px solid #d2e1f8;
 }
 
 .point-pill {
-  min-height: 38px;
-  padding: 0 14px;
+  min-height: 28px;
+  padding: 0 10px;
   border-radius: 999px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  font-size: 12px;
   font-weight: 800;
   background: rgba(255, 255, 255, 0.94);
   color: #1653ba;
@@ -1134,10 +1151,6 @@ watch(() => roomId.value, () => {
 }
 
 @media (max-width: 760px) {
-  .game-room {
-    padding: 10px;
-  }
-
   .mode-card {
     padding: 12px;
   }
@@ -1177,7 +1190,6 @@ watch(() => roomId.value, () => {
 /* Reference-art refresh */
 .game-room {
   position: relative;
-  padding: 16px 12px 24px;
   background:
     radial-gradient(circle at 12% 14%, rgba(255, 255, 255, 0.34), transparent 22%),
     linear-gradient(180deg, rgba(0, 96, 240, 0.08), rgba(255, 255, 255, 0.24) 78%);
@@ -1185,22 +1197,22 @@ watch(() => roomId.value, () => {
 
 .game-header {
   width: min(100%, 940px);
-  margin: 0 auto 14px;
-  min-height: 66px;
-  border-radius: 28px;
-  grid-template-columns: 52px minmax(0, 1fr) auto;
+  margin: 6px auto;
+  min-height: 36px;
+  border-radius: 14px;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.26), rgba(31, 128, 255, 0.36));
-  border: 2px solid rgba(255, 255, 255, 0.54);
+  border: 1px solid rgba(255, 255, 255, 0.54);
   box-shadow: var(--shadow-strong);
 }
 
 .game-header h1 {
-  font-size: clamp(24px, 6vw, 40px);
+  font-size: clamp(14px, 2.6vw, 18px);
   letter-spacing: 0;
-  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.72);
+  -webkit-text-stroke: 0.5px rgba(255, 255, 255, 0.72);
   text-shadow:
-    0 4px 0 rgba(4, 67, 180, 0.88),
-    0 10px 18px rgba(4, 57, 160, 0.26);
+    0 2px 0 rgba(4, 67, 180, 0.88),
+    0 4px 10px rgba(4, 57, 160, 0.26);
 }
 
 .back-btn {
@@ -1208,10 +1220,10 @@ watch(() => roomId.value, () => {
 }
 
 .point-pill {
-  min-height: 44px;
-  border: 2px solid rgba(214, 232, 255, 0.9);
+  min-height: 28px;
+  border: 1px solid rgba(214, 232, 255, 0.9);
   color: #145bd8;
-  box-shadow: 0 8px 16px rgba(9, 74, 176, 0.12);
+  box-shadow: 0 4px 10px rgba(9, 74, 176, 0.12);
 }
 
 .mode-card {

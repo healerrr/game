@@ -1851,7 +1851,7 @@ const handTypeLabel = computed(() => {
 
 .zjh-table {
   position: relative;
-  min-height: 620px;
+  min-height: min(620px, calc(100vh - 220px));
   border-radius: 52% 52% 34px 34px / 16% 16% 34px 34px;
   padding: 34px 24px 22px;
   overflow: hidden;
@@ -2052,8 +2052,8 @@ const handTypeLabel = computed(() => {
 }
 
 .zjh-my .my-card {
-  width: 74px;
-  height: 104px;
+  width: clamp(58px, 12vw, 80px);
+  height: clamp(82px, 17vw, 112px);
 }
 
 .zjh-my .hand-type {
@@ -2128,43 +2128,62 @@ const handTypeLabel = computed(() => {
     border-top: 1px solid #d6e7fb;
   }
 
+  /* 移动端：将椭圆牌桌从绝对定位重构为 CSS Grid */
   .zjh-table {
-    min-height: 560px;
-    padding: 18px 10px;
-    border-width: 9px;
-    border-radius: 46px 46px 24px 24px;
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas:
+      ". top-seat ."
+      "left-seat pot right-seat"
+      "turn turn turn"
+      "my-area my-area my-area";
+    align-items: center;
+    justify-items: center;
+    gap: 10px;
+    min-height: 0;
+    height: auto;
+    padding: 16px 10px 18px;
+    border-width: 8px;
+    border-radius: 36px 36px 24px 24px;
   }
 
-  .zjh-seat {
-    width: 116px;
+  .zjh-table::before {
+    inset: 10px;
   }
 
-  .zjh-seat-top {
-    top: 0;
+  .zjh-seat,
+  .zjh-pot,
+  .zjh-turn,
+  .zjh-my {
+    position: static;
+    transform: none;
+    left: auto;
+    right: auto;
+    top: auto;
+    bottom: auto;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
   }
 
-  .zjh-seat-left,
-  .zjh-seat-right {
-    top: 45%;
-  }
-
-  .zjh-seat-left {
-    left: -4px;
-  }
-
-  .zjh-seat-right {
-    right: -4px;
-  }
+  .zjh-seat-top { grid-area: top-seat; width: auto; max-width: 220px; }
+  .zjh-seat-left { grid-area: left-seat; width: auto; max-width: 100%; }
+  .zjh-seat-right { grid-area: right-seat; width: auto; max-width: 100%; }
+  .zjh-pot { grid-area: pot; width: 100%; min-height: auto; }
+  .zjh-turn { grid-area: turn; width: auto; max-width: 100%; }
+  .zjh-my { grid-area: my-area; width: 100%; }
 
   .zjh-avatar {
-    width: 58px;
-    height: 58px;
+    width: 56px;
+    height: 56px;
     margin-bottom: -10px;
     font-size: 22px;
   }
 
   .zjh-seat .player-info {
-    min-width: 88px;
+    min-width: 0;
     padding: 6px 8px;
   }
 
@@ -2177,54 +2196,203 @@ const handTypeLabel = computed(() => {
   }
 
   .zjh-seat .card-back {
-    width: 30px;
-    height: 42px;
+    width: 28px;
+    height: 40px;
+  }
+
+  .zjh-seat-left .side-cards,
+  .zjh-seat-right .side-cards {
+    flex-direction: row;
   }
 
   .zjh-pot {
-    top: 42%;
-    width: min(62%, 230px);
-    min-height: 118px;
-    border-radius: 20px;
+    padding: 10px 12px;
+    border-radius: 18px;
+  }
+
+  .zjh-pot .pot-kicker {
+    top: -16px;
+    min-height: 28px;
+    padding: 0 12px;
+    font-size: 12px;
   }
 
   .zjh-pot strong {
-    font-size: 44px;
+    font-size: 36px;
+  }
+
+  .zjh-pot small {
+    font-size: 12px;
   }
 
   .zjh-turn {
-    top: 59%;
-    min-height: 40px;
-    padding: 0 16px;
-    font-size: 18px;
-  }
-
-  .zjh-my {
-    width: 72%;
-    bottom: 24px;
+    min-height: 38px;
+    padding: 0 14px;
+    font-size: 16px;
   }
 
   .zjh-my .my-cards {
-    gap: 6px;
+    gap: 8px;
+    justify-content: center;
+    overflow: visible;
   }
 
   .zjh-my .my-card {
-    width: 58px;
-    height: 82px;
+    width: clamp(58px, 16vw, 74px);
+    height: clamp(82px, 22vw, 104px);
   }
 
   .zjh-toolbar {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(72px, 1fr));
+    min-height: auto;
   }
 
   .zjh-layout .action-buttons {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
   }
 
   .zjh-layout .action-buttons .btn,
   .zjh-layout > .action-bar > .btn {
-    min-height: 58px;
-    font-size: 20px;
+    min-height: 52px;
+    font-size: 18px;
+  }
+
+  .compare-panel {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  .compare-panel .btn,
+  .compare-panel button {
+    min-width: 70px;
+    min-height: 44px;
+    flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .zjh-table {
+    padding: 12px 8px 14px;
+    gap: 8px;
+    border-width: 7px;
+    border-radius: 30px 30px 20px 20px;
+  }
+
+  .zjh-avatar {
+    width: 48px;
+    height: 48px;
+    margin-bottom: -8px;
+    font-size: 18px;
+  }
+
+  .zjh-seat .player-info {
+    padding: 4px 6px;
+  }
+
+  .zjh-seat .player-name {
+    font-size: 12px;
+  }
+
+  .zjh-seat .player-status {
+    font-size: 10px;
+  }
+
+  .zjh-seat .card-back {
+    width: 24px;
+    height: 34px;
+  }
+
+  .zjh-pot strong {
+    font-size: 30px;
+  }
+
+  .zjh-turn {
+    font-size: 14px;
+    min-height: 34px;
+    padding: 0 12px;
+  }
+
+  .zjh-my .my-card {
+    width: clamp(56px, 15vw, 64px);
+    height: clamp(78px, 21vw, 90px);
+  }
+
+  .zjh-layout .action-buttons,
+  .zjh-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .zjh-layout .action-buttons .btn,
+  .zjh-layout > .action-bar > .btn {
+    min-height: 44px;
+    font-size: 14px;
+    border-radius: 14px;
+  }
+
+  .tool-pill {
+    font-size: 13px;
+    min-height: 40px;
+  }
+}
+
+@media (max-width: 375px) {
+  .zjh-table {
+    padding: 10px 6px 12px;
+    gap: 6px;
+    border-width: 6px;
+    border-radius: 24px 24px 18px 18px;
+  }
+
+  .zjh-avatar {
+    width: 40px;
+    height: 40px;
+    margin-bottom: -6px;
+    font-size: 16px;
+  }
+
+  .zjh-seat .card-back {
+    width: 22px;
+    height: 30px;
+  }
+
+  .zjh-pot strong {
+    font-size: 26px;
+  }
+
+  .zjh-pot small,
+  .zjh-pot .pot-kicker {
+    font-size: 11px;
+  }
+
+  .zjh-turn {
+    font-size: 13px;
+    min-height: 30px;
+  }
+
+  .zjh-my .my-card {
+    width: clamp(50px, 14vw, 56px);
+    height: clamp(70px, 19vw, 78px);
+  }
+
+  .zjh-layout .action-buttons .btn,
+  .zjh-layout > .action-bar > .btn {
+    min-height: 40px;
+    font-size: 13px;
+  }
+}
+
+/* 竖屏低高度设备进一步收紧间距 */
+@media (max-height: 667px) and (orientation: portrait) {
+  .zjh-table {
+    gap: 6px;
+    padding: 10px 8px;
+  }
+
+  .zjh-info-strip {
+    padding: 6px 10px;
   }
 }
 </style>

@@ -33,6 +33,10 @@
           @click="handleCanvasClick"
           @mousemove="handleCanvasMove"
           @mouseleave="hideHoverPiece"
+          @touchstart.prevent="handleTouchStart"
+          @touchmove.prevent="handleTouchMove"
+          @touchend.prevent="handleTouchEnd"
+          @touchcancel.prevent="handleTouchEnd"
         ></canvas>
       </div>
 
@@ -495,11 +499,8 @@ function getCellFromPosition(px, py) {
   return null
 }
 
-function handleCanvasClick(event) {
+function handleBoardInteraction(px, py) {
   if (!isMyTurn.value || gamePhase.value !== 'playing') return
-  const rect = boardCanvas.value.getBoundingClientRect()
-  const px = (event.clientX - rect.left) / displayScale
-  const py = (event.clientY - rect.top) / displayScale
   const cell = getCellFromPosition(px, py)
   if (!cell) return
 
@@ -513,14 +514,11 @@ function handleCanvasClick(event) {
   }
 }
 
-function handleCanvasMove(event) {
+function handleBoardHover(px, py) {
   if (!isMyTurn.value) {
     hideHoverPiece()
     return
   }
-  const rect = boardCanvas.value.getBoundingClientRect()
-  const px = (event.clientX - rect.left) / displayScale
-  const py = (event.clientY - rect.top) / displayScale
   const cell = getCellFromPosition(px, py)
   if (cell) {
     const piece = board.value[cell.row][cell.col]
@@ -529,6 +527,43 @@ function handleCanvasMove(event) {
       return
     }
   }
+  hideHoverPiece()
+}
+
+function getCanvasPoint(clientX, clientY) {
+  const rect = boardCanvas.value.getBoundingClientRect()
+  return {
+    px: (clientX - rect.left) / displayScale,
+    py: (clientY - rect.top) / displayScale
+  }
+}
+
+function handleCanvasClick(event) {
+  const { px, py } = getCanvasPoint(event.clientX, event.clientY)
+  handleBoardInteraction(px, py)
+}
+
+function handleCanvasMove(event) {
+  const { px, py } = getCanvasPoint(event.clientX, event.clientY)
+  handleBoardHover(px, py)
+}
+
+function handleTouchStart(event) {
+  if (!event.touches || event.touches.length === 0) return
+  const touch = event.touches[0]
+  const { px, py } = getCanvasPoint(touch.clientX, touch.clientY)
+  handleBoardHover(px, py)
+  handleBoardInteraction(px, py)
+}
+
+function handleTouchMove(event) {
+  if (!event.touches || event.touches.length === 0) return
+  const touch = event.touches[0]
+  const { px, py } = getCanvasPoint(touch.clientX, touch.clientY)
+  handleBoardHover(px, py)
+}
+
+function handleTouchEnd() {
   hideHoverPiece()
 }
 
@@ -860,6 +895,10 @@ watch([board, selectedCell, lastMoveFrom, lastMoveTo, hoverPos, isMyTurn, myColo
   border-radius: 18px;
   box-shadow: inset 0 0 0 3px rgba(160, 106, 38, 0.3);
   cursor: pointer;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .action-strip {

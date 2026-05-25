@@ -1,171 +1,123 @@
 <template>
-  <div class="mahjong-stage">
+  <div class="game-wrapper" :class="{ 'force-landscape': isPortrait }">
+    <section class="mj-board">
+    <!-- 加载状态 -->
     <div v-if="!isReady" class="loading">
       <div class="loading-spinner"></div>
       <p>正在加载麻将牌桌...</p>
     </div>
 
     <template v-else>
-      <!-- 顶部蓝色渐变头部 -->
-      <header class="mj-header">
+      <!-- 顶部信息栏 -->
+      <header class="mj-info-bar">
         <button class="back-btn" @click="$emit('back')" aria-label="返回">
-          <svg viewBox="0 0 24 24" width="20" height="20">
-            <path d="M15 6l-6 6 6 6" fill="none" stroke="#1976D2" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
         </button>
-
-        <div class="title-wrap">
-          <span class="star left">✦</span>
-          <h1 class="title">红中麻将</h1>
-          <span class="star right">✦</span>
-        </div>
-
-        <div class="score-badge">
-          <span class="coin">¥</span>
-          <span class="score-num">{{ myScore }}</span>
-        </div>
+        <span class="info-item">第 {{ gs.roundNumber || 1 }} 局</span>
+        <span class="info-sep">|</span>
+        <span class="info-item">当前: <b>{{ getPlayerName(activeSeat || gs.currentPlayer) }}</b></span>
+        <span class="info-sep">|</span>
+        <span class="info-item">剩余: <b>{{ gs.remainingTiles ?? 0 }}</b> 张</span>
+        <span class="info-sep">|</span>
+        <span class="info-item">积分: <b>{{ myScore }}</b></span>
+        <button class="rules-toggle-btn" @click="showRules = !showRules">📖 规则</button>
       </header>
 
-      <!-- 信息条 -->
-      <div class="info-bar">
-        <div class="info-item">
-          <span class="info-icon flag">⚑</span>
-          <span class="info-text">第 {{ gs.roundNumber || 1 }} 局</span>
-        </div>
-        <div class="info-divider"></div>
-        <div class="info-item">
-          <span class="info-icon avatar">👤</span>
-          <span class="info-text">{{ getPlayerName(activeSeat || gs.currentPlayer) }}</span>
-        </div>
-        <div class="info-divider"></div>
-        <div class="info-item">
-          <span class="info-icon mahjong">🀄</span>
-          <span class="info-text">剩余 {{ gs.remainingTiles ?? 0 }}</span>
-        </div>
-      </div>
-
-      <!-- Canvas 游戏桌面 -->
-      <div class="table-canvas-wrap" ref="canvasWrapRef">
+      <!-- 中间Canvas牌桌区 -->
+      <div class="canvas-area" ref="canvasWrapRef">
         <canvas ref="canvasRef" class="game-canvas"></canvas>
       </div>
 
-      <!-- 手牌区 -->
-      <div class="hand-panel">
-        <div class="hand-header">
-          <span class="hand-label">我的手牌</span>
-          <span class="hand-count">{{ myHand.length }} 张</span>
-        </div>
-        <div class="hand-row">
-          <button
-            v-for="(tile, index) in myHand"
-            :key="tile.id || `${tile.suit}-${tile.rank}-${index}`"
-            class="hand-tile"
-            :class="{
-              selected: selectedIndex === index,
-              hint: hintIndex === index && selectedIndex !== index,
-              disabled: !canDiscard
-            }"
-            :disabled="!canDiscard"
-            @click="selectTile(index)"
-          >
-            <span class="tile-top" :data-suit="getTileSuitClass(tile)">
-              <span class="tile-glyph" :class="getTileSuitClass(tile)">{{ getTileGlyph(tile) }}</span>
-            </span>
-            <span class="tile-side"></span>
-            <span v-if="canHuTile(tile)" class="hu-mark">可胡</span>
-          </button>
-        </div>
-      </div>
-
-      <!-- 副露展示区 -->
-      <div v-if="myMelds.length" class="melds-panel">
-        <span class="melds-label">我方已碰/杠</span>
-        <div class="melds-row">
-          <div
-            v-for="(meld, mi) in myMelds"
-            :key="`meld-${mi}`"
-            class="meld-group"
-          >
-            <span class="meld-tag" :class="meld.type">{{ meldLabel(meld.type) }}</span>
-            <div class="meld-tiles">
-              <span
-                v-for="(t, ti) in meld.tiles"
-                :key="`m-${mi}-${ti}`"
-                class="meld-tile"
-              >
-                <span class="tile-glyph" :class="getTileSuitClass(t)">{{ getTileGlyph(t) }}</span>
-              </span>
-            </div>
+      <!-- 底部手牌+操作区 -->
+      <div class="bottom-zone">
+        <!-- 左侧我方信息 -->
+        <div class="my-info">
+          <div class="my-avatar" :style="avatarStyle(myId)">{{ playerInitial(myId) }}</div>
+          <div class="my-meta">
+            <strong>{{ getPlayerName(myId) || '我' }}</strong>
+            <span>{{ myHand.length }}张</span>
           </div>
         </div>
+
+        <!-- 中间手牌区 -->
+        <div class="hand-area">
+          <!-- 副露展示 -->
+          <div v-if="myMelds.length" class="melds-row">
+            <div v-for="(meld, mi) in myMelds" :key="`meld-${mi}`" class="meld-group">
+              <span class="meld-tag" :class="meld.type">{{ meldLabel(meld.type) }}</span>
+              <div class="meld-tiles">
+                <template v-for="(t, ti) in meld.tiles" :key="`m-${mi}-${ti}`">
+                  <img
+                    v-if="isMeldTileVisible(meld, ti)"
+                    :src="getTileImageUrl(t)"
+                    class="meld-tile-img"
+                    :alt="getTileAlt(t)"
+                  />
+                  <img
+                    v-else
+                    :src="backTileUrl"
+                    class="meld-tile-img"
+                    alt="牌背"
+                  />
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- 手牌 -->
+          <div class="hand-row">
+            <div
+              v-for="(tile, index) in myHand"
+              :key="tile.id || `${tile.suit}-${tile.rank}-${index}`"
+              class="hand-tile-wrap"
+              :class="{
+                selected: selectedIndex === index,
+                'last-draw': isLastDraw(index),
+                disabled: !canDiscard
+              }"
+              @click="selectTile(index)"
+            >
+              <img
+                :src="getTileImageUrl(tile)"
+                class="hand-tile-img"
+                :alt="getTileAlt(tile)"
+              />
+              <span v-if="canHuTile(tile)" class="hu-mark"></span>
+            </div>
+            <div v-if="!myHand.length" class="hand-empty">暂无手牌</div>
+          </div>
+        </div>
+
+        <!-- 右侧操作按钮 -->
+        <div class="action-buttons">
+          <template v-if="canDraw">
+            <button class="btn-draw" @click="draw">摸牌</button>
+          </template>
+
+          <template v-else-if="canDiscard">
+            <button class="btn-peng" :disabled="!canSelfAction('peng')" @click="emitSelfAction('peng')">碰</button>
+            <button class="btn-gang" :disabled="!canSelfAction('gang') && !canSelfAction('angang') && !canSelfAction('bugang')" @click="emitSelfGang">杠</button>
+            <button class="btn-hu" :disabled="!canSelfAction('hu')" @click="emitSelfAction('hu')">胡</button>
+            <button class="btn-discard" :disabled="selectedIndex === null" @click="discard">出牌</button>
+          </template>
+
+          <template v-else-if="showResponsePanel">
+            <button v-if="hasResponse('peng')" class="btn-peng" @click="emitResponseByType('peng')">碰</button>
+            <button v-if="hasResponse('gang')" class="btn-gang" @click="emitResponseByType('gang')">杠</button>
+            <button v-if="hasResponse('hu')" class="btn-hu" @click="emitResponseByType('hu')">胡</button>
+            <button class="btn-pass" @click="emitResponseByType('pass')">过</button>
+          </template>
+
+          <template v-else-if="gs.phase === 'finished'">
+            <button class="btn-draw" @click="$emit('rematch')">再来</button>
+            <button class="btn-pass" @click="$emit('back')">返回</button>
+          </template>
+
+          <template v-else>
+            <div class="status-label">{{ waitingText }}</div>
+          </template>
+        </div>
       </div>
-
-      <!-- 操作按钮区 -->
-      <div class="action-bar">
-        <template v-if="canDraw">
-          <button class="action-btn act-discard" @click="draw">摸 牌</button>
-        </template>
-
-        <template v-else-if="canDiscard">
-          <button
-            class="action-btn act-peng"
-            :disabled="!canSelfAction('peng')"
-            @click="emitSelfAction('peng')"
-          >碰</button>
-          <button
-            class="action-btn act-gang"
-            :disabled="!canSelfAction('gang') && !canSelfAction('angang') && !canSelfAction('bugang')"
-            @click="emitSelfGang"
-          >杠</button>
-          <button
-            class="action-btn act-hu"
-            :disabled="!canSelfAction('hu')"
-            @click="emitSelfAction('hu')"
-          >胡</button>
-          <button
-            class="action-btn act-discard"
-            :disabled="selectedIndex === null"
-            @click="discard"
-          >出牌</button>
-        </template>
-
-        <template v-else-if="showResponsePanel">
-          <button
-            v-if="hasResponse('peng')"
-            class="action-btn act-peng"
-            @click="emitResponseByType('peng')"
-          >碰</button>
-          <button
-            v-if="hasResponse('gang')"
-            class="action-btn act-gang"
-            @click="emitResponseByType('gang')"
-          >杠</button>
-          <button
-            v-if="hasResponse('hu')"
-            class="action-btn act-hu"
-            @click="emitResponseByType('hu')"
-          >胡</button>
-          <button
-            class="action-btn act-pass"
-            @click="emitResponseByType('pass')"
-          >过</button>
-        </template>
-
-        <template v-else-if="gs.phase === 'finished'">
-          <button class="action-btn act-discard" @click="$emit('rematch')">再来一局</button>
-          <button class="action-btn act-pass" @click="$emit('back')">返回大厅</button>
-        </template>
-
-        <template v-else>
-          <div class="status-line">{{ waitingText }}</div>
-        </template>
-      </div>
-
-      <!-- 游戏规则按钮 -->
-      <button class="rules-btn" @click="showRules = !showRules">
-        <span class="rules-icon">📖</span>
-        <span>游戏规则</span>
-      </button>
 
       <!-- 规则弹窗 -->
       <transition name="modal">
@@ -183,6 +135,7 @@
         </div>
       </transition>
 
+      <!-- 结算弹窗 -->
       <transition name="modal">
         <div v-if="gs.phase === 'finished'" class="result-overlay">
           <div class="result-card">
@@ -190,13 +143,14 @@
             <p>{{ resultDetail }}</p>
             <p v-if="winSummary" class="summary">{{ winSummary }}</p>
             <div class="result-actions">
-              <button class="action-btn act-discard" @click="$emit('rematch')">再来一局</button>
-              <button class="action-btn act-pass" @click="$emit('back')">返回大厅</button>
+              <button class="btn-draw" @click="$emit('rematch')">再来一局</button>
+              <button class="btn-pass" @click="$emit('back')">返回大厅</button>
             </div>
           </div>
         </div>
       </transition>
     </template>
+  </section>
   </div>
 </template>
 
@@ -212,16 +166,74 @@ const props = defineProps({
 
 const emit = defineEmits(['action', 'rematch', 'back'])
 
-const seatOrder = ['south', 'west', 'north', 'east']
+// ============== SVG Tile Image Mapping ==============
 
+function getTileSvgFilename(tile) {
+  if (!tile) return 'Back.svg'
+  const { suit, rank } = tile
+
+  // 万子 (wan / man)
+  if (suit === 'wan' || suit === 'man') {
+    const n = Number(rank)
+    if (Number.isInteger(n) && n >= 1 && n <= 9) return `Man${n}.svg`
+    return 'Back.svg'
+  }
+  // 筒子 (tong / pin)
+  if (suit === 'tong' || suit === 'pin') {
+    const n = Number(rank)
+    if (Number.isInteger(n) && n >= 1 && n <= 9) return `Pin${n}.svg`
+    return 'Back.svg'
+  }
+  // 条子 (tiao / sou)
+  if (suit === 'tiao' || suit === 'sou') {
+    const n = Number(rank)
+    if (Number.isInteger(n) && n >= 1 && n <= 9) return `Sou${n}.svg`
+    return 'Back.svg'
+  }
+  // 风牌
+  if (suit === 'wind') {
+    const windMap = { east: 'Ton.svg', south: 'Nan.svg', west: 'Shaa.svg', north: 'Pei.svg' }
+    return windMap[rank] || 'Back.svg'
+  }
+  // 三元牌
+  if (suit === 'dragon') {
+    const dragonMap = { red: 'Chun.svg', green: 'Hatsu.svg', white: 'Haku.svg' }
+    return dragonMap[rank] || 'Back.svg'
+  }
+  return 'Back.svg'
+}
+
+function getTileImageUrl(tile) {
+  const filename = getTileSvgFilename(tile)
+  return new URL(`../../assets/mahjong-tiles/riichi-mahjong-tiles-master/Regular/${filename}`, import.meta.url).href
+}
+
+const backTileUrl = new URL('../../assets/mahjong-tiles/riichi-mahjong-tiles-master/Regular/Back.svg', import.meta.url).href
+
+function getTileAlt(tile) {
+  if (!tile) return '牌背'
+  const { suit, rank } = tile
+  if (suit === 'wan' || suit === 'man') return `${rank}万`
+  if (suit === 'tong' || suit === 'pin') return `${rank}筒`
+  if (suit === 'tiao' || suit === 'sou') return `${rank}条`
+  if (suit === 'wind') return ({ east: '东', south: '南', west: '西', north: '北' })[rank] || '风'
+  if (suit === 'dragon') return ({ red: '中', green: '发', white: '白' })[rank] || '龙'
+  return '牌'
+}
+
+// ============== 状态 ==============
+
+const seatOrder = ['south', 'west', 'north', 'east']
 const selectedIndex = ref(null)
-const showHint = ref(true)
 const showRules = ref(false)
+const isPortrait = ref(false)
 const canvasRef = ref(null)
 const canvasWrapRef = ref(null)
 let renderer = null
 let rafId = 0
 let resizeObserver = null
+
+// ============== 计算属性 ==============
 
 const myId = computed(() => props.player?.id || '')
 const isReady = computed(() => Boolean(props.gs?.hands && props.gs?.players && myId.value))
@@ -312,28 +324,11 @@ const myMelds = computed(() => {
 const lastDiscard = computed(() => props.gs.lastDiscard || null)
 
 const waitingText = computed(() => {
-  if (canDraw.value) return '轮到你摸牌'
-  if (canDiscard.value) return '请选择一张牌打出'
-  if (props.gs.phase === 'response') return `等待 ${getPlayerName(activeSeat.value)} 响应...`
-  if (props.gs.phase === 'finished') return '本局结算中'
-  return `等待 ${getPlayerName(props.gs.currentPlayer)} 操作...`
-})
-
-const hintIndex = computed(() => {
-  if (!showHint.value || !canDiscard.value || myHand.value.length === 0) return null
-  const counter = new Map()
-  myHand.value.forEach((tile) => {
-    const key = `${tile.suit}-${tile.rank}`
-    counter.set(key, (counter.get(key) || 0) + 1)
-  })
-  for (let i = 0; i < myHand.value.length; i += 1) {
-    const tile = myHand.value[i]
-    const key = `${tile.suit}-${tile.rank}`
-    if ((counter.get(key) || 0) === 1 && tile.suit !== 'dragon' && tile.suit !== 'wind') {
-      return i
-    }
-  }
-  return myHand.value.length - 1
+  if (canDraw.value) return '摸牌'
+  if (canDiscard.value) return '出牌'
+  if (props.gs.phase === 'response') return '等待响应'
+  if (props.gs.phase === 'finished') return '结算'
+  return '等待中'
 })
 
 const huTilesSet = computed(() => {
@@ -363,6 +358,8 @@ const winSummary = computed(() => {
   return `${getPlayerName(winnerId)} 自摸胡牌 · ${totalFan}番`
 })
 
+// ============== 工具函数 ==============
+
 function concealedCount(playerId) {
   const count = (props.gs.hands?.[playerId] || []).length
   return Math.min(Math.max(count, 0), 14) || 13
@@ -378,26 +375,18 @@ function getPlayerScore(playerId) {
   return props.gs.scores?.[playerId] ?? 1000
 }
 
-function getTileSuitClass(tile) {
-  if (!tile) return ''
-  const s = tile.suit
-  if (s === 'man' || s === 'wan') return 'suit-wan'
-  if (s === 'pin' || s === 'tong') return 'suit-tong'
-  if (s === 'sou' || s === 'tiao') return 'suit-tiao'
-  if (s === 'wind') return 'suit-wind'
-  if (s === 'dragon') return 'suit-dragon'
-  return ''
+function playerInitial(pid) {
+  const name = getPlayerName(pid) || '我'
+  return name.slice(0, 1)
 }
 
-function getTileGlyph(tile) {
-  if (!tile) return ''
-  const { suit, rank } = tile
-  if (suit === 'man' || suit === 'wan') return `${rank}万`
-  if (suit === 'pin' || suit === 'tong') return `${rank}筒`
-  if (suit === 'sou' || suit === 'tiao') return `${rank}条`
-  if (suit === 'wind') return ({ 1: '东', 2: '南', 3: '西', 4: '北' })[rank] || '风'
-  if (suit === 'dragon') return ({ 1: '中', 2: '发', 3: '白' })[rank] || '中'
-  return `${rank || ''}`
+function avatarStyle(pid) {
+  if (!pid) return {}
+  let hash = 0
+  for (const ch of String(pid)) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0
+  const palette = [['#FFD86B', '#FF9F43'], ['#7EE8FA', '#80FF72'], ['#FBC2EB', '#A18CD1'], ['#F6D365', '#FDA085'], ['#84FAB0', '#8FD3F4'], ['#A1C4FD', '#C2E9FB'], ['#FF9A9E', '#FAD0C4'], ['#FCCB90', '#D57EEB']]
+  const [a, b] = palette[hash % palette.length]
+  return { background: `linear-gradient(135deg, ${a}, ${b})` }
 }
 
 function meldLabel(type) {
@@ -407,9 +396,23 @@ function meldLabel(type) {
   return type
 }
 
+function isMeldTileVisible(meld, tileIndex) {
+  // 暗杠: 中间两张面朝下
+  if (meld.type === 'angang') {
+    return tileIndex === 0 || tileIndex === 3
+  }
+  return true
+}
+
 function canHuTile(tile) {
   if (!tile) return false
   return huTilesSet.value.has(`${tile.suit}-${tile.rank}`)
+}
+
+function isLastDraw(index) {
+  // 最后摸的牌在手牌最末尾
+  if (!props.gs.lastDraw) return false
+  return index === myHand.value.length - 1
 }
 
 function canSelfAction(type) {
@@ -479,8 +482,8 @@ function scheduleRedraw() {
 
 function ensureCanvasSize() {
   if (!renderer || !canvasWrapRef.value) return
-  const w = canvasWrapRef.value.clientWidth
-  const h = 380
+  const w = canvasWrapRef.value.clientWidth || 800
+  const h = canvasWrapRef.value.clientHeight || 300
   if (w !== renderer._logicalWidth || h !== renderer._logicalHeight) {
     renderer.resize(w, h)
   }
@@ -493,28 +496,34 @@ function drawTable() {
   const W = renderer._logicalWidth
   const H = renderer._logicalHeight
 
-  // 木质外框
-  renderer.drawWoodFrame(0, 0, W, H, 14)
+  // 木质外框 + 绿色毡面
+  renderer.drawWoodFrame(0, 0, W, H, 10)
 
-  // 内部毡面
-  const padding = 14
+  const ctx = renderer._ctx
+  // 装饰椭圆
+  ctx.save()
+  ctx.strokeStyle = 'rgba(255,255,255,0.06)'
+  ctx.lineWidth = 1.5
+  ctx.beginPath()
+  ctx.ellipse(W / 2, H / 2, W * 0.30, H * 0.32, 0, 0, Math.PI * 2)
+  ctx.stroke()
+  ctx.restore()
+
+  const padding = 10
   const innerX = padding
   const innerY = padding
   const innerW = W - padding * 2
   const innerH = H - padding * 2
 
-  // 玩家
   const top = seatTop.value
   const left = seatLeft.value
   const right = seatRight.value
   const bottom = seatBottom.value
   const activeId = activeSeat.value || props.gs.currentPlayer
 
-  // 顶部玩家手牌（横排）
+  // 顶部玩家 (横排牌背)
   if (top) {
-    const tileW = 22
-    const tileH = 30
-    const gap = 2
+    const tileW = 22, tileH = 30, gap = 2
     const count = Math.min(concealedCount(top.id), 13)
     const totalW = count * (tileW + gap) - gap
     const startX = innerX + (innerW - totalW) / 2
@@ -522,20 +531,16 @@ function drawTable() {
     for (let i = 0; i < count; i++) {
       renderer.drawMahjongBack(startX + i * (tileW + gap), tilesY, tileW, tileH, { tilt: false })
     }
-    // 座位信息
-    const seatX = innerX + innerW / 2 - 20
-    renderer.drawSeatInfo(seatX, innerY + 4, {
+    renderer.drawSeatInfo(innerX + innerW / 2 - 20, innerY + 4, {
       name: top.nickname,
       score: getPlayerScore(top.id),
       isCurrentTurn: top.id === activeId
     })
   }
 
-  // 左侧玩家手牌（竖排）
+  // 左侧玩家 (竖排牌背)
   if (left) {
-    const tileW = 24
-    const tileH = 18
-    const gap = 2
+    const tileW = 24, tileH = 18, gap = 2
     const count = Math.min(concealedCount(left.id), 13)
     const totalH = count * (tileH + gap) - gap
     const startY = innerY + (innerH - totalH) / 2
@@ -550,11 +555,9 @@ function drawTable() {
     })
   }
 
-  // 右侧玩家手牌（竖排）
+  // 右侧玩家 (竖排牌背)
   if (right) {
-    const tileW = 24
-    const tileH = 18
-    const gap = 2
+    const tileW = 24, tileH = 18, gap = 2
     const count = Math.min(concealedCount(right.id), 13)
     const totalH = count * (tileH + gap) - gap
     const startY = innerY + (innerH - totalH) / 2
@@ -573,8 +576,7 @@ function drawTable() {
   drawCenterDiscards(innerX, innerY, innerW, innerH)
 
   // 中心 "剩余牌数" 标签
-  const labelW = 130
-  const labelH = 36
+  const labelW = 130, labelH = 36
   const labelX = innerX + innerW / 2 - labelW / 2
   const labelY = innerY + innerH / 2 - labelH / 2
   renderer.drawRoundRect(labelX, labelY, labelW, labelH, 18, 'rgba(20, 90, 60, 0.85)', 'rgba(255, 220, 130, 0.9)', 2)
@@ -591,7 +593,7 @@ function drawTable() {
     baseline: 'top'
   })
 
-  // 底部玩家信息
+  // 底部我方座位信息
   if (bottom) {
     const seatX = innerX + innerW / 2 - 20
     const seatY = innerY + innerH - 70
@@ -600,9 +602,7 @@ function drawTable() {
       score: getPlayerScore(bottom.id),
       isCurrentTurn: bottom.id === activeId
     })
-    // "我方"标签
-    const tagW = 36
-    const tagH = 16
+    const tagW = 36, tagH = 16
     const tagX = seatX + 40 + 6
     const tagY = seatY + 4
     renderer.drawRoundRect(tagX, tagY, tagW, tagH, 8, '#FF9800')
@@ -618,11 +618,8 @@ function drawTable() {
 function drawCenterDiscards(innerX, innerY, innerW, innerH) {
   const cx = innerX + innerW / 2
   const cy = innerY + innerH / 2
-  const tileW = 22
-  const tileH = 30
-  const gap = 2
+  const tileW = 22, tileH = 30, gap = 2
   const cols = 7
-  const offset = 62 // 从中心向外距离
 
   const playerByPos = {
     top: seatTop.value,
@@ -631,7 +628,9 @@ function drawCenterDiscards(innerX, innerY, innerW, innerH) {
     bottom: seatBottom.value
   }
 
-  // 上方弃牌（横排，从左到右）
+  const offset = 62
+
+  // 上方弃牌
   const topDiscards = (props.gs.discards?.[playerByPos.top?.id] || []).slice(-cols)
   topDiscards.forEach((tile, i) => {
     const tx = cx - (cols * (tileW + gap) - gap) / 2 + i * (tileW + gap)
@@ -639,7 +638,7 @@ function drawCenterDiscards(innerX, innerY, innerW, innerH) {
     renderer.drawMahjongTileFace(tx, ty, tileW, tileH, tile)
   })
 
-  // 下方弃牌（横排，从左到右）
+  // 下方弃牌
   const bottomDiscards = (props.gs.discards?.[playerByPos.bottom?.id] || []).slice(-cols)
   bottomDiscards.forEach((tile, i) => {
     const tx = cx - (cols * (tileW + gap) - gap) / 2 + i * (tileW + gap)
@@ -647,7 +646,7 @@ function drawCenterDiscards(innerX, innerY, innerW, innerH) {
     renderer.drawMahjongTileFace(tx, ty, tileW, tileH, tile)
   })
 
-  // 左侧弃牌（竖排，从上到下）
+  // 左侧弃牌
   const leftRows = 5
   const leftDiscards = (props.gs.discards?.[playerByPos.left?.id] || []).slice(-leftRows)
   leftDiscards.forEach((tile, i) => {
@@ -656,7 +655,7 @@ function drawCenterDiscards(innerX, innerY, innerW, innerH) {
     renderer.drawMahjongTileFace(tx, ty, tileW, tileH, tile)
   })
 
-  // 右侧弃牌（竖排，从上到下）
+  // 右侧弃牌
   const rightRows = 5
   const rightDiscards = (props.gs.discards?.[playerByPos.right?.id] || []).slice(-rightRows)
   rightDiscards.forEach((tile, i) => {
@@ -668,11 +667,24 @@ function drawCenterDiscards(innerX, innerY, innerW, innerH) {
 
 // ============== 生命周期 ==============
 
+function checkOrientation() {
+  isPortrait.value = window.innerHeight > window.innerWidth && window.innerWidth < 768
+}
+
 onMounted(async () => {
+  checkOrientation()
+  window.addEventListener('resize', checkOrientation)
+  window.addEventListener('orientationchange', checkOrientation)
+  try {
+    if (screen.orientation && typeof screen.orientation.lock === 'function') {
+      screen.orientation.lock('landscape').catch(() => {})
+    }
+  } catch (e) { /* ignore */ }
   await nextTick()
   if (canvasRef.value && canvasWrapRef.value) {
     const w = canvasWrapRef.value.clientWidth || 800
-    renderer = new CanvasRenderer(canvasRef.value, { width: w, height: 380 })
+    const h = canvasWrapRef.value.clientHeight || 300
+    renderer = new CanvasRenderer(canvasRef.value, { width: w, height: h })
     drawTable()
   }
   if (typeof ResizeObserver !== 'undefined' && canvasWrapRef.value) {
@@ -687,6 +699,13 @@ onBeforeUnmount(() => {
   if (rafId) cancelAnimationFrame(rafId)
   if (resizeObserver) resizeObserver.disconnect()
   else window.removeEventListener('resize', scheduleRedraw)
+  window.removeEventListener('resize', checkOrientation)
+  window.removeEventListener('orientationchange', checkOrientation)
+  try {
+    if (screen.orientation && typeof screen.orientation.unlock === 'function') {
+      screen.orientation.unlock()
+    }
+  } catch (e) { /* ignore */ }
 })
 
 watch(
@@ -702,443 +721,328 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
 </script>
 
 <style scoped>
-.mahjong-stage {
-  min-height: 100vh;
-  padding: 0 0 24px;
-  background: linear-gradient(180deg, #E8F4FD 0%, #D6E9F8 100%);
-  color: #1f2c44;
-  font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+/* 强制横屏外层容器 */
+.game-wrapper {
+  width: 100%;
+  height: 100vh;
+  overflow: hidden;
 }
 
+.game-wrapper.force-landscape {
+  position: fixed;
+  top: 0;
+  left: 100vw;
+  width: 100vh;
+  height: 100vw;
+  transform: rotate(90deg);
+  transform-origin: top left;
+  overflow: hidden;
+  z-index: 100;
+}
+
+.mj-board {
+  width: 100%;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  background: #0a2e1a;
+  font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  color: #fff;
+}
+
+/* 加载 */
 .loading {
-  min-height: 86vh;
+  flex: 1;
   display: grid;
   place-items: center;
   align-content: center;
   gap: 16px;
+  color: #aaa;
 }
-
 .loading-spinner {
-  width: 50px;
-  height: 50px;
-  border: 4px solid rgba(25, 118, 210, 0.18);
-  border-top-color: #1976D2;
+  width: 50px; height: 50px;
+  border: 4px solid rgba(79, 172, 254, 0.18);
+  border-top-color: #4FACFE;
   border-radius: 50%;
   animation: spin 1s linear infinite;
 }
+@keyframes spin { to { transform: rotate(360deg); } }
 
-/* ===== 顶部头部 ===== */
-.mj-header {
-  position: relative;
-  height: 64px;
-  padding: 0 14px;
+/* ===== 顶部信息栏 ===== */
+.mj-info-bar {
+  flex: 0 0 40px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
   background: linear-gradient(180deg, #4FACFE 0%, #00C6FB 100%);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  box-shadow: 0 4px 14px rgba(33, 150, 243, 0.32);
+  border-bottom: 1px solid rgba(255,255,255,0.15);
+  font-size: 13px;
+  z-index: 10;
 }
-
 .back-btn {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: 0;
-  background: #fff;
-  display: grid;
-  place-items: center;
+  width: 28px; height: 28px; border-radius: 50%; border: none;
+  background: rgba(255,255,255,0.2); color: #fff;
+  display: grid; place-items: center; cursor: pointer;
+  transition: background 0.15s;
+}
+.back-btn:hover { background: rgba(255,255,255,0.35); }
+.info-item { color: #fff; white-space: nowrap; }
+.info-item b { color: #FFD700; font-weight: 700; }
+.info-sep { color: rgba(255,255,255,0.4); }
+.rules-toggle-btn {
+  margin-left: auto;
+  padding: 4px 10px;
+  border: 1px solid rgba(255,255,255,0.4);
+  border-radius: 14px;
+  background: rgba(255,255,255,0.15);
+  color: #fff;
+  font-size: 12px;
   cursor: pointer;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.18);
-  transition: transform 0.18s ease;
+  white-space: nowrap;
+  transition: background 0.15s;
 }
-.back-btn:hover { transform: translateX(-2px); }
+.rules-toggle-btn:hover { background: rgba(255,255,255,0.3); }
 
-.title-wrap {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  color: #fff;
-}
-
-.title {
-  margin: 0;
-  font-size: 22px;
-  font-weight: 800;
-  letter-spacing: 4px;
-  color: #fff;
-  text-shadow: 0 2px 6px rgba(0, 60, 120, 0.45);
-}
-
-.star {
-  font-size: 16px;
-  color: #FFE082;
-  text-shadow: 0 0 8px rgba(255, 224, 130, 0.85);
-}
-
-.score-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 14px;
-  border-radius: 22px;
-  background: linear-gradient(180deg, #FFD54F, #FFA726);
-  color: #5a3000;
-  font-weight: 800;
-  font-size: 15px;
-  box-shadow: 0 4px 10px rgba(255, 152, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.6);
-  border: 2px solid #fff;
-}
-
-.score-badge .coin {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background: linear-gradient(180deg, #FFE082, #FFB300);
-  color: #6a3d00;
-  display: grid;
-  place-items: center;
-  font-size: 13px;
-  font-weight: 900;
-  border: 1px solid #fff;
-}
-
-/* ===== 信息条 ===== */
-.info-bar {
-  margin: 12px 14px 0;
-  padding: 10px 16px;
-  background: #fff;
-  border-radius: 22px;
-  box-shadow: 0 4px 14px rgba(33, 150, 243, 0.12);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  border: 1px solid rgba(79, 172, 254, 0.18);
-}
-
-.info-item {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  color: #2c3e6e;
-}
-
-.info-icon {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  font-size: 14px;
-  color: #fff;
-}
-
-.info-icon.flag { background: linear-gradient(135deg, #ff7043, #f4511e); }
-.info-icon.avatar { background: linear-gradient(135deg, #66BB6A, #43A047); }
-.info-icon.mahjong { background: linear-gradient(135deg, #29B6F6, #0288D1); font-size: 12px; }
-
-.info-divider {
-  width: 1px;
-  height: 22px;
-  background: linear-gradient(180deg, transparent, rgba(33, 150, 243, 0.25), transparent);
-}
-
-/* ===== Canvas 桌面 ===== */
-.table-canvas-wrap {
-  margin: 12px 14px 0;
-  border-radius: 18px;
+/* ===== Canvas牌桌区 ===== */
+.canvas-area {
+  flex: 1 1 0;
+  min-height: 0;
+  position: relative;
+  margin: 4px 6px;
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 12px 28px rgba(13, 77, 42, 0.32);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.4);
 }
-
 .game-canvas {
   display: block;
   width: 100%;
-  height: 380px;
+  height: 100%;
 }
 
-/* ===== 手牌区 ===== */
-.hand-panel {
-  margin: 14px 14px 0;
-  padding: 14px 14px 16px;
-  background: #fff;
-  border-radius: 22px;
-  box-shadow: 0 6px 18px rgba(33, 150, 243, 0.14);
-  border: 1px solid rgba(79, 172, 254, 0.18);
-}
-
-.hand-header {
+/* ===== 底部手牌+操作区 ===== */
+.bottom-zone {
+  flex: 0 0 auto;
+  min-height: 120px;
+  max-height: 35vh;
   display: flex;
+  align-items: stretch;
+  background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+  border-top: 1px solid rgba(79, 172, 254, 0.25);
+  padding: 6px 8px;
+  gap: 8px;
+}
+
+/* 左侧我方信息 */
+.my-info {
+  flex: 0 0 70px;
+  display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  margin-bottom: 10px;
-  padding: 0 4px;
-}
-
-.hand-label {
-  font-size: 13px;
-  font-weight: 800;
-  color: #1976D2;
-  position: relative;
-  padding-left: 12px;
-}
-.hand-label::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 4px;
-  height: 16px;
-  border-radius: 2px;
-  background: linear-gradient(180deg, #4FACFE, #00C6FB);
-}
-
-.hand-count {
-  font-size: 12px;
-  color: #607086;
-  font-weight: 700;
-}
-
-.hand-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
   justify-content: center;
-  min-height: 96px;
+  gap: 4px;
 }
-
-.hand-tile {
-  position: relative;
-  width: 52px;
-  height: 84px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  cursor: pointer;
-  transition: transform 0.18s ease, filter 0.18s ease;
+.my-avatar {
+  width: 36px; height: 36px; border-radius: 50%;
+  display: grid; place-items: center;
+  color: #fff; font-weight: 900; font-size: 16px;
+  border: 2px solid rgba(79, 172, 254, 0.6);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.3);
 }
+.my-meta { text-align: center; line-height: 1.2; }
+.my-meta strong { display: block; font-size: 12px; color: #e0e0e0; }
+.my-meta span { font-size: 10px; color: #7aa3c7; }
 
-.hand-tile.disabled { cursor: default; opacity: 0.78; }
-
-.hand-tile:not(.disabled):hover { transform: translateY(-4px); }
-
-.hand-tile.selected {
-  transform: translateY(-12px);
-}
-
-.hand-tile.hint .tile-top {
-  border-color: #FFB300;
-  box-shadow: 0 0 0 2px rgba(255, 179, 0, 0.5), 0 4px 10px rgba(0, 0, 0, 0.15);
-}
-
-.hand-tile .tile-top {
-  position: absolute;
-  inset: 0 0 6px 0;
-  border-radius: 8px;
-  background: linear-gradient(180deg, #fefefe 0%, #f0f0f0 100%);
-  border: 2px solid #d8dde3;
-  display: grid;
-  place-items: center;
-  z-index: 2;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-}
-
-.hand-tile.selected .tile-top {
-  border-color: #FF9800;
-  background: linear-gradient(180deg, #fffbe7, #fff3c4);
-  box-shadow: 0 0 0 2px rgba(255, 152, 0, 0.5), 0 6px 12px rgba(255, 152, 0, 0.3);
-}
-
-.hand-tile .tile-side {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 10px;
-  background: linear-gradient(180deg, #c5c8cd, #9ba0a8);
-  border-radius: 0 0 8px 8px;
-  z-index: 1;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
-}
-
-.tile-glyph {
-  font-size: 22px;
-  font-weight: 900;
-  font-family: "STKaiti", "KaiTi", "PingFang SC", serif;
-  letter-spacing: -1px;
-}
-
-.tile-glyph.suit-wan { color: #d32f2f; }
-.tile-glyph.suit-tong { color: #1565C0; }
-.tile-glyph.suit-tiao { color: #2E7D32; }
-.tile-glyph.suit-wind { color: #37474F; }
-.tile-glyph.suit-dragon { color: #c62828; }
-
-.hu-mark {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  z-index: 3;
-  background: linear-gradient(135deg, #f44336, #d32f2f);
-  color: #fff;
-  font-size: 11px;
-  font-weight: 800;
-  padding: 2px 7px;
-  border-radius: 10px;
-  border: 1.5px solid #fff;
-  box-shadow: 0 2px 6px rgba(244, 67, 54, 0.45);
-  letter-spacing: 1px;
-}
-
-/* ===== 副露区 ===== */
-.melds-panel {
-  margin: 12px 14px 0;
-  padding: 12px 14px;
-  background: #fff;
-  border-radius: 18px;
-  box-shadow: 0 4px 14px rgba(33, 150, 243, 0.12);
+/* 中间手牌区 */
+.hand-area {
+  flex: 1 1 0;
   display: flex;
-  align-items: center;
-  gap: 12px;
-  border: 1px solid rgba(79, 172, 254, 0.18);
-  flex-wrap: wrap;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-width: 0;
+  overflow: hidden;
 }
 
-.melds-label {
-  display: inline-block;
-  padding: 5px 12px;
-  background: linear-gradient(135deg, #2196F3, #1976D2);
-  color: #fff;
-  border-radius: 12px;
-  font-size: 12px;
-  font-weight: 800;
-  white-space: nowrap;
-  box-shadow: 0 2px 6px rgba(33, 150, 243, 0.3);
-}
-
+/* 副露展示 */
 .melds-row {
   display: flex;
-  gap: 14px;
-  flex-wrap: wrap;
-  flex: 1;
+  gap: 8px;
+  max-width: 100%;
+  padding: 4px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  flex-shrink: 0;
 }
-
+.melds-row::-webkit-scrollbar { height: 3px; }
+.melds-row::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 2px; }
 .meld-group {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 3px;
+  flex-shrink: 0;
 }
-
 .meld-tag {
-  padding: 3px 10px;
-  border-radius: 10px;
+  padding: 2px 6px;
+  border-radius: 6px;
   color: #fff;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 800;
+  white-space: nowrap;
 }
-
 .meld-tag.peng { background: linear-gradient(135deg, #4CAF50, #388E3C); }
 .meld-tag.gang,
 .meld-tag.angang,
 .meld-tag.bugang { background: linear-gradient(135deg, #2196F3, #1976D2); }
 .meld-tag.chi { background: linear-gradient(135deg, #FF9800, #F57C00); }
-
 .meld-tiles {
   display: flex;
-  gap: 3px;
+  gap: 1px;
+}
+.meld-tile-img {
+  height: 36px;
+  width: auto;
+  border-radius: 3px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
 
-.meld-tile {
-  width: 32px;
-  height: 44px;
-  background: linear-gradient(180deg, #fefefe, #ececec);
-  border: 1.5px solid #d0d4da;
-  border-radius: 5px;
-  display: grid;
-  place-items: center;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.12);
-}
-
-.meld-tile .tile-glyph { font-size: 14px; }
-
-/* ===== 操作按钮 ===== */
-.action-bar {
-  margin: 14px 14px 0;
+/* 手牌行 */
+.hand-row {
   display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  justify-content: center;
-  align-items: center;
+  align-items: flex-end;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px 12px;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+  min-height: 80px;
 }
+.hand-row::-webkit-scrollbar { height: 3px; }
+.hand-row::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 2px; }
 
-.action-btn {
-  flex: 1;
-  min-width: 0;
-  height: 48px;
-  border: 0;
-  border-radius: 24px;
-  color: #fff;
-  font-size: 16px;
-  font-weight: 800;
-  letter-spacing: 4px;
+.hand-tile-wrap {
+  position: relative;
+  flex-shrink: 0;
+  margin-left: -3px;
   cursor: pointer;
-  transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.32);
+  transition: transform 0.15s ease;
+  z-index: 1;
+}
+.hand-tile-wrap:first-child { margin-left: 0; }
+
+/* 扩大触摸热区 */
+.hand-tile-wrap::after {
+  content: '';
+  position: absolute;
+  inset: -8px -4px;
+  z-index: -1;
 }
 
-.action-btn:not(:disabled):hover { transform: translateY(-2px); filter: brightness(1.05); }
-.action-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.hand-tile-wrap.last-draw {
+  margin-left: 12px;
+}
 
-.act-peng { background: linear-gradient(135deg, #4CAF50, #388E3C); box-shadow: 0 6px 14px rgba(76, 175, 80, 0.36); }
-.act-gang { background: linear-gradient(135deg, #2196F3, #1976D2); box-shadow: 0 6px 14px rgba(33, 150, 243, 0.36); }
-.act-hu { background: linear-gradient(135deg, #f44336, #d32f2f); box-shadow: 0 6px 14px rgba(244, 67, 54, 0.36); }
-.act-discard { background: linear-gradient(135deg, #FF9800, #F57C00); box-shadow: 0 6px 14px rgba(255, 152, 0, 0.36); }
-.act-pass { background: linear-gradient(135deg, #78909C, #546E7A); box-shadow: 0 6px 14px rgba(96, 125, 139, 0.32); }
+.hand-tile-wrap:hover,
+.hand-tile-wrap:active {
+  z-index: 10;
+}
 
-.status-line {
-  flex: 1;
+.hand-tile-wrap:not(.disabled):hover {
+  transform: translateY(-4px);
+}
+
+.hand-tile-wrap.selected {
+  transform: translateY(-12px);
+  z-index: 11;
+}
+.hand-tile-wrap.selected .hand-tile-img {
+  filter: brightness(1.1);
+  box-shadow: 0 0 8px rgba(255, 152, 0, 0.6), 0 4px 10px rgba(0,0,0,0.3);
+}
+
+.hand-tile-wrap.disabled {
+  cursor: default;
+  opacity: 0.8;
+}
+
+.hand-tile-img {
+  height: 75px;
+  width: auto;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  transition: filter 0.15s, box-shadow 0.15s;
+}
+
+.hu-mark {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  z-index: 5;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #f44336, #d32f2f);
+  border: 1.5px solid #fff;
+  box-shadow: 0 0 6px rgba(244, 67, 54, 0.6);
+  animation: hu-pulse 1.2s ease-in-out infinite alternate;
+}
+@keyframes hu-pulse {
+  from { box-shadow: 0 0 4px rgba(244, 67, 54, 0.4); }
+  to { box-shadow: 0 0 10px rgba(244, 67, 54, 0.9); }
+}
+
+.hand-empty {
+  width: 100%;
   text-align: center;
-  font-size: 14px;
-  font-weight: 700;
-  color: #4a5e85;
-  background: rgba(255, 255, 255, 0.7);
-  border-radius: 24px;
-  padding: 14px 16px;
-  border: 1px dashed rgba(33, 150, 243, 0.35);
+  color: #556;
+  font-size: 13px;
+  padding: 20px 0;
 }
 
-/* ===== 游戏规则按钮 ===== */
-.rules-btn {
+/* ===== 右侧操作按钮 ===== */
+.action-buttons {
+  flex: 0 0 72px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  margin: 12px auto 0;
-  padding: 10px 28px;
-  background: #fff;
-  border: 1px solid #cfd8dc;
-  border-radius: 20px;
-  color: #455a64;
-  font-size: 13px;
-  font-weight: 700;
+}
+.action-buttons button {
+  min-width: 62px;
+  min-height: 44px;
+  width: 62px;
+  height: 48px;
+  border-radius: 24px;
+  border: none;
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
   cursor: pointer;
-  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.06);
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  letter-spacing: 2px;
+  transition: transform 0.12s, opacity 0.2s;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.18), inset 0 1px 0 rgba(255,255,255,0.32);
 }
-.rules-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 6px 14px rgba(33, 150, 243, 0.16);
+.action-buttons button:not(:disabled):hover { transform: scale(1.06); }
+.action-buttons button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.btn-peng { background: linear-gradient(135deg, #4CAF50, #388E3C); box-shadow: 0 4px 10px rgba(76, 175, 80, 0.36); }
+.btn-gang { background: linear-gradient(135deg, #2196F3, #1976D2); box-shadow: 0 4px 10px rgba(33, 150, 243, 0.36); }
+.btn-hu { background: linear-gradient(135deg, #f44336, #d32f2f); box-shadow: 0 4px 10px rgba(244, 67, 54, 0.36); }
+.btn-discard { background: linear-gradient(135deg, #FF9800, #F57C00); box-shadow: 0 4px 10px rgba(255, 152, 0, 0.36); }
+.btn-draw { background: linear-gradient(135deg, #FF9800, #F57C00); box-shadow: 0 4px 10px rgba(255, 152, 0, 0.36); }
+.btn-pass { background: linear-gradient(135deg, #78909C, #546E7A); box-shadow: 0 4px 10px rgba(96, 125, 139, 0.32); }
+
+.status-label {
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: #7aa3c7;
+  padding: 8px 4px;
+  line-height: 1.4;
 }
-.rules-icon { font-size: 14px; }
 
 /* ===== 弹窗 ===== */
 .rules-overlay,
@@ -1148,56 +1052,58 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
   z-index: 30;
   display: grid;
   place-items: center;
-  background: rgba(10, 25, 50, 0.55);
+  background: rgba(10, 25, 50, 0.6);
   backdrop-filter: blur(4px);
 }
-
 .rules-card,
 .result-card {
   width: min(92vw, 380px);
   background: #fff;
   border-radius: 22px;
   padding: 22px 22px 18px;
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.32);
+  box-shadow: 0 24px 48px rgba(0,0,0,0.32);
   text-align: center;
   color: #2c3e6e;
 }
-
 .rules-card h3,
 .result-card h2 {
   margin: 0 0 12px;
   color: #1976D2;
   font-size: 22px;
 }
-
 .rules-card ul {
-  margin: 0;
-  padding: 0 0 0 22px;
-  text-align: left;
-  font-size: 14px;
-  color: #4a5e85;
-  line-height: 1.9;
+  margin: 0; padding: 0 0 0 22px;
+  text-align: left; font-size: 14px;
+  color: #4a5e85; line-height: 1.9;
 }
-
 .rules-close {
   margin-top: 16px;
   padding: 10px 28px;
-  border: 0;
-  border-radius: 22px;
+  border: 0; border-radius: 22px;
   color: #fff;
   background: linear-gradient(135deg, #4FACFE, #00C6FB);
-  font-weight: 800;
-  cursor: pointer;
+  font-weight: 800; cursor: pointer;
   box-shadow: 0 4px 12px rgba(79, 172, 254, 0.4);
 }
-
 .result-card p { margin: 6px 0; color: #4a5e85; }
 .result-card .summary { color: #FF9800; font-weight: 800; }
-
 .result-actions {
   margin-top: 16px;
   display: flex;
   gap: 10px;
+  justify-content: center;
+}
+.result-actions button {
+  flex: 1;
+  max-width: 140px;
+  height: 48px;
+  border-radius: 24px;
+  border: none;
+  color: #fff;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  letter-spacing: 2px;
 }
 
 .modal-enter-active,
@@ -1205,25 +1111,71 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
 .modal-enter-from,
 .modal-leave-to { opacity: 0; }
 
-@keyframes spin { to { transform: rotate(360deg); } }
+/* ===== 横屏提示 (旧覆盖层已移除，使用 CSS 强制横屏) ===== */
 
-@media (max-width: 720px) {
-  .title { font-size: 18px; letter-spacing: 2px; }
-  .info-bar { padding: 8px 10px; border-radius: 18px; }
-  .info-item { font-size: 12px; gap: 6px; }
-  .info-icon { width: 22px; height: 22px; font-size: 12px; }
-  .game-canvas { height: 320px; }
-  .hand-tile { width: 42px; height: 70px; }
-  .tile-glyph { font-size: 18px; }
-  .action-btn { height: 44px; font-size: 14px; letter-spacing: 2px; }
-  .melds-panel { padding: 10px; gap: 8px; }
-  .meld-tile { width: 26px; height: 36px; }
-  .meld-tile .tile-glyph { font-size: 12px; }
+/* Responsive */
+@media (max-height: 600px) {
+  .bottom-zone { min-height: 100px; max-height: 140px; }
+  .hand-tile-img { height: 60px; }
+  .meld-tile-img { height: 30px; }
+  .action-buttons button { width: 56px; height: 40px; min-height: 40px; font-size: 12px; }
 }
 
-@media (max-width: 420px) {
-  .hand-tile { width: 36px; height: 62px; }
-  .tile-glyph { font-size: 15px; }
-  .game-canvas { height: 280px; }
+@media (max-width: 414px) {
+  .bottom-zone {
+    min-height: 100px;
+    max-height: 140px;
+    padding: 4px;
+  }
+  .hand-tile-img {
+    height: 60px;
+  }
+  .hand-tile-wrap {
+    margin-left: -2px;
+  }
+  .meld-tile-img {
+    height: 28px;
+  }
+  .action-buttons {
+    gap: 6px;
+  }
+  .action-buttons button {
+    min-width: 52px;
+    min-height: 42px;
+    width: 52px;
+    height: 42px;
+    font-size: 12px;
+    padding: 4px 8px;
+  }
+  .melds-row {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+  .top-info-bar,
+  .mj-info-bar {
+    font-size: 12px;
+    height: 36px;
+    flex: 0 0 36px;
+  }
+}
+
+@media (max-width: 375px) {
+  .bottom-zone {
+    min-height: 90px;
+    max-height: 120px;
+  }
+  .hand-tile-img {
+    height: 52px;
+  }
+  .hand-tile-wrap {
+    margin-left: 0;
+  }
+  .action-buttons button {
+    min-width: 48px;
+    min-height: 38px;
+    width: 48px;
+    height: 38px;
+    font-size: 11px;
+  }
 }
 </style>
