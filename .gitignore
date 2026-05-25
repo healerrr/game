@@ -1,0 +1,10 @@
+client/node_modules/
+server/node_modules/
+client/dist/
+*.log
+*.out.log
+*.err.log
+.trae/
+.workbuddy/
+.DS_Store
+Thumbs.db
