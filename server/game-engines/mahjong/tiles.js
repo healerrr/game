@@ -1,131 +1,61 @@
-const FLOWERS = [
-  { rank: 'spring', label: '春' },
-  { rank: 'summer', label: '夏' },
-  { rank: 'autumn', label: '秋' },
-  { rank: 'winter', label: '冬' },
-  { rank: 'plum', label: '梅' },
-  { rank: 'orchid', label: '兰' },
-  { rank: 'bamboo', label: '竹' },
-  { rank: 'chrysanthemum', label: '菊' }
-];
+'use strict';
 
-const WINDS = ['east', 'south', 'west', 'north'];
-const DRAGONS = ['red', 'green', 'white'];
-const SUITS = ['wan', 'tiao', 'tong'];
-
-function tileId(suit, rank, copyIndex) {
-  return `${suit}-${rank}-${copyIndex}`;
-}
+const SUITS = ['wan', 'tong', 'tiao'];
 
 function createMahjongSet() {
   const tiles = [];
-  SUITS.forEach((suit) => {
-    for (let rank = 1; rank <= 9; rank += 1) {
-      for (let copy = 0; copy < 4; copy += 1) {
-        tiles.push({
-          id: tileId(suit, String(rank), copy),
-          suit,
-          rank: String(rank),
-          label: `${rank}${suit}`
-        });
+  let id = 0;
+  // 万筒条各1-9，每种4张 = 108张
+  for (const suit of SUITS) {
+    for (let rank = 1; rank <= 9; rank++) {
+      for (let i = 0; i < 4; i++) {
+        tiles.push({ id: id++, suit, rank });
       }
     }
-  });
-
-  WINDS.forEach((rank) => {
-    for (let copy = 0; copy < 4; copy += 1) {
-      tiles.push({
-        id: tileId('wind', rank, copy),
-        suit: 'wind',
-        rank,
-        label: rank
-      });
-    }
-  });
-
-  DRAGONS.forEach((rank) => {
-    for (let copy = 0; copy < 4; copy += 1) {
-      tiles.push({
-        id: tileId('dragon', rank, copy),
-        suit: 'dragon',
-        rank,
-        label: rank
-      });
-    }
-  });
-
-  FLOWERS.forEach((flower, copy) => {
-    tiles.push({
-      id: tileId('flower', flower.rank, copy),
-      suit: 'flower',
-      rank: flower.rank,
-      label: flower.label
-    });
-  });
-
-  return tiles;
+  }
+  // 红中4张
+  for (let i = 0; i < 4; i++) {
+    tiles.push({ id: id++, suit: 'zhong', rank: 'zhong' });
+  }
+  return tiles; // 共112张
 }
 
-function isFlower(tile) {
-  return tile?.suit === 'flower';
+function isZhong(tile) {
+  return tile && tile.suit === 'zhong';
 }
 
-function isHonor(tile) {
-  return tile?.suit === 'wind' || tile?.suit === 'dragon';
-}
-
-function tileKey(tile) {
-  return tile ? `${tile.suit}:${tile.rank}` : '';
+function isNumberTile(tile) {
+  return tile && SUITS.includes(tile.suit);
 }
 
 function sameTile(a, b) {
-  return tileKey(a) === tileKey(b);
+  if (!a || !b) return false;
+  return a.suit === b.suit && a.rank === b.rank;
+}
+
+function tileKey(tile) {
+  if (!tile) return '';
+  return `${tile.suit}:${tile.rank}`;
 }
 
 function sortTiles(tiles) {
-  const suitOrder = { wan: 1, tiao: 2, tong: 3, wind: 4, dragon: 5, flower: 6 };
-  const windOrder = { east: 1, south: 2, west: 3, north: 4 };
-  const dragonOrder = { red: 1, green: 2, white: 3 };
-  const flowerOrder = {
-    spring: 1,
-    summer: 2,
-    autumn: 3,
-    winter: 4,
-    plum: 5,
-    orchid: 6,
-    bamboo: 7,
-    chrysanthemum: 8
-  };
-
+  const suitOrder = { wan: 1, tong: 2, tiao: 3, zhong: 4 };
   return [...tiles].sort((a, b) => {
-    const suitDiff = suitOrder[a.suit] - suitOrder[b.suit];
+    const suitDiff = (suitOrder[a.suit] || 99) - (suitOrder[b.suit] || 99);
     if (suitDiff !== 0) return suitDiff;
-    if (a.suit === 'wan' || a.suit === 'tiao' || a.suit === 'tong') {
-      return Number(a.rank) - Number(b.rank);
+    if (isNumberTile(a)) {
+      return a.rank - b.rank;
     }
-    if (a.suit === 'wind') return windOrder[a.rank] - windOrder[b.rank];
-    if (a.suit === 'dragon') return dragonOrder[a.rank] - dragonOrder[b.rank];
-    return flowerOrder[a.rank] - flowerOrder[b.rank];
+    return 0;
   });
-}
-
-function allWinningTileTypes() {
-  return createMahjongSet().filter((tile) => !isFlower(tile)).reduce((map, tile) => {
-    map.set(tileKey(tile), tile);
-    return map;
-  }, new Map());
 }
 
 module.exports = {
   SUITS,
-  WINDS,
-  DRAGONS,
-  FLOWERS,
   createMahjongSet,
-  isFlower,
-  isHonor,
-  tileKey,
+  isZhong,
+  isNumberTile,
   sameTile,
-  sortTiles,
-  allWinningTileTypes
+  tileKey,
+  sortTiles
 };

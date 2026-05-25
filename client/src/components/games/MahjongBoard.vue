@@ -73,7 +73,8 @@
               :class="{
                 selected: selectedIndex === index,
                 'last-draw': isLastDraw(index),
-                disabled: !canDiscard
+                disabled: !canDiscard,
+                'is-zhong': tile.suit === 'zhong'
               }"
               @click="selectTile(index)"
             >
@@ -104,7 +105,7 @@
           <template v-else-if="showResponsePanel">
             <button v-if="hasResponse('peng')" class="btn-peng" @click="emitResponseByType('peng')">碰</button>
             <button v-if="hasResponse('gang')" class="btn-gang" @click="emitResponseByType('gang')">杠</button>
-            <button v-if="hasResponse('hu')" class="btn-hu" @click="emitResponseByType('hu')">胡</button>
+            <button v-if="hasResponse('hu')" class="btn-hu" @click="emitResponseByType('hu')">{{ isQianggangHu ? '抢杠胡' : '胡' }}</button>
             <button class="btn-pass" @click="emitResponseByType('pass')">过</button>
           </template>
 
@@ -122,14 +123,31 @@
       <!-- 规则弹窗 -->
       <transition name="modal">
         <div v-if="showRules" class="rules-overlay" @click.self="showRules = false">
-          <div class="rules-card">
-            <h3>红中麻将规则</h3>
-            <ul>
-              <li>使用万、筒、条 + 红中（共 112 张）</li>
-              <li>胡牌牌型：4 副面子 + 1 对将</li>
-              <li>支持碰、明杠、暗杠、补杠</li>
-              <li>红中可作百搭（视具体规则）</li>
-            </ul>
+          <div class="rules-card rules-card-wide">
+            <h3>红中推倒胡规则</h3>
+            <div class="rules-content">
+              <div class="rules-section">
+                <p>• 使用万、筒、条各36张 + 红中4张，共112张牌</p>
+                <p>• 红中为百搭牌，可替代任何数字牌组成面子</p>
+                <p>• 禁止吃牌，只能碰、杠</p>
+                <p>• 推倒胡：任何合法的4面子+1雀头均可胡牌</p>
+                <p>• 四红中自动胡牌</p>
+              </div>
+              <div class="rules-section">
+                <strong>番型说明：</strong>
+                <p>• 平胡 1番 | 自摸 +1番 | 杠上开花 +1番</p>
+                <p>• 对对胡 2番 | 清一色 4番</p>
+                <p>• 七对 4番 | 豪华七对 8番 | 四红中 4番</p>
+                <p>• 抢杠胡 +1番 | 全求人 +1番</p>
+                <p>• 杀鬼(无红中胡) 番数翻倍</p>
+              </div>
+              <div class="rules-section">
+                <strong>杠分（即时结算）：</strong>
+                <p>• 暗杠：三家各赔2分</p>
+                <p>• 补杠：三家各赔1分</p>
+                <p>• 明杠：放杠者赔3分</p>
+              </div>
+            </div>
             <button class="rules-close" @click="showRules = false">关闭</button>
           </div>
         </div>
@@ -141,7 +159,17 @@
           <div class="result-card">
             <h2>{{ resultText }}</h2>
             <p>{{ resultDetail }}</p>
-            <p v-if="winSummary" class="summary">{{ winSummary }}</p>
+            <div v-if="gs.winInfo && gs.winInfo.detail" class="fan-detail">
+              <div v-for="f in gs.winInfo.detail" :key="f.name" class="fan-item">
+                {{ f.name }} <span class="fan-num">{{ f.fan }}番</span>
+              </div>
+              <div class="fan-total">总计: {{ gs.winInfo.fan }}番</div>
+            </div>
+            <div v-if="gs.scores" class="score-changes">
+              <div v-for="pid in gs.players" :key="pid" class="score-row">
+                {{ getPlayerName(pid) }}: <span :class="gs.scores[pid] >= 0 ? 'score-pos' : 'score-neg'">{{ gs.scores[pid] >= 0 ? '+' : '' }}{{ gs.scores[pid] }}分</span>
+              </div>
+            </div>
             <div class="result-actions">
               <button class="btn-draw" @click="$emit('rematch')">再来一局</button>
               <button class="btn-pass" @click="$emit('back')">返回大厅</button>
@@ -172,33 +200,27 @@ function getTileSvgFilename(tile) {
   if (!tile) return 'Back.svg'
   const { suit, rank } = tile
 
-  // 万子 (wan / man)
-  if (suit === 'wan' || suit === 'man') {
+  // 红中
+  if (suit === 'zhong') {
+    return 'Chun.svg'
+  }
+  // 万子
+  if (suit === 'wan') {
     const n = Number(rank)
     if (Number.isInteger(n) && n >= 1 && n <= 9) return `Man${n}.svg`
     return 'Back.svg'
   }
-  // 筒子 (tong / pin)
-  if (suit === 'tong' || suit === 'pin') {
+  // 筒子
+  if (suit === 'tong') {
     const n = Number(rank)
     if (Number.isInteger(n) && n >= 1 && n <= 9) return `Pin${n}.svg`
     return 'Back.svg'
   }
-  // 条子 (tiao / sou)
-  if (suit === 'tiao' || suit === 'sou') {
+  // 条子
+  if (suit === 'tiao') {
     const n = Number(rank)
     if (Number.isInteger(n) && n >= 1 && n <= 9) return `Sou${n}.svg`
     return 'Back.svg'
-  }
-  // 风牌
-  if (suit === 'wind') {
-    const windMap = { east: 'Ton.svg', south: 'Nan.svg', west: 'Shaa.svg', north: 'Pei.svg' }
-    return windMap[rank] || 'Back.svg'
-  }
-  // 三元牌
-  if (suit === 'dragon') {
-    const dragonMap = { red: 'Chun.svg', green: 'Hatsu.svg', white: 'Haku.svg' }
-    return dragonMap[rank] || 'Back.svg'
   }
   return 'Back.svg'
 }
@@ -213,11 +235,10 @@ const backTileUrl = new URL('../../assets/mahjong-tiles/riichi-mahjong-tiles-mas
 function getTileAlt(tile) {
   if (!tile) return '牌背'
   const { suit, rank } = tile
-  if (suit === 'wan' || suit === 'man') return `${rank}万`
-  if (suit === 'tong' || suit === 'pin') return `${rank}筒`
-  if (suit === 'tiao' || suit === 'sou') return `${rank}条`
-  if (suit === 'wind') return ({ east: '东', south: '南', west: '西', north: '北' })[rank] || '风'
-  if (suit === 'dragon') return ({ red: '中', green: '发', white: '白' })[rank] || '龙'
+  if (suit === 'zhong') return '红中'
+  if (suit === 'wan') return `${rank}万`
+  if (suit === 'tong') return `${rank}筒`
+  if (suit === 'tiao') return `${rank}条`
   return '牌'
 }
 
@@ -292,7 +313,13 @@ const showResponsePanel = computed(() => {
   const pending = props.gs.pendingAction
   if (!pending || props.gs.phase !== 'response') return false
   if (pending.type === 'self') return pending.playerId === myId.value
+  if (pending.type === 'qianggang') return pending.queue?.[0]?.playerId === myId.value
   return pending.queue?.[0]?.playerId === myId.value
+})
+
+const isQianggangHu = computed(() => {
+  const pending = props.gs.pendingAction
+  return pending?.type === 'qianggang'
 })
 
 const responseOptions = computed(() => {
@@ -314,10 +341,10 @@ const selfActionOptions = computed(() => {
 })
 
 const myMelds = computed(() => {
-  const melds = props.gs.melds?.[myId.value] || props.gs.fulu?.[myId.value] || []
+  const melds = props.gs.fulu?.[myId.value] || props.gs.melds?.[myId.value] || []
   return melds.map((m) => ({
     type: m.type || 'peng',
-    tiles: m.tiles || []
+    tiles: m.cards || m.tiles || []
   }))
 })
 
@@ -333,8 +360,9 @@ const waitingText = computed(() => {
 
 const huTilesSet = computed(() => {
   const set = new Set()
-  if (props.gs.huTiles && Array.isArray(props.gs.huTiles)) {
-    props.gs.huTiles.forEach((t) => set.add(`${t.suit}-${t.rank}`))
+  const myTing = props.gs.tingInfo?.[myId.value]
+  if (myTing && Array.isArray(myTing)) {
+    myTing.forEach((t) => set.add(`${t.suit}-${t.rank}`))
   }
   return set
 })
@@ -351,11 +379,11 @@ const resultDetail = computed(() => {
 
 const winSummary = computed(() => {
   if (!props.gs.winInfo) return ''
-  const { winnerId, sourcePlayerId, totalFan } = props.gs.winInfo
+  const { winnerId, sourcePlayerId, fan } = props.gs.winInfo
   if (sourcePlayerId && sourcePlayerId !== winnerId) {
-    return `${getPlayerName(winnerId)} 点炮胡牌 · ${totalFan}番`
+    return `${getPlayerName(winnerId)} 点炮胡牌 · ${fan}番`
   }
-  return `${getPlayerName(winnerId)} 自摸胡牌 · ${totalFan}番`
+  return `${getPlayerName(winnerId)} 自摸胡牌 · ${fan}番`
 })
 
 // ============== 工具函数 ==============
@@ -391,8 +419,7 @@ function avatarStyle(pid) {
 
 function meldLabel(type) {
   if (type === 'peng') return '碰'
-  if (type === 'gang' || type === 'angang' || type === 'bugang') return '杠'
-  if (type === 'chi') return '吃'
+  if (type === 'gang' || type === 'angang' || type === 'bugang' || type === 'minggang') return '杠'
   return type
 }
 
@@ -894,8 +921,8 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
 .meld-tag.peng { background: linear-gradient(135deg, #4CAF50, #388E3C); }
 .meld-tag.gang,
 .meld-tag.angang,
-.meld-tag.bugang { background: linear-gradient(135deg, #2196F3, #1976D2); }
-.meld-tag.chi { background: linear-gradient(135deg, #FF9800, #F57C00); }
+.meld-tag.bugang,
+.meld-tag.minggang { background: linear-gradient(135deg, #2196F3, #1976D2); }
 .meld-tiles {
   display: flex;
   gap: 1px;
@@ -903,8 +930,11 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
 .meld-tile-img {
   height: 36px;
   width: auto;
+  background: #FFFFFF;
   border-radius: 3px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+  padding: 1px;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  border: 1px solid #d0d0d0;
 }
 
 /* 手牌行 */
@@ -967,11 +997,24 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
   opacity: 0.8;
 }
 
+/* 红中特殊标记 */
+.hand-tile-wrap.is-zhong {
+  border: 2px solid #FFD700;
+  border-radius: 6px;
+  box-shadow: 0 0 8px rgba(255, 215, 0, 0.6);
+}
+.hand-tile-wrap.is-zhong .hand-tile-img {
+  border-color: #FFD700;
+}
+
 .hand-tile-img {
   height: 75px;
   width: auto;
+  background: #FFFFFF;
   border-radius: 4px;
-  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  padding: 2px;
+  box-shadow: 1px 2px 3px rgba(0,0,0,0.3);
+  border: 1px solid #d0d0d0;
   transition: filter 0.15s, box-shadow 0.15s;
 }
 
@@ -1076,6 +1119,27 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
   text-align: left; font-size: 14px;
   color: #4a5e85; line-height: 1.9;
 }
+.rules-card-wide {
+  width: min(92vw, 460px);
+  max-height: 80vh;
+  overflow-y: auto;
+}
+.rules-content {
+  text-align: left;
+  font-size: 13px;
+  color: #4a5e85;
+  line-height: 1.7;
+}
+.rules-section {
+  margin-bottom: 10px;
+}
+.rules-section strong {
+  color: #1976D2;
+  font-size: 14px;
+}
+.rules-section p {
+  margin: 2px 0;
+}
 .rules-close {
   margin-top: 16px;
   padding: 10px 28px;
@@ -1087,6 +1151,43 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
 }
 .result-card p { margin: 6px 0; color: #4a5e85; }
 .result-card .summary { color: #FF9800; font-weight: 800; }
+.fan-detail {
+  margin: 10px 0;
+  padding: 10px;
+  background: #f8f9fc;
+  border-radius: 12px;
+  text-align: left;
+}
+.fan-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 8px;
+  font-size: 14px;
+  color: #4a5e85;
+}
+.fan-item .fan-num {
+  color: #FF9800;
+  font-weight: 700;
+}
+.fan-total {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-top: 1px solid #e0e0e0;
+  font-weight: 800;
+  font-size: 15px;
+  color: #1976D2;
+}
+.score-changes {
+  margin: 10px 0;
+  text-align: left;
+}
+.score-row {
+  padding: 3px 8px;
+  font-size: 13px;
+  color: #4a5e85;
+}
+.score-pos { color: #4CAF50; font-weight: 700; }
+.score-neg { color: #f44336; font-weight: 700; }
 .result-actions {
   margin-top: 16px;
   display: flex;

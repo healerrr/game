@@ -1,119 +1,182 @@
-const { isHonor, isFlower, tileKey } = require('./tiles');
-const { canHu } = require('./hule');
+'use strict';
 
-function countMap(tiles) {
-  return tiles.filter((tile) => !isFlower(tile)).reduce((map, tile) => {
-    const key = tileKey(tile);
-    map.set(key, (map.get(key) || 0) + 1);
-    return map;
-  }, new Map());
-}
+const { isZhong } = require('./tiles');
+const { checkSevenPairs, buildCounts } = require('./hule');
 
-function getSuits(tiles, fulu = []) {
-  const all = [...tiles, ...fulu.flatMap((meld) => meld.cards)];
-  const suits = new Set(all.filter((tile) => !isFlower(tile)).map((tile) => tile.suit));
-  return [...suits];
-}
+/**
+ * 红中推倒胡番型计算
+ * @param {Array} hand - 完整手牌（含胡的那张牌）
+ * @param {Array} fulu - 副露数组
+ * @param {object} winTile - 胡的那张牌
+ * @param {string} winType - 胡牌方式: 'zimo'|'dianpao'|'gangshanghua'|'qianggang'
+ * @returns {{ fan: number, detail: Array<{name: string, fan: number}> }}
+ */
+function evaluateFan(hand, fulu = [], winTile = null, winType = 'dianpao') {
+  const detail = [];
+  const allTiles = hand || [];
 
-function hasOneDragon(tiles, fulu = []) {
-  const all = [...tiles, ...fulu.flatMap((meld) => meld.cards)];
-  const suitBuckets = {
-    wan: new Set(),
-    tiao: new Set(),
-    tong: new Set()
-  };
-  all.forEach((tile) => {
-    if (tile.suit === 'wan' || tile.suit === 'tiao' || tile.suit === 'tong') {
-      suitBuckets[tile.suit].add(Number(tile.rank));
+  if (allTiles.length === 0) {
+    return { fan: 1, detail: [{ name: '平胡', fan: 1 }] };
+  }
+
+  // 1. 基础平胡 = 1番
+  detail.push({ name: '平胡', fan: 1 });
+
+  // 2. 自摸 +1
+  if (winType === 'zimo' || winType === 'gangshanghua') {
+    detail.push({ name: '自摸', fan: 1 });
+  }
+
+  // 3. 对对胡(碰碰胡) = 2番 - 所有面子都是刻子/杠，无顺子
+  if (isAllPong(allTiles, fulu)) {
+    detail.push({ name: '对对胡', fan: 2 });
+  }
+
+  // 4. 清一色 = 4番（仅一种花色的数字牌，红中不计入花色判断）
+  const nonZhongHand = allTiles.filter(t => !isZhong(t));
+  const fuluTiles = fulu.flatMap(f => f.cards || []).filter(t => !isZhong(t));
+  const allNonZhong = [...nonZhongHand, ...fuluTiles];
+  if (allNonZhong.length > 0) {
+    const suits = new Set(allNonZhong.map(t => t.suit));
+    if (suits.size === 1) {
+      detail.push({ name: '清一色', fan: 4 });
     }
-  });
-  return Object.values(suitBuckets).some((bucket) => bucket.size === 9);
-}
-
-function isAllTriples(tiles, fulu = []) {
-  if (!canHu(tiles, fulu).standard) return false;
-  const counts = countMap(tiles);
-  const pairCount = [...counts.values()].filter((count) => count === 2).length;
-  const invalid = [...counts.values()].some((count) => ![2, 3, 4].includes(count));
-  const sequenceLike = tiles.some((tile) => {
-    if (isHonor(tile) || isFlower(tile)) return false;
-    const key1 = `${tile.suit}:${Number(tile.rank) + 1}`;
-    const key2 = `${tile.suit}:${Number(tile.rank) + 2}`;
-    return counts.has(key1) && counts.has(key2);
-  });
-  return pairCount === 1 && !invalid && !sequenceLike && fulu.every((meld) => ['peng', 'angang', 'minggang', 'bugang'].includes(meld.type));
-}
-
-function evaluateFan(tiles, fulu = [], flowers = [], context = {}) {
-  const fanList = [];
-  const suits = getSuits(tiles, fulu);
-  const counts = countMap(tiles);
-  const huCheck = canHu(tiles, fulu);
-  const allTiles = [...tiles, ...fulu.flatMap((meld) => meld.cards)];
-
-  if (!huCheck.canHu) {
-    return { fanList: [], totalFan: 0, flowerFan: 0 };
   }
 
-  if (fulu.length === 0) {
-    fanList.push({ name: '门清', fan: 1 });
-  }
-
-  if (isAllTriples(tiles, fulu)) {
-    fanList.push({ name: '对对胡', fan: 2 });
-  }
-
-  const hasHonors = allTiles.some((tile) => isHonor(tile));
-  const suitOnly = suits.filter((suit) => ['wan', 'tiao', 'tong'].includes(suit));
-  if (suitOnly.length === 1 && !hasHonors) {
-    fanList.push({ name: '清一色', fan: 4 });
-  } else if (suitOnly.length === 1 && hasHonors) {
-    fanList.push({ name: '混一色', fan: 2 });
-  }
-
-  if (huCheck.sevenPairs) {
-    const hasHonorsInPairs = [...counts.keys()].some((key) => key.startsWith('wind:') || key.startsWith('dragon:'));
-    const hasQuad = [...counts.values()].some((value) => value === 4);
-    if (hasQuad) {
-      fanList.push({ name: '豪华七对', fan: 8 });
-    } else if (hasHonorsInPairs) {
-      fanList.push({ name: '混七对', fan: 2 });
+  // 5. 七对 = 4番 / 豪华七对 = 8番
+  if (fulu.length === 0 && allTiles.length === 14 && checkSevenPairs(allTiles)) {
+    const counts = buildCounts(allTiles.filter(t => !isZhong(t)));
+    const hasFour = Object.values(counts).some(v => v >= 4);
+    if (hasFour) {
+      detail.push({ name: '豪华七对', fan: 8 });
     } else {
-      fanList.push({ name: '七对', fan: 4 });
+      detail.push({ name: '七对', fan: 4 });
+    }
+    // 七对不计平胡
+    const idx = detail.findIndex(d => d.name === '平胡');
+    if (idx >= 0) detail.splice(idx, 1);
+  }
+
+  // 6. 杠上开花 +1
+  if (winType === 'gangshanghua') {
+    detail.push({ name: '杠上开花', fan: 1 });
+  }
+
+  // 7. 抢杠胡 +1
+  if (winType === 'qianggang') {
+    detail.push({ name: '抢杠胡', fan: 1 });
+  }
+
+  // 8. 全求人 +1（4副露，手里只剩将牌，点炮胡）
+  if (fulu.length === 4 && allTiles.length === 2 && winType === 'dianpao') {
+    detail.push({ name: '全求人', fan: 1 });
+  }
+
+  // 9. 四红中 = 4番
+  const zhongCount = allTiles.filter(t => isZhong(t)).length;
+  const fuluZhongCount = fulu.flatMap(f => f.cards || []).filter(t => isZhong(t)).length;
+  const totalZhong = zhongCount + fuluZhongCount;
+  if (totalZhong >= 4) {
+    detail.push({ name: '四红中', fan: 4 });
+  }
+
+  // 计算总番
+  let totalFan = detail.reduce((s, d) => s + d.fan, 0);
+
+  // 10. 无红中胡(杀鬼) = 总番翻倍
+  if (zhongCount === 0 && fuluZhongCount === 0) {
+    const baseFan = totalFan;
+    totalFan *= 2;
+    detail.push({ name: '杀鬼(无红中)', fan: baseFan });
+  }
+
+  return { fan: Math.max(1, totalFan), detail };
+}
+
+/**
+ * 判断是否对对胡（全刻子无顺子）
+ * 独立判定，不依赖 decompose 的拆解顺序
+ */
+function isAllPong(hand, fulu) {
+  // 副露中是否有顺子
+  for (const f of fulu) {
+    if (f.type === 'chi') return false;
+  }
+
+  // 手牌中：去掉红中后，检查是否能仅用刻子+雀头拆解
+  const zhongCount = hand.filter(t => isZhong(t)).length;
+  const nonZhong = hand.filter(t => !isZhong(t));
+  const counts = buildCounts(nonZhong);
+  const values = Object.values(counts);
+
+  // 枚举哪种牌做雀头
+  const keys = Object.keys(counts);
+  for (const pairKey of keys) {
+    if (counts[pairKey] < 2) continue;
+    // 尝试这种牌做雀头
+    let zhongNeeded = 0;
+    let valid = true;
+    for (const k of keys) {
+      const c = k === pairKey ? counts[k] - 2 : counts[k];
+      if (c === 0) continue;
+      if (c === 3) continue; // 完整刻子
+      if (c === 1) zhongNeeded += 2; // 需要2红中凑刻子
+      else if (c === 2) zhongNeeded += 1; // 需要1红中凑刻子
+      else { valid = false; break; } // c===4时当成1个刻子+1张, 需要2红中
+    }
+    // 处理count=4的情况
+    if (!valid) {
+      zhongNeeded = 0;
+      valid = true;
+      for (const k of keys) {
+        let c = k === pairKey ? counts[k] - 2 : counts[k];
+        if (c === 0) continue;
+        while (c >= 3) c -= 3;
+        if (c === 0) continue;
+        if (c === 1) zhongNeeded += 2;
+        else if (c === 2) zhongNeeded += 1;
+        else { valid = false; break; }
+      }
+    }
+    if (valid && zhongNeeded <= zhongCount) return true;
+  }
+
+  // 用1红中配雀头
+  if (zhongCount >= 1) {
+    for (const pairKey of keys) {
+      if (counts[pairKey] < 1) continue;
+      let zhongNeeded = 0;
+      let valid = true;
+      for (const k of keys) {
+        let c = k === pairKey ? counts[k] - 1 : counts[k];
+        if (c === 0) continue;
+        while (c >= 3) c -= 3;
+        if (c === 0) continue;
+        if (c === 1) zhongNeeded += 2;
+        else if (c === 2) zhongNeeded += 1;
+        else { valid = false; break; }
+      }
+      if (valid && zhongNeeded + 1 <= zhongCount) return true;
     }
   }
 
-  if (hasOneDragon(allTiles)) {
-    fanList.push({ name: '一条龙', fan: 2 });
+  // 2红中做雀头
+  if (zhongCount >= 2) {
+    let zhongNeeded = 0;
+    let valid = true;
+    for (const k of keys) {
+      let c = counts[k];
+      if (c === 0) continue;
+      while (c >= 3) c -= 3;
+      if (c === 0) continue;
+      if (c === 1) zhongNeeded += 2;
+      else if (c === 2) zhongNeeded += 1;
+      else { valid = false; break; }
+    }
+    if (valid && zhongNeeded + 2 <= zhongCount) return true;
   }
 
-  if (fulu.length === 4 && tiles.filter((tile) => !isFlower(tile)).length <= 2) {
-    fanList.push({ name: '全求人', fan: 1 });
-  }
-
-  if (context.winType === 'gangshanghua') {
-    fanList.push({ name: '杠开', fan: 1 });
-  }
-
-  if (context.winType === 'qianggang') {
-    fanList.push({ name: '抢杠', fan: 1 });
-  }
-
-  const flowerFan = flowers.length > 0 ? flowers.length : 1;
-  if (flowers.length > 0) {
-    fanList.push({ name: '花牌', fan: flowers.length });
-  } else {
-    fanList.push({ name: '无花', fan: 1 });
-  }
-
-  const totalFan = fanList.reduce((sum, item) => sum + item.fan, 0);
-  return {
-    fanList,
-    totalFan,
-    flowerFan
-  };
+  return false;
 }
 
-module.exports = {
-  evaluateFan
-};
+module.exports = { evaluateFan };

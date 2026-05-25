@@ -1,27 +1,27 @@
+'use strict';
+
 const { shuffle } = require('../shared/cards');
-const { createMahjongSet, isFlower } = require('./tiles');
+const { createMahjongSet } = require('./tiles');
 
 class Shan {
   constructor(tiles = shuffle(createMahjongSet())) {
     this.tiles = [...tiles];
   }
 
+  // 从牌山顶摸一张牌
   draw() {
-    return this.tiles.pop() || null;
+    if (this.tiles.length === 0) return null;
+    return this.tiles.pop();
   }
 
-  drawUntilPlayable() {
-    const flowers = [];
-    let tile = this.draw();
-    while (tile && isFlower(tile)) {
-      flowers.push(tile);
-      tile = this.draw();
-    }
-    return { tile, flowers };
-  }
-
+  // 返回剩余牌数
   remaining() {
     return this.tiles.length;
+  }
+
+  // 是否还有牌可摸
+  isEmpty() {
+    return this.tiles.length === 0;
   }
 
   snapshot() {
