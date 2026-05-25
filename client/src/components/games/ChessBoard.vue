@@ -1172,4 +1172,93 @@ watch([board, selectedCell, lastMoveFrom, lastMoveTo, hoverPos, isMyTurn, myColo
     linear-gradient(90deg, rgba(216, 245, 255, 0.96), rgba(255, 255, 255, 0.98) 52%, rgba(223, 247, 255, 0.96));
   text-shadow: 0 2px 0 #fff;
 }
+
+.chess-board {
+  min-height: 0;
+  height: var(--game-viewport-height, calc(100dvh - 60px));
+  max-height: var(--game-viewport-height, calc(100dvh - 60px));
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
+  overflow: hidden;
+  padding-bottom: 10px;
+}
+
+.board-shell {
+  min-height: 0;
+  padding: 14px;
+}
+
+.board-canvas {
+  max-width: 100%;
+  height: auto;
+}
+
+@media (max-width: 760px), (max-height: 820px) {
+  .chess-board {
+    padding-top: 4px;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  }
+
+  .versus-panel {
+    padding: 10px 12px;
+    border-radius: 22px;
+  }
+
+  .avatar {
+    width: 48px;
+    height: 48px;
+    font-size: 24px;
+  }
+
+  .status-banner {
+    margin-top: 8px;
+    min-height: 42px;
+    font-size: 20px;
+  }
+
+  .board-shell {
+    margin-top: 8px;
+    padding: 10px;
+    border-radius: 22px;
+  }
+
+  .action-strip {
+    margin-top: 10px;
+    gap: 8px;
+  }
+
+  .action-card {
+    min-height: 72px;
+    border-radius: 16px;
+    box-shadow:
+      inset 0 2px 0 rgba(255, 255, 255, 0.56),
+      0 8px 18px rgba(8, 72, 182, 0.16);
+  }
+
+  .action-card span {
+    font-size: 24px;
+  }
+
+  .action-card strong {
+    font-size: 15px;
+  }
+
+  .info-strip {
+    margin-top: 10px;
+    padding: 12px;
+    gap: 8px;
+  }
+
+  .info-item span {
+    font-size: 13px;
+  }
+
+  .info-item strong {
+    font-size: 22px;
+  }
+
+  .bottom-banner {
+    display: none;
+  }
+}
 </style>

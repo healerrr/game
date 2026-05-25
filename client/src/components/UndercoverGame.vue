@@ -211,6 +211,10 @@ watch(() => props.gs?.phase, (phase) => {
 
 <style scoped>
 .uc-game {
+  width: min(100%, 520px);
+  height: var(--game-viewport-height, calc(100dvh - 60px));
+  max-height: var(--game-viewport-height, calc(100dvh - 60px));
+  margin: 0 auto;
   flex: 1;
   display: flex;
   flex-direction: column;
@@ -486,5 +490,46 @@ watch(() => props.gs?.phase, (phase) => {
   color: var(--gold-light);
   font-weight: 600;
   margin-left: auto;
+}
+
+@media (max-width: 760px), (max-height: 820px) {
+  .uc-game {
+    padding: 10px;
+  }
+
+  .uc-header {
+    padding: 12px;
+    margin-bottom: 10px;
+  }
+
+  .uc-round {
+    margin-bottom: 10px;
+  }
+
+  .uc-desc-list {
+    margin-bottom: 12px;
+    max-height: 160px;
+  }
+
+  .uc-current {
+    margin-top: 8px;
+  }
+
+  .uc-submit-row {
+    margin-top: 10px;
+  }
+
+  .uc-voice-btn,
+  .uc-send-btn,
+  .uc-next-btn {
+    min-height: 42px;
+    padding-top: 10px;
+    padding-bottom: 10px;
+  }
+
+  .uc-finish-banner {
+    font-size: 18px;
+    padding: 14px 16px;
+  }
 }
 </style>

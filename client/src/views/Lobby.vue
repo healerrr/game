@@ -1,106 +1,134 @@
 <template>
   <main class="lobby-page">
-    <section class="lobby-shell">
-      <header class="hero-panel">
-        <div class="hero-top">
-          <div class="title-wrap">
-            <p class="hero-ribbon">轻松互动，欢乐同行</p>
-            <h1 class="page-title">游戏平台</h1>
-          </div>
-
-          <div class="score-pill">
-            <span class="coin">⭐</span>
-            <span>积分 {{ player?.points ?? 0 }}</span>
-          </div>
+    <div class="lobby-container">
+      <!-- 顶部装饰 -->
+      <div class="top-decorations">
+        <div class="flags">
+          <span class="flag flag-1"></span>
+          <span class="flag flag-2">🚩</span>
+          <span class="flag flag-3">🚩</span>
         </div>
+        <div class="balloon">🎈</div>
+        <div class="confetti">
+          <span class="confetti-piece"></span>
+          <span class="confetti-piece"></span>
+          <span class="confetti-piece"></span>
+        </div>
+      </div>
 
-        <div class="player-row">
-          <div class="player-card">
-            <div class="avatar">
-              <img :src="playerAvatar" alt="avatar" />
+      <!-- 标题 -->
+      <h1 class="main-title">游戏平台</h1>
+
+      <!-- 用户信息区 -->
+      <div class="user-section">
+        <div class="user-info">
+          <div class="avatar-wrapper">
+            <img :src="playerAvatar" alt="avatar" class="user-avatar" />
+          </div>
+          <div class="user-details">
+            <div class="user-name-row">
+              <span class="greeting">Hi, {{ player?.nickname || '游客' }}</span>
+              <span class="bus-badge">🚌 {{ player?.busNumber || '-' }}号车</span>
             </div>
-            <div class="player-copy">
-              <div class="name-row">
-                <strong>{{ player?.nickname || '游客' }}</strong>
-                <span class="bus-tag">🚌 {{ player?.busNumber || '-' }}号车</span>
-              </div>
-              <p>欢迎来到公司团建小游戏平台</p>
+            <p class="welcome-text">欢迎来到公司团建小游戏平台！</p>
+          </div>
+        </div>
+        <div class="action-buttons">
+          <button class="action-btn" @click="$router.push('/leaderboard')">
+            <span class="action-icon"></span>
+            <span class="action-text">今日排行</span>
+          </button>
+          <button class="action-btn" @click="showRuleHint = !showRuleHint">
+            <span class="action-icon">📘</span>
+            <span class="action-text">活动规则</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- 积分展示区 -->
+      <div class="score-section">
+        <div class="score-card">
+          <div class="score-left">
+            <img src="/assets/lobby/score-trophy-left.png" alt="trophy" class="trophy-img" />
+          </div>
+          <div class="score-center">
+            <div class="score-label">
+              <span class="star">⭐</span>
+              <span>当前积分</span>
+              <span class="star">⭐</span>
+            </div>
+            <div class="score-value">{{ player?.points ?? 0 }}</div>
+          </div>
+          <div class="score-right">
+            <img src="/assets/lobby/score-gift-right.png" alt="gift" class="gift-img" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 游戏网格区 -->
+      <div class="games-section">
+        <div class="games-grid">
+          <div
+            v-for="game in gameCards"
+            :key="game.key"
+            class="game-card"
+            @click="joinGame(game.key)"
+          >
+            <div class="game-image-wrapper">
+              <img :src="game.art" :alt="game.name" class="game-image" />
+            </div>
+            <div class="game-name">{{ game.name }}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 宣传横幅 -->
+      <div class="promo-banner">
+        <img src="/assets/lobby/promo-strip.png" alt="promo" class="promo-image" />
+      </div>
+
+      <!-- 底部功能区 -->
+      <div class="bottom-section">
+        <div class="feature-grid">
+          <div class="feature-item" @click="$router.push('/leaderboard')">
+            <img src="/assets/lobby/feature-record.png" alt="record" class="feature-icon-img" />
+            <div class="feature-text">
+              <div class="feature-title">积分记录</div>
+              <div class="feature-subtitle">明细查询</div>
             </div>
           </div>
-
-          <div class="hero-actions">
-            <button class="hero-btn" @click="$router.push('/leaderboard')">
-              <span class="hero-btn-icon">🏆</span>
-              <span>今日排行</span>
-            </button>
-            <button class="hero-btn" @click="showRuleHint = !showRuleHint">
-              <span class="hero-btn-icon">📘</span>
-              <span>活动规则</span>
-            </button>
+          <div class="feature-item">
+            <img src="/assets/lobby/feature-achievement.png" alt="achievement" class="feature-icon-img" />
+            <div class="feature-text">
+              <div class="feature-title">我的战绩</div>
+              <div class="feature-subtitle">历史成绩</div>
+            </div>
+          </div>
+          <div class="feature-item" @click="$router.push('/leaderboard')">
+            <img src="/assets/lobby/feature-ranking.png" alt="ranking" class="feature-icon-img" />
+            <div class="feature-text">
+              <div class="feature-title">排行榜</div>
+              <div class="feature-subtitle">实时排名</div>
+            </div>
+          </div>
+          <div class="feature-item" @click="showReward = true">
+            <img src="/assets/lobby/feature-reward.png" alt="reward" class="feature-icon-img" />
+            <div class="feature-text">
+              <div class="feature-title">兑奖区</div>
+              <div class="feature-subtitle">兑换好礼</div>
+            </div>
           </div>
         </div>
+      </div>
 
-        <section class="score-banner">
-          <span class="score-accent accent-left">🏆</span>
-          <div class="score-copy">
-            <span>当前积分</span>
-            <strong>{{ player?.points ?? 0 }}</strong>
-          </div>
-          <span class="score-accent accent-right">🎁</span>
-        </section>
-      </header>
+      <!-- 底部提示 -->
+      <div class="footer-note">
+        <span class="note-decoration">🎁</span>
+        <span>积极参与，赢取积分，兑换丰厚好礼！</span>
+        <span class="note-decoration">🎁</span>
+      </div>
 
-      <section class="game-grid-panel">
-        <article
-          v-for="game in gameCards"
-          :key="game.key"
-          class="game-card"
-          :class="game.tone"
-          :title="game.desc"
-          @click="joinGame(game.key)"
-        >
-          <div class="game-visual">
-            <img :src="game.art" :alt="game.name" />
-            <span class="game-icon">{{ game.icon }}</span>
-          </div>
-          <h3>{{ game.name }}</h3>
-        </article>
-      </section>
-
-      <section class="slogan-banner">
-        <span class="slogan-mascot">📣</span>
-        <div>
-          <strong>轻松互动，欢乐同行</strong>
-          <p>团队合作 共创精彩</p>
-        </div>
-        <span class="slogan-tail">🎯</span>
-      </section>
-
-      <nav class="feature-nav">
-        <button class="feature-btn" @click="$router.push('/leaderboard')">
-          <span class="feature-icon">📋</span>
-          <span class="title">积分记录</span>
-          <span class="sub">明细查询</span>
-        </button>
-        <button class="feature-btn">
-          <span class="feature-icon">🎖️</span>
-          <span class="title">我的战绩</span>
-          <span class="sub">历史成绩</span>
-        </button>
-        <button class="feature-btn" @click="$router.push('/leaderboard')">
-          <span class="feature-icon">🏅</span>
-          <span class="title">排行榜</span>
-          <span class="sub">实时排名</span>
-        </button>
-        <button class="feature-btn" @click="showReward = true">
-          <span class="feature-icon">🎁</span>
-          <span class="title">兑奖区</span>
-          <span class="sub">兑换好礼</span>
-        </button>
-      </nav>
-
-      <footer class="page-note">积极参与，赢取积分，兑换丰厚好礼！</footer>
-
+      <!-- 匹配弹窗 -->
       <transition name="fade">
         <div v-if="matching" class="overlay" @click="cancelMatch">
           <div class="loading-box">
@@ -112,6 +140,7 @@
         </div>
       </transition>
 
+      <!-- 奖励弹窗 -->
       <transition name="fade">
         <div v-if="showReward" class="overlay" @click.self="showReward = false">
           <div class="reward-box">
@@ -132,12 +161,13 @@
         </div>
       </transition>
 
+      <!-- 规则提示 -->
       <transition name="fade">
         <div v-if="showRuleHint" class="toast">
           推荐先体验：猜数字、快问快答、掼蛋、红中麻将
         </div>
       </transition>
-    </section>
+    </div>
   </main>
 </template>
 
@@ -160,14 +190,14 @@ const avatarPalette = [
 ]
 
 const gameCards = [
-  { key: 'rock_paper_scissors', name: '剪刀石头布', icon: '✊', art: '/assets/ui-ref/rps.png', tone: 'tone-mint', desc: '轻量快开，2 人对战' },
-  { key: 'guess_number', name: '猜数字', icon: '7', art: '/assets/ui-ref/guess.png', tone: 'tone-violet', desc: '1 到 100 猜谜博弈' },
-  { key: 'quiz', name: '快问快答', icon: 'Q', art: '/assets/ui-ref/quiz.png', tone: 'tone-blue', desc: '限时抢答，冲刺积分' },
-  { key: 'gomoku', name: '五子棋', icon: '●', art: '/assets/ui-ref/gomoku.png', tone: 'tone-gold', desc: '经典黑白棋' },
-  { key: 'chess', name: '象棋', icon: '象', art: '/assets/ui-ref/chess.png', tone: 'tone-orange', desc: '楚河汉界策略对弈' },
-  { key: 'guandan', name: '掼蛋', icon: 'A', art: '/assets/ui-ref/guandan.png', tone: 'tone-green', desc: '双人组队出牌' },
-  { key: 'zha_jin_hua', name: '炸金花', icon: '♦', art: '/assets/ui-ref/zjh.png', tone: 'tone-purple', desc: '看牌比牌，刺激上头' },
-  { key: 'mahjong', name: '红中麻将', icon: '中', art: '/assets/ui-ref/mahjong.png', tone: 'tone-cyan', desc: '四人经典麻将局' }
+  { key: 'rock_paper_scissors', name: '剪刀石头布', art: '/assets/lobby/game-rps-card.png' },
+  { key: 'guess_number', name: '猜数字', art: '/assets/lobby/game-guess-card.png' },
+  { key: 'quiz', name: '快问快答', art: '/assets/lobby/game-quiz-card.png' },
+  { key: 'gomoku', name: '五子棋', art: '/assets/lobby/game-gomoku-card.png' },
+  { key: 'chess', name: '象棋', art: '/assets/lobby/game-chess-card.png' },
+  { key: 'guandan', name: '掼蛋', art: '/assets/lobby/game-guandan-card.png' },
+  { key: 'zha_jin_hua', name: '炸金花', art: '/assets/lobby/game-zjh-card.png' },
+  { key: 'mahjong', name: '红中麻将', art: '/assets/lobby/game-mahjong-card.png' }
 ]
 
 const selectedGameName = computed(() => {
@@ -238,441 +268,391 @@ function cancelMatch() {
 <style scoped>
 .lobby-page {
   min-height: 100vh;
-  padding: 16px 12px 22px;
+  background: linear-gradient(180deg, #1e90ff 0%, #87ceeb 100%);
   position: relative;
-  overflow: hidden;
-  background:
-    linear-gradient(180deg, rgba(0, 92, 240, 0.08), rgba(255, 255, 255, 0.24) 76%),
-    radial-gradient(circle at 52% 21%, rgba(255, 255, 255, 0.36), transparent 24%);
+  overflow-x: hidden;
+  padding-bottom: 20px;
 }
 
-.lobby-page::before,
-.lobby-page::after {
-  content: '';
-  position: absolute;
-  border-radius: 999px;
-  pointer-events: none;
-}
-
-.lobby-page::before {
-  width: 240px;
-  height: 240px;
-  left: -120px;
-  top: 160px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0));
-}
-
-.lobby-page::after {
-  width: 280px;
-  height: 280px;
-  right: -140px;
-  bottom: 110px;
-  background: radial-gradient(circle, rgba(118, 255, 229, 0.36), rgba(118, 255, 229, 0));
-}
-
-.lobby-shell {
-  width: min(100%, 430px);
+.lobby-container {
+  max-width: 750px;
   margin: 0 auto;
+  padding: 0 16px;
   position: relative;
-  z-index: 1;
 }
 
-.hero-panel {
+/* 顶部装饰 */
+.top-decorations {
+  position: relative;
+  height: 60px;
+  margin-bottom: 10px;
+}
+
+.flags {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  gap: 15px;
+}
+
+.flag {
+  font-size: 24px;
+  animation: wave 2s ease-in-out infinite;
+}
+
+.flag-1 {
+  animation-delay: 0s;
+}
+
+.flag-2 {
+  animation-delay: 0.3s;
+}
+
+.flag-3 {
+  animation-delay: 0.6s;
+}
+
+.balloon {
+  position: absolute;
+  top: 0;
+  right: 20px;
+  font-size: 40px;
+  animation: float 3s ease-in-out infinite;
+}
+
+.confetti {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.confetti-piece {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin: 0 5px;
+  border-radius: 2px;
+  animation: confetti-fall 2s ease-in-out infinite;
+}
+
+.confetti-piece:nth-child(1) {
+  background: #ff6b6b;
+  animation-delay: 0s;
+}
+
+.confetti-piece:nth-child(2) {
+  background: #ffd93d;
+  animation-delay: 0.5s;
+}
+
+.confetti-piece:nth-child(3) {
+  background: #6bcb77;
+  animation-delay: 1s;
+}
+
+/* 主标题 */
+.main-title {
+  text-align: center;
+  font-size: 48px;
+  font-weight: 900;
+  color: #fff;
+  text-shadow: 
+    0 4px 0 #1a73e8,
+    0 8px 0 #1557b0,
+    0 12px 20px rgba(0, 0, 0, 0.3);
+  margin: 0 0 20px;
+  letter-spacing: 4px;
+}
+
+/* 用户信息区 */
+.user-section {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  gap: 15px;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.avatar-wrapper {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  overflow: hidden;
+  border: 3px solid #fff;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.user-avatar {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.user-details {
   color: #fff;
 }
 
-.hero-top {
+.user-name-row {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.hero-ribbon {
-  margin: 0 0 8px;
-  width: fit-content;
-  min-height: 34px;
-  padding: 0 16px;
-  border-radius: 999px;
-  display: inline-flex;
   align-items: center;
-  background: linear-gradient(180deg, rgba(87, 154, 255, 0.98), rgba(25, 91, 241, 0.98));
-  border: 1px solid rgba(255, 255, 255, 0.52);
-  box-shadow: var(--shadow-strong);
-  font-size: 13px;
-  font-weight: 800;
+  gap: 10px;
+  margin-bottom: 4px;
 }
 
-.page-title {
-  margin: 0;
-  font-size: clamp(38px, 10vw, 58px);
-  line-height: 0.96;
-  font-weight: 900;
-  letter-spacing: 0;
-  -webkit-text-stroke: 2px rgba(255, 255, 255, 0.82);
-  text-shadow:
-    0 5px 0 rgba(4, 61, 173, 0.94),
-    0 10px 0 rgba(3, 61, 165, 0.34),
-    0 14px 28px rgba(5, 58, 150, 0.3);
-}
-
-.score-pill {
-  flex: 0 0 auto;
-  min-height: 50px;
-  padding: 0 16px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  border: 2px solid rgba(255, 255, 255, 0.48);
-  background: rgba(255, 255, 255, 0.92);
-  color: #2363f5;
-  font-size: 15px;
-  font-weight: 900;
-  box-shadow: var(--shadow-soft);
-}
-
-.coin {
+.greeting {
   font-size: 20px;
-}
-
-.player-row {
-  margin-top: 14px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: stretch;
-}
-
-.player-card {
-  min-height: 112px;
-  border-radius: 24px;
-  padding: 12px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.44);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.38), rgba(91, 176, 255, 0.28));
-  backdrop-filter: blur(8px);
-  box-shadow: var(--shadow-soft);
-}
-
-.avatar {
-  width: 76px;
-  height: 76px;
-  flex: 0 0 76px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(180deg, #fdfefe, #ebf4ff);
-  color: #2065f4;
-  border: 2px solid rgba(255, 255, 255, 0.72);
-  font-size: 32px;
-  font-weight: 900;
-  box-shadow: inset 0 2px 12px rgba(115, 159, 255, 0.2);
-  overflow: hidden;
-}
-
-.avatar img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.player-copy strong {
-  font-size: 26px;
-  line-height: 1.05;
-  font-weight: 900;
-}
-
-.name-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.bus-tag {
-  min-height: 30px;
-  padding: 0 10px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  background: rgba(255, 255, 255, 0.92);
-  color: #2264f6;
-  font-size: 14px;
-  font-weight: 900;
-}
-
-.player-copy p {
-  margin: 8px 0 0;
-  color: rgba(255, 255, 255, 0.94);
-  font-size: 15px;
   font-weight: 700;
 }
 
-.hero-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.hero-btn {
-  width: 88px;
-  min-height: 88px;
+.bus-badge {
+  background: rgba(255, 255, 255, 0.9);
+  color: #1a73e8;
+  padding: 4px 10px;
   border-radius: 20px;
-  border: 1px solid #d8e8fb;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(231, 241, 255, 0.95));
-  color: #1b4f97;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.welcome-text {
+  margin: 0;
+  font-size: 14px;
+  opacity: 0.9;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.action-btn {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 6px;
-  box-shadow: var(--shadow-soft);
-  font-size: 14px;
-  font-weight: 900;
+  width: 70px;
+  height: 70px;
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 16px;
+  border: none;
+  cursor: pointer;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s;
 }
 
-.hero-btn-icon {
-  font-size: 30px;
+.action-btn:hover {
+  transform: translateY(-2px);
 }
 
-.score-banner {
-  margin-top: 14px;
-  min-height: 148px;
-  border-radius: 30px;
-  border: 2px solid rgba(219, 233, 255, 0.92);
-  background:
-    radial-gradient(circle at 50% -10%, rgba(255, 255, 255, 0.24), rgba(255, 255, 255, 0) 38%),
-    linear-gradient(180deg, #4aa2ff, #1f6aff);
-  display: grid;
-  grid-template-columns: 52px 1fr 52px;
+.action-icon {
+  font-size: 28px;
+  margin-bottom: 4px;
+}
+
+.action-text {
+  font-size: 12px;
+  color: #333;
+  font-weight: 600;
+}
+
+/* 积分展示区 */
+.score-section {
+  margin-bottom: 20px;
+}
+
+.score-card {
+  background: linear-gradient(135deg, #1a73e8 0%, #4a90e2 100%);
+  border-radius: 20px;
+  padding: 20px;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 16px;
-  box-shadow: var(--shadow-strong);
+  justify-content: space-between;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
+  position: relative;
+  overflow: hidden;
 }
 
-.score-copy {
+.score-card::before {
+  content: '';
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
+  animation: shimmer 3s infinite;
+}
+
+.score-left,
+.score-right {
+  flex: 0 0 auto;
+}
+
+.trophy-img,
+.gift-img {
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
+}
+
+.score-center {
+  flex: 1;
   text-align: center;
+  color: #fff;
+  position: relative;
+  z-index: 1;
 }
 
-.score-copy span {
-  display: block;
-  font-size: 22px;
-  font-weight: 900;
-}
-
-.score-copy strong {
-  display: block;
-  margin-top: 6px;
-  font-size: 78px;
-  line-height: 0.92;
-  color: #ffd567;
-  font-weight: 900;
-  text-shadow: 0 5px 0 rgba(193, 116, 16, 0.56);
-}
-
-.score-accent {
-  display: inline-flex;
+.score-label {
+  display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 34px;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 18px;
+  font-weight: 600;
 }
 
-.game-grid-panel {
-  margin-top: 16px;
-  padding: 14px;
-  border-radius: 30px;
-  border: 2px solid #dceafb;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(239, 247, 255, 0.98) 100%);
+.star {
+  color: #ffd700;
+}
+
+.score-value {
+  font-size: 64px;
+  font-weight: 900;
+  color: #ffd700;
+  text-shadow: 0 4px 0 #b8860b, 0 8px 10px rgba(0, 0, 0, 0.3);
+  line-height: 1;
+}
+
+/* 游戏网格区 */
+.games-section {
+  margin-bottom: 20px;
+}
+
+.games-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  box-shadow: var(--shadow-soft);
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
 }
 
 .game-card {
-  overflow: hidden;
-  border-radius: 18px;
-  border: 2px solid #dbeafb;
   background: #fff;
-  color: #17386d;
-  box-shadow: 0 10px 18px rgba(14, 63, 143, 0.12);
-  transform: translateZ(0);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  cursor: pointer;
+  transition: transform 0.2s, box-shadow 0.2s;
 }
 
-.game-visual {
-  height: 108px;
-  display: grid;
-  place-items: center;
-  position: relative;
+.game-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+}
+
+.game-image-wrapper {
+  height: 100px;
   overflow: hidden;
 }
 
-.game-visual img {
-  position: absolute;
-  inset: 0;
+.game-image {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 28%;
-  transform: scale(1.18);
-  filter: saturate(1.12) brightness(1.03);
 }
 
-.game-visual::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.16)),
-    radial-gradient(circle at 50% 35%, rgba(255, 255, 255, 0.42), transparent 38%);
-}
-
-.game-icon {
-  position: relative;
-  z-index: 1;
-  min-width: 48px;
-  height: 48px;
-  padding: 0 10px;
-  border-radius: 15px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.86);
-  color: #125ee8;
-  font-size: 28px;
-  font-weight: 900;
-  box-shadow: 0 8px 18px rgba(17, 72, 164, 0.18);
-}
-
-.game-card h3 {
-  margin: 0;
-  padding: 12px 6px 14px;
+.game-name {
+  padding: 10px;
   text-align: center;
-  font-size: 15px;
-  line-height: 1.2;
-  font-weight: 900;
-}
-
-.game-card.tone-mint .game-visual {
-  background: linear-gradient(180deg, #d9fff0, #f5fffb);
-}
-
-.game-card.tone-violet .game-visual {
-  background: linear-gradient(180deg, #eadfff, #f9f5ff);
-}
-
-.game-card.tone-blue .game-visual {
-  background: linear-gradient(180deg, #dcebff, #f4f9ff);
-}
-
-.game-card.tone-gold .game-visual {
-  background: linear-gradient(180deg, #ffefca, #fffaf0);
-}
-
-.game-card.tone-orange .game-visual {
-  background: linear-gradient(180deg, #ffe4c7, #fff8ef);
-}
-
-.game-card.tone-green .game-visual {
-  background: linear-gradient(180deg, #e0ffd2, #f7fff2);
-}
-
-.game-card.tone-purple .game-visual {
-  background: linear-gradient(180deg, #f0e2ff, #fbf7ff);
-}
-
-.game-card.tone-cyan .game-visual {
-  background: linear-gradient(180deg, #ddfff7, #f4fffd);
-}
-
-.slogan-banner {
-  margin-top: 16px;
-  min-height: 96px;
-  border-radius: 20px;
-  padding: 0 16px;
-  display: grid;
-  grid-template-columns: auto 1fr auto;
-  align-items: center;
-  gap: 12px;
-  background:
-    radial-gradient(circle at 8% 84%, rgba(58, 193, 119, 0.34), transparent 28%),
-    radial-gradient(circle at 92% 78%, rgba(255, 174, 34, 0.24), transparent 26%),
-    linear-gradient(90deg, #c8f0ff, #eff9ff 45%, #d8f6ff);
-  border: 1px solid #cce7ff;
-  color: #2260c8;
-}
-
-.slogan-mascot,
-.slogan-tail {
-  font-size: 34px;
-}
-
-.slogan-banner strong {
-  display: block;
-  font-size: 22px;
-  line-height: 1.2;
-}
-
-.slogan-banner p {
-  margin: 4px 0 0;
   font-size: 14px;
-  font-weight: 800;
+  font-weight: 600;
+  color: #333;
 }
 
-.feature-nav {
-  margin-top: 16px;
-  border-radius: 24px;
-  border: 2px solid #dce9f8;
-  background: #fff;
-  overflow: hidden;
+/* 宣传横幅 */
+.promo-banner {
+  margin-bottom: 20px;
+}
+
+.promo-image {
+  width: 100%;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* 底部功能区 */
+.bottom-section {
+  margin-bottom: 20px;
+}
+
+.feature-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  background: #fff;
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
 }
 
-.feature-btn {
-  min-height: 94px;
-  padding: 12px 6px;
+.feature-item {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  background: transparent;
-  color: #1a3f74;
+  cursor: pointer;
+  transition: transform 0.2s;
 }
 
-.feature-btn + .feature-btn {
-  border-left: 1px solid #e5edf8;
+.feature-item:hover {
+  transform: translateY(-2px);
 }
 
-.feature-icon {
-  font-size: 30px;
+.feature-icon-img {
+  width: 48px;
+  height: 48px;
+  margin-bottom: 8px;
 }
 
-.feature-btn .title {
-  font-size: 15px;
-  font-weight: 900;
-}
-
-.feature-btn .sub {
-  font-size: 12px;
-  color: #6a88b3;
-  font-weight: 700;
-}
-
-.page-note {
-  margin: 14px 0 4px;
+.feature-text {
   text-align: center;
-  color: #eff8ff;
-  font-size: 16px;
-  font-weight: 800;
-  text-shadow: 0 2px 12px rgba(9, 67, 167, 0.36);
 }
 
+.feature-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 2px;
+}
+
+.feature-subtitle {
+  font-size: 12px;
+  color: #666;
+}
+
+/* 底部提示 */
+.footer-note {
+  text-align: center;
+  color: #fff;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.note-decoration {
+  font-size: 16px;
+}
+
+/* 弹窗样式 */
 .overlay {
   position: fixed;
   inset: 0;
@@ -783,76 +763,77 @@ function cancelMatch() {
   opacity: 0;
 }
 
+/* 动画 */
+@keyframes wave {
+  0%, 100% { transform: rotate(-5deg); }
+  50% { transform: rotate(5deg); }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes confetti-fall {
+  0%, 100% { transform: translateY(0) rotate(0deg); }
+  50% { transform: translateY(10px) rotate(180deg); }
+}
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+  100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
+}
+
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
+  to { transform: rotate(360deg); }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .games-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .feature-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .main-title {
+    font-size: 36px;
+  }
+  
+  .score-value {
+    font-size: 48px;
   }
 }
 
-@media (max-width: 390px) {
-  .lobby-page {
-    padding-inline: 10px;
+@media (max-width: 480px) {
+  .user-section {
+    flex-direction: column;
+    align-items: flex-start;
   }
-
-  .page-title {
-    font-size: 44px;
+  
+  .action-buttons {
+    width: 100%;
+    justify-content: space-around;
   }
-
-  .player-row {
-    grid-template-columns: 1fr;
-  }
-
-  .hero-actions {
-    flex-direction: row;
-  }
-
-  .hero-btn {
-    width: auto;
-    flex: 1;
-    min-height: 76px;
-  }
-
-  .score-banner {
-    min-height: 132px;
-    grid-template-columns: 44px 1fr 44px;
-  }
-
-  .score-copy span {
-    font-size: 18px;
-  }
-
-  .score-copy strong {
-    font-size: 64px;
-  }
-
-  .game-grid-panel {
-    padding: 10px;
+  
+  .games-grid {
+    grid-template-columns: repeat(2, 1fr);
     gap: 8px;
   }
-
-  .game-visual {
-    height: 88px;
+  
+  .feature-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
   }
-
-  .game-card h3 {
-    padding: 10px 4px 12px;
-    font-size: 13px;
+  
+  .main-title {
+    font-size: 32px;
   }
-
-  .feature-nav {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .feature-btn + .feature-btn {
-    border-left: 0;
-  }
-
-  .feature-btn:nth-child(2n) {
-    border-left: 1px solid #e5edf8;
-  }
-
-  .feature-btn:nth-child(n + 3) {
-    border-top: 1px solid #e5edf8;
+  
+  .score-value {
+    font-size: 40px;
   }
 }
 </style>

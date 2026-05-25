@@ -1,27 +1,9 @@
 <template>
   <main class="landing-page">
     <section class="landing-shell">
-      <header class="hero-area">
-        <p class="hero-ribbon">轻松互动，欢乐同行</p>
-        <h1 class="hero-title">
-          公司团建
-          <span>小游戏</span>
-        </h1>
-        <p class="hero-subtitle">团队合作，共创精彩</p>
+      <h1 class="sr-only">公司团建小游戏</h1>
 
-        <div class="team-showcase">
-          <div
-            v-for="(avatar, index) in heroAvatars"
-            :key="avatar.src"
-            class="team-member"
-            :class="avatar.tone"
-            :style="{ '--lift': `${(index % 2) * -10}px` }"
-          >
-            <img :src="avatar.src" :alt="avatar.label" />
-            <span>{{ avatar.label }}</span>
-          </div>
-        </div>
-      </header>
+      <header class="hero-area" aria-hidden="true"></header>
 
       <section class="entry-card">
         <div class="field-group">
@@ -29,6 +11,7 @@
             <span class="field-icon">👤</span>
             姓名
           </label>
+
           <input
             id="nickname"
             v-model="nickname"
@@ -40,42 +23,39 @@
           />
         </div>
 
-        <div class="field-group">
+        <div class="field-group field-group-bus">
           <label class="field-label">
             <span class="field-icon">🚌</span>
             大巴车
           </label>
+
           <p class="field-tip">请选择您所在的大巴车</p>
 
           <div class="bus-grid">
             <button
               v-for="n in busCount"
               :key="n"
+              type="button"
               class="bus-item"
               :class="{ active: busNumber === n }"
               @click="busNumber = n"
             >
               <span class="bus-icon">🚌</span>
-              <span>{{ n }}号车</span>
+              <strong>{{ n }}号车</strong>
               <span v-if="busNumber === n" class="bus-check">✓</span>
             </button>
           </div>
         </div>
 
-        <div class="promo-strip">
-          <span>🎯</span>
-          <span>🎲</span>
-          <span>🕹️</span>
-          <span>📣</span>
-        </div>
+        <div class="reference-banner" aria-hidden="true"></div>
 
         <button
           class="enter-btn"
           :disabled="!nickname.trim() || !busNumber"
           @click="handleSubmit"
         >
-          进入游戏平台
-          <span>›</span>
+          <span>进入游戏平台</span>
+          <i>›</i>
         </button>
 
         <p class="reward-note">
@@ -83,11 +63,6 @@
           提交后自动领取 <strong>1000</strong> 积分
         </p>
       </section>
-
-      <footer class="landing-footer">
-        <span>在线 {{ stats.onlinePlayers || 0 }} 人</span>
-        <span>已注册 {{ stats.totalPlayers || 0 }} 人</span>
-      </footer>
     </section>
   </main>
 </template>
@@ -102,12 +77,6 @@ const nickname = ref('')
 const busNumber = ref(1)
 const busCount = ref(4)
 const stats = ref({ onlinePlayers: 0, totalPlayers: 0 })
-const heroAvatars = [
-  { src: '/assets/mahjong-theme/avatars/yun.png', label: '1号车', tone: 'tone-yellow' },
-  { src: '/assets/mahjong-theme/avatars/xu.png', label: '2号车', tone: 'tone-blue' },
-  { src: '/assets/mahjong-theme/avatars/ling.png', label: '3号车', tone: 'tone-white' },
-  { src: '/assets/mahjong-theme/avatars/wan.png', label: '4号车', tone: 'tone-green' }
-]
 
 function toLobby(player) {
   setPlayer(player)
@@ -168,345 +137,213 @@ onUnmounted(() => {
 <style scoped>
 .landing-page {
   min-height: 100vh;
-  padding: 16px 12px 22px;
+  padding: 0 14px 30px;
   position: relative;
   overflow: hidden;
-  background:
-    radial-gradient(circle at 15% 28%, rgba(255, 255, 255, 0.46), transparent 18%),
-    radial-gradient(circle at 88% 18%, rgba(255, 221, 100, 0.24), transparent 15%),
-    linear-gradient(180deg, rgba(0, 93, 234, 0.18), rgba(255, 255, 255, 0.18) 72%);
+  background: linear-gradient(180deg, #0a64ef 0%, #47b4ff 46%, #eef9ff 88%);
 }
 
 .landing-page::before,
 .landing-page::after {
   content: '';
   position: absolute;
-  border-radius: 999px;
+  left: 0;
+  right: 0;
   pointer-events: none;
-  opacity: 0.5;
+  z-index: 0;
 }
 
 .landing-page::before {
-  width: 220px;
-  height: 220px;
-  left: -110px;
-  top: 160px;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0));
+  top: 0;
+  height: 430px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.04)),
+    url('/assets/ui-ref/landing.png') center top / 100% auto no-repeat;
 }
 
 .landing-page::after {
-  width: 240px;
-  height: 240px;
-  right: -120px;
-  bottom: 120px;
-  background: radial-gradient(circle, rgba(144, 255, 237, 0.46), rgba(144, 255, 237, 0));
+  bottom: 0;
+  height: 220px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(238, 249, 255, 0.1)),
+    url('/assets/ui-ref/landing.png') center bottom / 100% auto no-repeat;
 }
 
 .landing-shell {
-  width: min(100%, 430px);
+  width: min(100%, 460px);
   margin: 0 auto;
-  min-height: calc(100vh - 36px);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
+  min-height: 100vh;
   position: relative;
   z-index: 1;
+  padding-top: 10px;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .hero-area {
-  position: relative;
-  min-height: 318px;
-  padding: 42px 18px 20px;
-  border-radius: 8px 8px 28px 28px;
-  text-align: center;
-  color: #fff;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 12% 30%, rgba(255, 255, 255, 0.35) 0 35px, transparent 37px),
-    radial-gradient(circle at 90% 22%, rgba(255, 255, 255, 0.32) 0 42px, transparent 44px),
-    radial-gradient(circle at 75% 82%, rgba(53, 203, 135, 0.22) 0 80px, transparent 82px),
-    linear-gradient(180deg, rgba(40, 133, 255, 0.66), rgba(31, 146, 255, 0.42));
-  box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.24);
-}
-
-.hero-area::before,
-.hero-area::after {
-  content: '';
-  position: absolute;
-  pointer-events: none;
-}
-
-.hero-area::before {
-  left: 20px;
-  right: 20px;
-  top: 14px;
-  height: 1px;
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.58), transparent);
-}
-
-.hero-area::after {
-  left: 50%;
-  bottom: -48px;
-  width: 420px;
-  height: 124px;
-  transform: translateX(-50%);
-  border-radius: 50%;
-  background: rgba(223, 249, 255, 0.2);
-}
-
-.hero-ribbon {
-  margin: 0 auto;
-  width: fit-content;
-  min-height: 36px;
-  padding: 0 18px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(180deg, rgba(78, 155, 255, 0.98), rgba(20, 91, 239, 0.98));
-  border: 1px solid rgba(255, 255, 255, 0.58);
-  box-shadow: 0 10px 20px rgba(5, 67, 164, 0.2);
-  font-size: 14px;
-  font-weight: 900;
-}
-
-.hero-title {
-  margin: 16px 0 8px;
-  font-size: 44px;
-  line-height: 0.95;
-  font-weight: 900;
-  letter-spacing: 0;
-  -webkit-text-stroke: 2px rgba(255, 255, 255, 0.82);
-  text-shadow:
-    0 5px 0 #0752c7,
-    0 10px 0 rgba(8, 54, 172, 0.42),
-    0 16px 28px rgba(3, 56, 148, 0.34);
-}
-
-.hero-title span {
-  display: block;
-  margin-top: 8px;
-  color: #ffd256;
-  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.5);
-  text-shadow:
-    0 5px 0 rgba(192, 105, 5, 0.95),
-    0 14px 28px rgba(3, 56, 148, 0.26);
-}
-
-.hero-subtitle {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 900;
-  text-shadow: 0 3px 12px rgba(6, 58, 156, 0.28);
-}
-
-.team-showcase {
-  position: relative;
-  z-index: 1;
-  margin-top: 22px;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
-  align-items: stretch;
-}
-
-.team-member {
-  min-width: 0;
-  min-height: 72px;
-  border-radius: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.62);
-  box-shadow: 0 10px 18px rgba(6, 67, 166, 0.16);
-}
-
-.team-member {
-  transform: none;
-  padding: 7px 4px 6px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 4px;
-  color: #fff;
-  font-size: 12px;
-  font-weight: 900;
-  overflow: hidden;
-}
-
-.team-member img {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  object-fit: cover;
-  background: rgba(255, 255, 255, 0.88);
-  border: 2px solid rgba(255, 255, 255, 0.78);
-}
-
-.team-member span {
-  min-height: 22px;
-  padding: 0 6px;
-  border-radius: 999px;
-  display: inline-flex;
-  align-items: center;
-  background: rgba(255, 255, 255, 0.86);
-  color: #1b5fd8;
-  white-space: nowrap;
-}
-
-.team-member.tone-yellow {
-  background: linear-gradient(180deg, #ffc54b, #ffa62d);
-}
-
-.team-member.tone-blue {
-  background: linear-gradient(180deg, #53a7ff, #236cff);
-}
-
-.team-member.tone-white {
-  background: linear-gradient(180deg, #ffffff, #eff5ff);
-  color: #245ff4;
-}
-
-.team-member.tone-green {
-  background: linear-gradient(180deg, #34d6bb, #00b99e);
-}
-
-.team-member.tone-orange {
-  background: linear-gradient(180deg, #ff9d52, #ff6d37);
+  width: 100%;
+  aspect-ratio: 941 / 648;
+  background: url('/assets/ui-ref/landing.png') center top / 100% auto no-repeat;
 }
 
 .entry-card {
-  margin-top: -10px;
-  background: linear-gradient(180deg, #ffffff 0%, #f3f9ff 100%);
-  border-radius: 30px;
-  border: 2px solid rgba(218, 233, 252, 0.98);
-  box-shadow: var(--shadow-strong);
-  padding: 22px 18px 20px;
+  margin-top: -16px;
+  padding: 28px 22px 20px;
+  border-radius: 36px;
+  background: rgba(255, 255, 255, 0.98);
+  border: 1px solid rgba(228, 237, 250, 0.96);
+  box-shadow:
+    0 22px 44px rgba(10, 74, 170, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .field-group + .field-group {
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px dashed #d9e8fb;
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 1px dashed #d7e4f7;
 }
 
 .field-label {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: #1f3562;
   font-size: 18px;
   font-weight: 900;
-  color: var(--text-primary);
 }
 
 .field-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(31, 111, 255, 0.12), rgba(32, 197, 192, 0.14));
   font-size: 18px;
 }
 
 .field-tip {
-  margin: -4px 0 12px;
-  color: var(--text-secondary);
+  margin: -4px 0 14px;
+  color: #6b82ac;
   font-size: 14px;
-  font-weight: 600;
+  line-height: 1.5;
 }
 
 .field-input {
   width: 100%;
   min-height: 60px;
-  padding: 0 16px;
-  border: 2px solid #d5e4f9;
-  border-radius: 16px;
+  padding: 0 18px;
+  border: 1px solid #d2e0f4;
+  border-radius: 18px;
   outline: none;
-  color: var(--text-primary);
-  font-size: 18px;
   background: #fbfdff;
+  color: #17315d;
+  font-size: 18px;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .field-input:focus {
-  border-color: #67a1ff;
-  box-shadow: 0 0 0 4px rgba(103, 161, 255, 0.16);
+  border-color: #4d95ff;
+  box-shadow: 0 0 0 4px rgba(77, 149, 255, 0.14);
 }
 
 .bus-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 
 .bus-item {
   position: relative;
-  min-height: 112px;
-  border-radius: 18px;
-  border: 2px solid #d6e3f7;
-  background: #fff;
-  color: var(--text-primary);
+  min-height: 118px;
+  padding: 14px 8px 12px;
+  border-radius: 20px;
+  border: 1px solid #d9e4f5;
+  background: linear-gradient(180deg, #ffffff, #fbfdff);
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 8px;
-  font-size: 15px;
-  font-weight: 900;
-  box-shadow: 0 10px 18px rgba(13, 72, 168, 0.08);
+  gap: 10px;
+  color: #20355f;
+  box-shadow: 0 10px 18px rgba(7, 84, 178, 0.08);
 }
 
 .bus-icon {
   font-size: 30px;
 }
 
+.bus-item strong {
+  font-size: 17px;
+  line-height: 1;
+}
+
 .bus-item.active {
+  border-color: rgba(28, 113, 255, 0.32);
+  background: linear-gradient(180deg, #318cff, #115df3);
   color: #fff;
-  background: linear-gradient(180deg, #2f8dff, #0a5ff4);
-  border-color: #2a7eff;
-  box-shadow: var(--shadow-button);
+  box-shadow: 0 18px 28px rgba(10, 90, 212, 0.22);
 }
 
 .bus-check {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 22px;
-  height: 22px;
+  top: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   display: grid;
   place-items: center;
-  background: rgba(255, 255, 255, 0.22);
-  border: 1px solid rgba(255, 255, 255, 0.36);
-  font-size: 12px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 900;
 }
 
-.promo-strip {
-  margin: 18px 0 16px;
-  min-height: 82px;
-  border-radius: 18px;
-  border: 1px solid #cde5ff;
-  background:
-    radial-gradient(circle at 20% 50%, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0) 22%),
-    linear-gradient(120deg, #d8f6ff, #f4fbff 52%, #cff0ff);
-  display: flex;
-  align-items: center;
-  justify-content: space-evenly;
-  color: #2963b8;
-  font-size: 28px;
+.reference-banner {
+  margin-top: 22px;
+  width: 100%;
+  aspect-ratio: 754 / 166;
+  border-radius: 22px;
+  background: url('/assets/landing/banner-strip.png') center / cover no-repeat;
+  border: 1px solid rgba(208, 228, 247, 0.96);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
 }
 
 .enter-btn {
+  margin-top: 26px;
   width: 100%;
-  min-height: 64px;
-  border-radius: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.72);
-  background: linear-gradient(180deg, #2d8cff, #0352eb);
+  min-height: 68px;
+  padding: 0 22px;
+  border-radius: 24px;
+  border: 1px solid rgba(22, 108, 255, 0.18);
+  background: linear-gradient(180deg, #3291ff, #145ff2);
   color: #fff;
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  gap: 10px;
+  justify-content: space-between;
   font-size: 24px;
   font-weight: 900;
-  text-shadow: 0 2px 12px rgba(6, 62, 160, 0.42);
-  box-shadow: var(--shadow-button);
+  box-shadow:
+    0 16px 26px rgba(10, 90, 212, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22);
 }
 
-.enter-btn span {
+.enter-btn i {
+  font-style: normal;
   font-size: 34px;
   line-height: 1;
 }
@@ -515,76 +352,54 @@ onUnmounted(() => {
   opacity: 0.58;
   cursor: not-allowed;
   box-shadow: none;
-  filter: grayscale(0.28);
+  filter: grayscale(0.2);
 }
 
 .reward-note {
-  margin: 14px 0 0;
+  margin: 18px 0 0;
   text-align: center;
-  color: #384f7e;
-  font-size: 17px;
+  color: #2f456e;
+  font-size: 16px;
   font-weight: 700;
 }
 
 .gift-icon {
-  margin-right: 6px;
+  margin-right: 8px;
 }
 
 .reward-note strong {
-  color: #ff6f12;
-}
-
-.landing-footer {
-  margin-top: auto;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: #eff7ff;
-  font-size: 14px;
-  font-weight: 700;
-  text-shadow: 0 2px 12px rgba(10, 67, 160, 0.38);
+  color: #f06d00;
 }
 
 @media (max-width: 390px) {
   .landing-page {
-    padding-inline: 8px;
+    padding-inline: 10px;
   }
 
-  .landing-shell {
-    width: 100%;
+  .entry-card {
+    padding: 24px 16px 18px;
   }
 
-  .hero-area {
-    min-height: 308px;
-    padding: 40px 14px 18px;
-  }
-
-  .hero-title {
-    font-size: 40px;
-  }
-
-  .team-showcase {
-    gap: 8px;
-  }
-
-  .team-member {
-    min-height: 68px;
-    font-size: 11px;
-  }
-
-  .team-member img {
-    width: 36px;
-    height: 36px;
+  .bus-grid {
+    gap: 10px;
   }
 
   .bus-item {
-    min-height: 94px;
-    font-size: 14px;
+    min-height: 108px;
+    border-radius: 18px;
   }
 
-  .landing-footer {
-    flex-direction: column;
+  .bus-item strong {
+    font-size: 15px;
+  }
+
+  .reference-banner {
+    border-radius: 18px;
+  }
+
+  .enter-btn {
+    min-height: 62px;
+    font-size: 21px;
   }
 }
 </style>

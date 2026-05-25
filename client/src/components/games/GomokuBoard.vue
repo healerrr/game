@@ -321,33 +321,44 @@ function handleBoardHover(px, py) {
   }
 }
 
+function normalizeCanvasPoint(rawX, rawY) {
+  const rect = boardCanvas.value?.getBoundingClientRect()
+  if (!rect || !rect.width || !rect.height) {
+    return { x: rawX, y: rawY }
+  }
+  return {
+    x: rawX * (CANVAS_SIZE / rect.width),
+    y: rawY * (CANVAS_SIZE / rect.height)
+  }
+}
+
 function handleCanvasClick(event) {
   const rect = boardCanvas.value.getBoundingClientRect()
-  handleBoardInteraction(event.clientX - rect.left, event.clientY - rect.top)
+  const point = normalizeCanvasPoint(event.clientX - rect.left, event.clientY - rect.top)
+  handleBoardInteraction(point.x, point.y)
 }
 
 function handleCanvasMove(event) {
   const rect = boardCanvas.value.getBoundingClientRect()
-  handleBoardHover(event.clientX - rect.left, event.clientY - rect.top)
+  const point = normalizeCanvasPoint(event.clientX - rect.left, event.clientY - rect.top)
+  handleBoardHover(point.x, point.y)
 }
 
 function handleTouchStart(event) {
   if (!event.touches || event.touches.length === 0) return
   const touch = event.touches[0]
   const rect = boardCanvas.value.getBoundingClientRect()
-  const x = touch.clientX - rect.left
-  const y = touch.clientY - rect.top
-  handleBoardHover(x, y)
-  handleBoardInteraction(x, y)
+  const point = normalizeCanvasPoint(touch.clientX - rect.left, touch.clientY - rect.top)
+  handleBoardHover(point.x, point.y)
+  handleBoardInteraction(point.x, point.y)
 }
 
 function handleTouchMove(event) {
   if (!event.touches || event.touches.length === 0) return
   const touch = event.touches[0]
   const rect = boardCanvas.value.getBoundingClientRect()
-  const x = touch.clientX - rect.left
-  const y = touch.clientY - rect.top
-  handleBoardHover(x, y)
+  const point = normalizeCanvasPoint(touch.clientX - rect.left, touch.clientY - rect.top)
+  handleBoardHover(point.x, point.y)
 }
 
 function handleTouchEnd() {
@@ -779,5 +790,94 @@ watch([board, lastMoveX, lastMoveY, hoverPos, isMyTurn, myIndex, hintMove], () =
     radial-gradient(circle at 86% 68%, rgba(255, 174, 34, 0.2), transparent 23%),
     linear-gradient(90deg, rgba(216, 245, 255, 0.96), rgba(255, 255, 255, 0.98) 52%, rgba(223, 247, 255, 0.96));
   text-shadow: 0 2px 0 #fff;
+}
+
+.gomoku-board {
+  min-height: 0;
+  height: var(--game-viewport-height, calc(100dvh - 60px));
+  max-height: var(--game-viewport-height, calc(100dvh - 60px));
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
+  overflow: hidden;
+  padding-bottom: 10px;
+}
+
+.board-frame {
+  min-height: 0;
+  padding: 14px;
+}
+
+.board-canvas {
+  width: min(100%, 420px) !important;
+  height: auto !important;
+  aspect-ratio: 1 / 1;
+}
+
+@media (max-width: 760px), (max-height: 820px) {
+  .gomoku-board {
+    padding-top: 4px;
+    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
+  }
+
+  .versus-panel {
+    padding: 10px 12px;
+    border-radius: 22px;
+  }
+
+  .avatar {
+    width: 48px;
+    height: 48px;
+    font-size: 24px;
+  }
+
+  .turn-banner {
+    margin-top: 8px;
+    min-height: 42px;
+    font-size: 20px;
+  }
+
+  .board-frame {
+    margin-top: 8px;
+    padding: 10px;
+    border-radius: 22px;
+  }
+
+  .tool-row {
+    margin-top: 10px;
+    gap: 8px;
+  }
+
+  .tool-card {
+    min-height: 74px;
+    border-radius: 16px;
+    box-shadow:
+      inset 0 2px 0 rgba(255, 255, 255, 0.42),
+      0 8px 18px rgba(8, 72, 182, 0.16);
+  }
+
+  .tool-card span {
+    font-size: 24px;
+  }
+
+  .tool-card strong {
+    font-size: 16px;
+  }
+
+  .status-panel {
+    margin-top: 10px;
+    padding: 12px;
+  }
+
+  .status-panel strong {
+    font-size: 22px;
+  }
+
+  .status-panel span {
+    font-size: 14px;
+  }
+
+  .bottom-banner {
+    display: none;
+  }
 }
 </style>

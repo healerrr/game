@@ -1,12 +1,21 @@
 <template>
-  <main class="game-room" :class="{ 'fullscreen-game': isFullscreenGame }">
+  <main
+    class="game-room"
+    :class="{
+      'fullscreen-game': isFullscreenGame,
+      'quiz-layout': gameType === 'quiz',
+      'rps-layout': gameType === 'rock_paper_scissors',
+      'guess-layout': gameType === 'guess_number',
+      'board-layout': ['gomoku', 'chess', 'zha_jin_hua', 'undercover'].includes(gameType)
+    }"
+  >
     <header class="game-header">
       <button class="back-btn" @click="backToLobby">‹</button>
       <h1>{{ gameLabel }}</h1>
       <div class="point-pill"><span class="coin-dot"></span>积分 {{ player?.points ?? 0 }}</div>
     </header>
 
-    <section v-if="gameType === 'rock_paper_scissors'" class="mode-card">
+    <section v-if="gameType === 'rock_paper_scissors'" class="mode-card rps-mode">
       <div class="profile-row">
         <div class="side side-me">
           <div class="avatar-circle">{{ playerInitial }}</div>
@@ -93,7 +102,7 @@
       </div>
     </section>
 
-    <section v-else-if="gameType === 'guess_number'" class="mode-card">
+    <section v-else-if="gameType === 'guess_number'" class="mode-card guess-mode">
       <div class="profile-row compact">
         <div class="side side-me">
           <div class="avatar-circle">{{ playerInitial }}</div>
@@ -147,7 +156,7 @@
       </div>
     </section>
 
-    <section v-else-if="gameType === 'quiz'" class="mode-card">
+    <section v-else-if="gameType === 'quiz'" class="mode-card quiz-mode">
       <div class="profile-row compact">
         <div class="side side-me">
           <div class="avatar-circle">{{ playerInitial }}</div>
@@ -580,8 +589,10 @@ watch(() => roomId.value, () => {
 
 <style scoped>
 .game-room {
+  --game-header-space: 60px;
+  --game-viewport-height: calc(100dvh - var(--game-header-space));
   width: 100vw;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   padding: 0;
   display: flex;
@@ -591,7 +602,8 @@ watch(() => roomId.value, () => {
 
 .game-room.fullscreen-game {
   width: 100vw;
-  height: 100vh;
+  height: 100dvh;
+  --game-viewport-height: 100dvh;
   overflow: hidden;
   padding: 0;
 }
@@ -1325,14 +1337,699 @@ watch(() => roomId.value, () => {
   background: linear-gradient(180deg, #ffffff, #eef6ff);
 }
 
+/* Quiz compact first-screen layout */
+.game-room.quiz-layout {
+  height: 100dvh;
+  max-height: 100dvh;
+  padding: 0 10px 10px;
+}
+
+.game-room.quiz-layout .game-header {
+  width: min(100%, 520px);
+  margin: 8px auto;
+  flex: 0 0 auto;
+}
+
+.game-room.quiz-layout .point-pill {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+.game-room.quiz-layout .mode-card.quiz-mode {
+  width: min(100%, 520px);
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
+  height: calc(100dvh - 72px);
+  max-height: calc(100dvh - 72px);
+  padding: 14px;
+  border-radius: 28px;
+  overflow: hidden;
+}
+
+.game-room.quiz-layout .quiz-mode .profile-row.compact {
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.game-room.quiz-layout .quiz-mode .side {
+  min-height: 70px;
+  padding: 10px 12px;
+  gap: 12px;
+  border-radius: 20px;
+}
+
+.game-room.quiz-layout .quiz-mode .side strong {
+  font-size: 16px;
+}
+
+.game-room.quiz-layout .quiz-mode .side p {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.game-room.quiz-layout .quiz-mode .avatar-circle {
+  width: 52px;
+  height: 52px;
+  font-size: 24px;
+}
+
+.game-room.quiz-layout .quiz-mode .small-action {
+  min-height: 48px;
+  padding: 0 16px;
+  justify-self: end;
+}
+
+.game-room.quiz-layout .quiz-mode .quiz-head {
+  margin-top: 0;
+  gap: 10px;
+}
+
+.game-room.quiz-layout .quiz-mode .quiz-head span {
+  min-height: 42px;
+  padding: 0 14px;
+  justify-content: center;
+  font-size: 15px;
+}
+
+.game-room.quiz-layout .quiz-mode .quiz-panel {
+  margin-top: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 14px;
+}
+
+.game-room.quiz-layout .quiz-mode .ring-wrap.small {
+  width: 84px;
+  height: 84px;
+}
+
+.game-room.quiz-layout .quiz-mode .ring-wrap.small svg {
+  width: 84px;
+  height: 84px;
+}
+
+.game-room.quiz-layout .quiz-mode .ring-wrap strong {
+  font-size: 20px;
+}
+
+.game-room.quiz-layout .quiz-mode .quiz-panel h3 {
+  margin: 0;
+  font-size: clamp(22px, 4vw, 28px);
+  line-height: 1.24;
+}
+
+.game-room.quiz-layout .quiz-mode .quiz-options {
+  margin-top: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  align-content: start;
+}
+
+.game-room.quiz-layout .quiz-mode .quiz-options button {
+  min-height: 72px;
+  padding: 0 14px;
+}
+
+.game-room.quiz-layout .quiz-mode .quiz-options button span:last-child {
+  flex: 1 1 auto;
+  line-height: 1.24;
+}
+
+.game-room.quiz-layout .quiz-mode .quiz-options .letter {
+  width: 38px;
+  height: 38px;
+  flex-basis: 38px;
+}
+
+.game-room.quiz-layout .quiz-mode .final-box {
+  margin-top: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 12px;
+}
+
+.game-room.quiz-layout .quiz-mode .final-box p {
+  line-height: 1.4;
+}
+
+.game-room.quiz-layout .quiz-mode .score-list {
+  max-height: 180px;
+  overflow: auto;
+}
+
+.game-room.rps-layout,
+.game-room.guess-layout,
+.game-room.quiz-layout,
+.game-room.board-layout {
+  padding: 0 10px 10px;
+}
+
+.game-room.board-layout {
+  --game-header-space: 54px;
+}
+
+.game-room.rps-layout .game-header,
+.game-room.guess-layout .game-header,
+.game-room.quiz-layout .game-header,
+.game-room.board-layout .game-header {
+  width: min(100%, 520px);
+  margin: 8px auto;
+  flex: 0 0 auto;
+}
+
+.game-room.board-layout .game-header {
+  width: min(100%, 940px);
+}
+
+.game-room.rps-layout .point-pill,
+.game-room.guess-layout .point-pill,
+.game-room.quiz-layout .point-pill,
+.game-room.board-layout .point-pill {
+  justify-self: end;
+  white-space: nowrap;
+}
+
+.game-room.rps-layout .mode-card.rps-mode,
+.game-room.guess-layout .mode-card.guess-mode {
+  width: min(100%, 520px);
+  flex: 1 1 auto;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+  min-height: 0;
+  height: var(--game-viewport-height);
+  max-height: var(--game-viewport-height);
+  padding: 14px;
+  border-radius: 28px;
+  overflow: hidden;
+}
+
+.game-room.rps-layout .profile-row,
+.game-room.guess-layout .profile-row.compact {
+  margin: 0;
+}
+
+.game-room.rps-layout .side,
+.game-room.guess-layout .side {
+  min-height: 68px;
+  padding: 9px 11px;
+  gap: 10px;
+  border-radius: 18px;
+}
+
+.game-room.rps-layout .side strong,
+.game-room.guess-layout .side strong {
+  font-size: 16px;
+}
+
+.game-room.rps-layout .side p,
+.game-room.guess-layout .side p {
+  margin-top: 2px;
+  font-size: 12px;
+}
+
+.game-room.rps-layout .avatar-circle,
+.game-room.guess-layout .avatar-circle {
+  width: 48px;
+  height: 48px;
+  font-size: 22px;
+}
+
+.game-room.guess-layout .small-action {
+  min-height: 44px;
+  padding: 0 14px;
+  justify-self: end;
+}
+
+.game-room.rps-layout .result-line,
+.game-room.guess-layout .status-chips,
+.game-room.guess-layout .dual-btns {
+  margin-top: 0;
+}
+
+.game-room.rps-layout .play-zone {
+  margin-top: 0;
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  gap: 10px;
+  padding: 14px;
+}
+
+.game-room.rps-layout .ring-wrap {
+  width: 86px;
+  height: 86px;
+}
+
+.game-room.rps-layout .ring-wrap svg {
+  width: 86px;
+  height: 86px;
+}
+
+.game-room.rps-layout .ring-wrap strong {
+  font-size: 22px;
+}
+
+.game-room.rps-layout .phase-copy {
+  margin: 0;
+  font-size: 14px;
+}
+
+.game-room.rps-layout .move-row {
+  margin-top: 0;
+  align-content: start;
+}
+
+.game-room.rps-layout .move-btn {
+  min-height: 86px;
+}
+
+.game-room.rps-layout .move-btn .emoji {
+  font-size: 30px;
+}
+
+.game-room.rps-layout .reveal-row {
+  min-height: 0;
+}
+
+.game-room.rps-layout .reveal-piece {
+  min-height: 92px;
+}
+
+.game-room.rps-layout .reveal-piece span {
+  font-size: 34px;
+}
+
+.game-room.rps-layout .round-result,
+.game-room.rps-layout .dual-btns,
+.game-room.guess-layout .hint-line,
+.game-room.guess-layout .final-box {
+  margin-top: 0;
+}
+
+.game-room.guess-layout .hero-strip {
+  margin-top: 0;
+  min-height: 62px;
+  font-size: 20px;
+}
+
+.game-room.guess-layout .status-chips span {
+  min-height: 38px;
+  font-size: 13px;
+}
+
+.game-room.guess-layout .number-screen {
+  margin-top: 0;
+  min-height: 78px;
+  font-size: 48px;
+}
+
+.game-room.guess-layout .num-pad {
+  margin-top: 0;
+  gap: 8px;
+}
+
+.game-room.guess-layout .num-pad button {
+  min-height: 46px;
+  font-size: 20px;
+}
+
+.game-room.guess-layout .dual-btns {
+  gap: 10px;
+}
+
+.game-room.guess-layout .final-box {
+  min-height: 0;
+  overflow: auto;
+}
+
+@media (max-height: 820px) {
+  .game-room.quiz-layout .mode-card.quiz-mode {
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .side {
+    min-height: 64px;
+    padding: 8px 10px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .quiz-head span {
+    min-height: 38px;
+    font-size: 14px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .ring-wrap.small {
+    width: 72px;
+    height: 72px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .ring-wrap.small svg {
+    width: 72px;
+    height: 72px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .ring-wrap strong {
+    font-size: 18px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .quiz-panel h3 {
+    font-size: clamp(18px, 3.7vw, 24px);
+  }
+
+  .game-room.quiz-layout .quiz-mode .quiz-options button {
+    min-height: 64px;
+  }
+
+  .game-room.rps-layout .mode-card.rps-mode,
+  .game-room.guess-layout .mode-card.guess-mode {
+    gap: 8px;
+    padding: 12px;
+  }
+
+  .game-room.rps-layout .side,
+  .game-room.guess-layout .side {
+    min-height: 62px;
+    padding: 8px 10px;
+  }
+
+  .game-room.rps-layout .move-btn {
+    min-height: 74px;
+  }
+
+  .game-room.guess-layout .hero-strip {
+    min-height: 56px;
+    font-size: 18px;
+  }
+
+  .game-room.guess-layout .number-screen {
+    min-height: 68px;
+    font-size: 42px;
+  }
+}
+
 @media (max-width: 760px) {
-  .game-header {
+  .game-room:not(.quiz-layout) .game-header {
     grid-template-columns: 46px minmax(0, 1fr);
   }
 
-  .point-pill {
+  .game-room:not(.quiz-layout) .point-pill {
     grid-column: 1 / -1;
     justify-content: center;
+  }
+
+  .game-room.quiz-layout {
+    padding: 0 8px 8px;
+  }
+
+  .game-room.rps-layout,
+  .game-room.guess-layout,
+  .game-room.board-layout {
+    padding: 0 8px 8px;
+  }
+
+  .game-room.quiz-layout .game-header,
+  .game-room.rps-layout .game-header,
+  .game-room.guess-layout .game-header,
+  .game-room.board-layout .game-header {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    min-height: 32px;
+    padding: 3px 6px;
+    margin: 6px auto 8px;
+  }
+
+  .game-room.quiz-layout .game-header h1,
+  .game-room.rps-layout .game-header h1,
+  .game-room.guess-layout .game-header h1,
+  .game-room.board-layout .game-header h1 {
+    font-size: 16px;
+  }
+
+  .game-room.quiz-layout .point-pill,
+  .game-room.rps-layout .point-pill,
+  .game-room.guess-layout .point-pill,
+  .game-room.board-layout .point-pill {
+    grid-column: auto;
+    justify-self: end;
+    min-height: 26px;
+    padding: 0 8px;
+    font-size: 11px;
+  }
+
+  .game-room.quiz-layout .coin-dot {
+    width: 18px;
+    height: 18px;
+  }
+
+  .game-room.rps-layout .coin-dot,
+  .game-room.guess-layout .coin-dot,
+  .game-room.board-layout .coin-dot {
+    width: 18px;
+    height: 18px;
+  }
+
+  .game-room.quiz-layout .mode-card.quiz-mode {
+    gap: 8px;
+    height: calc(100dvh - 62px);
+    max-height: calc(100dvh - 62px);
+    padding: 12px;
+    border-radius: 24px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .side {
+    min-height: 62px;
+    padding: 8px 10px;
+    gap: 10px;
+    border-radius: 18px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .side strong {
+    font-size: 15px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .avatar-circle {
+    width: 44px;
+    height: 44px;
+    font-size: 22px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .small-action {
+    min-height: 42px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .quiz-head {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .quiz-head span {
+    min-height: 38px;
+    padding: 0 10px;
+    border-radius: 14px;
+    font-size: 13px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .quiz-panel {
+    gap: 8px;
+    padding: 12px;
+    border-radius: 20px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .ring-wrap.small {
+    width: 72px;
+    height: 72px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .ring-wrap.small svg {
+    width: 72px;
+    height: 72px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .ring-wrap strong {
+    font-size: 16px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .quiz-panel h3 {
+    font-size: clamp(18px, 5vw, 24px);
+    line-height: 1.28;
+  }
+
+  .game-room.quiz-layout .quiz-mode .quiz-options {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .quiz-options button {
+    min-height: 62px;
+    padding: 0 10px;
+    gap: 8px;
+    font-size: 14px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .quiz-options .letter {
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .final-box {
+    padding: 14px;
+    border-radius: 20px;
+  }
+
+  .game-room.quiz-layout .quiz-mode .score-list {
+    max-height: 160px;
+  }
+
+  .game-room.rps-layout .mode-card.rps-mode,
+  .game-room.guess-layout .mode-card.guess-mode {
+    gap: 8px;
+    height: calc(100dvh - 62px);
+    max-height: calc(100dvh - 62px);
+    padding: 12px;
+    border-radius: 24px;
+  }
+
+  .game-room.rps-layout .side,
+  .game-room.guess-layout .side {
+    min-height: 60px;
+    padding: 8px 10px;
+    gap: 8px;
+    border-radius: 16px;
+  }
+
+  .game-room.rps-layout .side strong,
+  .game-room.guess-layout .side strong {
+    font-size: 15px;
+  }
+
+  .game-room.rps-layout .avatar-circle,
+  .game-room.guess-layout .avatar-circle {
+    width: 42px;
+    height: 42px;
+    font-size: 20px;
+  }
+
+  .game-room.rps-layout .result-line {
+    gap: 8px;
+  }
+
+  .game-room.rps-layout .result-line span {
+    min-height: 34px;
+    font-size: 13px;
+  }
+
+  .game-room.rps-layout .play-zone {
+    gap: 8px;
+    padding: 12px;
+    border-radius: 20px;
+  }
+
+  .game-room.rps-layout .ring-wrap {
+    width: 72px;
+    height: 72px;
+  }
+
+  .game-room.rps-layout .ring-wrap svg {
+    width: 72px;
+    height: 72px;
+  }
+
+  .game-room.rps-layout .ring-wrap strong {
+    font-size: 18px;
+  }
+
+  .game-room.rps-layout .move-row {
+    gap: 8px;
+  }
+
+  .game-room.rps-layout .move-btn {
+    min-height: 72px;
+    gap: 4px;
+    font-size: 14px;
+  }
+
+  .game-room.rps-layout .move-btn .emoji {
+    font-size: 24px;
+  }
+
+  .game-room.rps-layout .reveal-piece {
+    min-height: 82px;
+    padding: 8px;
+  }
+
+  .game-room.rps-layout .reveal-piece span {
+    font-size: 28px;
+  }
+
+  .game-room.rps-layout .reveal-piece small {
+    font-size: 12px;
+  }
+
+  .game-room.rps-layout .round-result {
+    min-height: 42px;
+    font-size: 18px;
+  }
+
+  .game-room.guess-layout .small-action {
+    min-height: 40px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .game-room.guess-layout .hero-strip {
+    min-height: 54px;
+    font-size: 18px;
+  }
+
+  .game-room.guess-layout .status-chips {
+    gap: 8px;
+  }
+
+  .game-room.guess-layout .status-chips span {
+    min-height: 36px;
+    font-size: 12px;
+  }
+
+  .game-room.guess-layout .number-screen {
+    min-height: 64px;
+    font-size: 38px;
+  }
+
+  .game-room.guess-layout .num-pad {
+    gap: 8px;
+  }
+
+  .game-room.guess-layout .num-pad button {
+    min-height: 42px;
+    font-size: 18px;
+  }
+
+  .game-room.guess-layout .hint-line {
+    font-size: 13px;
+  }
+
+  .game-room.guess-layout .dual-btns {
+    gap: 8px;
+  }
+
+  .game-room.guess-layout .primary-btn,
+  .game-room.guess-layout .secondary-btn,
+  .game-room.rps-layout .primary-btn,
+  .game-room.rps-layout .secondary-btn {
+    min-height: 44px;
+    font-size: 15px;
   }
 }
 </style>

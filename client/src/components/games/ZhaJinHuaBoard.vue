@@ -2395,4 +2395,41 @@ const handTypeLabel = computed(() => {
     padding: 6px 10px;
   }
 }
+.zjh-board {
+  min-height: 0;
+  height: var(--game-viewport-height, calc(100dvh - 60px));
+  max-height: var(--game-viewport-height, calc(100dvh - 60px));
+}
+
+.zjh-layout {
+  height: 100%;
+  max-height: 100%;
+  overflow: auto;
+}
+
+@media (max-width: 760px), (max-height: 820px) {
+  .zjh-layout {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .zjh-info-strip {
+    padding: 8px 10px;
+  }
+
+  .pot-value {
+    font-size: 18px;
+  }
+
+  .pot-label,
+  .round-info {
+    font-size: 12px;
+  }
+
+  .tool-pill {
+    min-height: 36px;
+    font-size: 12px;
+    padding: 0 12px;
+  }
+}
 </style>
