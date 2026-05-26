@@ -87,7 +87,7 @@
             </div>
           </div>
           <div class="round-result" :class="roundResult">{{ roundResultText }}</div>
-          <button class="primary-btn" @click="nextRound">开始下一轮</button>
+          <button class="primary-btn next-round-btn" @click="nextRound">开始下一轮</button>
         </template>
 
         <template v-else-if="gs.phase === 'finished'">
@@ -1634,6 +1634,14 @@ watch(() => roomId.value, () => {
 .game-room.guess-layout .hint-line,
 .game-room.guess-layout .final-box {
   margin-top: 0;
+}
+
+/* 限制 RPS 揭示阶段按钮不要撑满整个剩余空间 */
+.game-room.rps-layout .play-zone .next-round-btn {
+  min-height: 48px;
+  height: 48px;
+  justify-self: center;
+  width: 100%;
 }
 
 .game-room.guess-layout .hero-strip {

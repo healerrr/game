@@ -326,105 +326,119 @@ function showSuggestedMove() {
 }
 
 .battle-card {
-  padding: 12px;
-  border-radius: 22px;
-  background: linear-gradient(180deg, rgba(244, 250, 255, 0.98), rgba(225, 239, 255, 0.95));
-  border: 1px solid rgba(255, 255, 255, 0.55);
-  box-shadow: 0 12px 24px rgba(8, 66, 160, 0.14);
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
   gap: 10px;
-  color: #20457d;
+  padding: 14px 16px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(236, 245, 255, 0.96));
+  color: #17305f;
+  box-shadow: 0 14px 28px rgba(38, 82, 180, 0.14);
 }
 
 .player-mini {
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
 }
 
 .player-mini.opponent {
-  justify-content: space-between;
-}
-
-.player-mini.opponent .player-mini__copy {
-  text-align: right;
+  justify-content: flex-end;
 }
 
 .avatar {
   width: 42px;
   height: 42px;
-  border-radius: 14px;
+  border-radius: 50%;
   display: grid;
   place-items: center;
-  background: linear-gradient(180deg, #ffffff, #dfeaff);
-  color: #1d6bde;
-  font-size: 20px;
-  font-weight: 900;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
+  background: linear-gradient(180deg, #65a8ff, #3069f6);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  flex-shrink: 0;
 }
 
 .avatar.ghost {
-  color: #708bb7;
+  background: linear-gradient(180deg, #eef4ff, #d9e7ff);
+  color: #5e79b2;
+}
+
+.player-mini__copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .player-mini__copy strong,
 .player-mini__copy span {
-  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .player-mini__copy strong {
-  font-size: 16px;
-  line-height: 1.15;
+  font-size: 17px;
+  font-weight: 800;
+  color: #143372;
 }
 
 .player-mini__copy span {
-  margin-top: 3px;
-  color: #6785b4;
+  color: #6781b8;
   font-size: 12px;
-  line-height: 1.2;
-  font-weight: 700;
 }
 
 .battle-meta {
-  padding: 10px 12px;
-  border-radius: 18px;
-  background: linear-gradient(180deg, #2f8fff, #0f62ef);
-  color: #fff;
-  text-align: center;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
 }
 
 .battle-meta__turn {
-  font-size: 18px;
-  line-height: 1.2;
-  font-weight: 900;
+  min-width: 130px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(44, 111, 255, 0.1);
+  color: #3966d5;
+  font-size: 15px;
+  font-weight: 800;
+  text-align: center;
 }
 
 .battle-meta__turn.mine {
-  color: #fff0a9;
+  background: linear-gradient(180deg, #4e9cff, #2d6eff);
+  color: #fff;
+  box-shadow: 0 10px 18px rgba(61, 110, 255, 0.28);
 }
 
 .battle-meta__turn.done {
+  background: linear-gradient(180deg, #6f7faa, #43557f);
   color: #ffffff;
 }
 
 .battle-meta__score {
-  margin-top: 6px;
   display: flex;
-  justify-content: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
+  justify-content: center;
+  font-size: 12px;
+  color: #6b82b3;
 }
 
 .battle-meta__score span {
-  min-height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.15);
-  display: inline-flex;
-  align-items: center;
-  font-size: 11px;
-  font-weight: 700;
+  min-height: auto;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  display: inline;
+  font-size: inherit;
+  font-weight: 400;
 }
 
 .board-card {
@@ -474,7 +488,7 @@ function showSuggestedMove() {
 }
 
 .board-playarea {
-  --grid-pad: 8%;
+  --grid-pad: 3%;
   position: absolute;
   inset: var(--grid-pad);
   overflow: visible;
@@ -486,8 +500,8 @@ function showSuggestedMove() {
 
 .intersection {
   position: absolute;
-  width: 8.6%;
-  height: 8.6%;
+  width: 12%;
+  height: 12%;
   padding: 0;
   border: none;
   background: transparent;
@@ -513,8 +527,8 @@ function showSuggestedMove() {
 }
 
 .piece {
-  width: 74%;
-  height: 74%;
+  width: 60%;
+  height: 60%;
   border-radius: 50%;
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
 }

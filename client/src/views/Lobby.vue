@@ -10,10 +10,7 @@
 
           <div class="hero-actions">
             <button type="button" class="icon-action" @click="$router.push('/leaderboard')">
-              <img src="/assets/lobby/feature-ranking.png" alt="排行榜" />
-            </button>
-            <button type="button" class="icon-action" @click="showRules = true">
-              <img src="/assets/lobby/btn-rules.png" alt="活动规则" />
+              <img src="/assets/lobby/feature-ranking.png" alt="今日排行" />
             </button>
           </div>
         </div>
@@ -44,27 +41,16 @@
       </section>
 
       <section class="games-panel">
-        <div class="section-head">
-          <div>
-            <p>精选游戏</p>
-            <h2>紧凑排布，单手就能点到</h2>
-          </div>
-          <span class="section-pill">H5</span>
-        </div>
-
         <div class="games-grid">
           <button
             v-for="game in gameCards"
             :key="game.key"
             type="button"
             class="game-tile"
+            :aria-label="game.name"
             @click="joinGame(game.key)"
           >
             <img :src="game.image" :alt="game.name" class="game-tile__image" />
-            <div class="game-tile__meta">
-              <strong>{{ game.name }}</strong>
-              <span>{{ game.tag }}</span>
-            </div>
           </button>
         </div>
       </section>
@@ -366,8 +352,6 @@ function handleUtility(item) {
 }
 
 .icon-action {
-  width: 48px;
-  height: 48px;
   border: none;
   border-radius: 16px;
   background: rgba(255, 255, 255, 0.16);
@@ -375,11 +359,12 @@ function handleUtility(item) {
   display: grid;
   place-items: center;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
+  padding: 6px;
 }
 
 .icon-action img {
-  width: 28px;
-  height: 28px;
+  width: 64px;
+  height: 64px;
   object-fit: contain;
 }
 
@@ -483,49 +468,10 @@ function handleUtility(item) {
 
 .games-panel {
   margin-top: 14px;
-  padding: 16px 12px 12px;
+  padding: 12px;
   border-radius: 26px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 14px 34px rgba(8, 72, 167, 0.12);
-}
-
-.section-head {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
-}
-
-.section-head p,
-.section-head h2 {
-  margin: 0;
-}
-
-.section-head p {
-  color: #5e83bd;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.section-head h2 {
-  margin-top: 4px;
-  color: #18325f;
-  font-size: 18px;
-  line-height: 1.2;
-  font-weight: 800;
-}
-
-.section-pill {
-  min-height: 28px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: #edf5ff;
-  color: #1764ee;
-  display: inline-flex;
-  align-items: center;
-  font-size: 12px;
-  font-weight: 900;
 }
 
 .games-grid {
@@ -547,30 +493,6 @@ function handleUtility(item) {
   height: auto;
   border-radius: 20px;
   box-shadow: 0 10px 18px rgba(8, 72, 167, 0.1);
-}
-
-.game-tile__meta {
-  padding: 7px 2px 0;
-}
-
-.game-tile__meta strong,
-.game-tile__meta span {
-  display: block;
-}
-
-.game-tile__meta strong {
-  color: #153260;
-  font-size: 13px;
-  line-height: 1.25;
-  font-weight: 800;
-}
-
-.game-tile__meta span {
-  margin-top: 3px;
-  color: #7a94bc;
-  font-size: 10px;
-  line-height: 1.2;
-  font-weight: 700;
 }
 
 .utility-panel {
@@ -766,10 +688,6 @@ function handleUtility(item) {
 
   .games-grid {
     gap: 8px 6px;
-  }
-
-  .game-tile__meta strong {
-    font-size: 12px;
   }
 
   .utility-item {

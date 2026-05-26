@@ -63,30 +63,6 @@
                 ></div>
               </template>
 
-              <svg class="palace-overlay" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-                <line
-                  v-for="line in palaceLines"
-                  :key="line.key"
-                  :x1="line.x1"
-                  :y1="line.y1"
-                  :x2="line.x2"
-                  :y2="line.y2"
-                />
-              </svg>
-
-              <div
-                v-for="mark in anchorMarks"
-                :key="mark.key"
-                class="anchor-mark"
-                :class="mark.mask"
-                :style="mark.style"
-              >
-                <span class="anchor corner tl"></span>
-                <span class="anchor corner tr"></span>
-                <span class="anchor corner bl"></span>
-                <span class="anchor corner br"></span>
-              </div>
-
               <div class="river-label river-left">楚河</div>
               <div class="river-label river-right">汉界</div>
 
@@ -114,8 +90,6 @@
                 >
                   {{ pieceText(cell.piece) }}
                 </span>
-                <span v-if="isLastMoveCell(cell, 'from')" class="trace from"></span>
-                <span v-if="isLastMoveCell(cell, 'to')" class="trace to"></span>
               </button>
             </div>
           </div>
@@ -252,23 +226,6 @@ const pieceLabels = {
   }
 }
 
-const anchorCoords = [
-  { row: 2, col: 1, mask: 'all' },
-  { row: 2, col: 7, mask: 'all' },
-  { row: 7, col: 1, mask: 'all' },
-  { row: 7, col: 7, mask: 'all' },
-  { row: 3, col: 0, mask: 'right' },
-  { row: 3, col: 2, mask: 'all' },
-  { row: 3, col: 4, mask: 'all' },
-  { row: 3, col: 6, mask: 'all' },
-  { row: 3, col: 8, mask: 'left' },
-  { row: 6, col: 0, mask: 'right' },
-  { row: 6, col: 2, mask: 'all' },
-  { row: 6, col: 4, mask: 'all' },
-  { row: 6, col: 6, mask: 'all' },
-  { row: 6, col: 8, mask: 'left' }
-]
-
 const toast = ref('')
 let toastTimer = null
 
@@ -334,8 +291,6 @@ const legalMoves = computed(() => {
   return getLegalMoves(board.value, selected.row, selected.col)
 })
 
-const lastMove = computed(() => props.gs?.lastMove || null)
-
 const winnerClass = computed(() => (props.gs?.winner === myColor.value ? 'winner' : 'loser'))
 const resultText = computed(() => (props.gs?.winner === myColor.value ? '将杀成功' : '本局失利'))
 const resultDetail = computed(() =>
@@ -381,29 +336,6 @@ const verticalLines = computed(() => {
   }
   return lines
 })
-
-const palaceLines = computed(() => {
-  const blackPalace = [{ from: { row: 0, col: 3 }, to: { row: 2, col: 5 } }, { from: { row: 0, col: 5 }, to: { row: 2, col: 3 } }]
-  const redPalace = [{ from: { row: 9, col: 3 }, to: { row: 7, col: 5 } }, { from: { row: 9, col: 5 }, to: { row: 7, col: 3 } }]
-  
-  const topPalace = myColor.value === COLORS.BLACK ? redPalace : blackPalace
-  const bottomPalace = myColor.value === COLORS.BLACK ? blackPalace : redPalace
-  
-  return [
-    createPalaceLine('top-a', topPalace[0].from, topPalace[0].to),
-    createPalaceLine('top-b', topPalace[1].from, topPalace[1].to),
-    createPalaceLine('bottom-a', bottomPalace[0].from, bottomPalace[0].to),
-    createPalaceLine('bottom-b', bottomPalace[1].from, bottomPalace[1].to)
-  ]
-})
-
-const anchorMarks = computed(() =>
-  anchorCoords.map((coord) => ({
-    key: `${coord.row}-${coord.col}`,
-    style: anchorStyle(coord),
-    mask: coord.mask
-  }))
-)
 
 onBeforeUnmount(() => {
   clearToast()
@@ -508,12 +440,6 @@ function isLegalMoveCell(cell) {
   return legalMoves.value.some((move) => move.row === cell.row && move.col === cell.col)
 }
 
-function isLastMoveCell(cell, phase) {
-  if (!lastMove.value) return false
-  const point = phase === 'from' ? lastMove.value.from : lastMove.value.to
-  return point?.row === cell.row && point?.col === cell.col
-}
-
 function canSelectPiece(cell) {
   return Boolean(cell.piece && cell.piece.color === myColor.value && isMyTurn.value)
 }
@@ -534,26 +460,6 @@ function handlePointTap(cell) {
       row: cell.row,
       col: cell.col
     })
-  }
-}
-
-function createPalaceLine(key, from, to) {
-  const fromPoint = toViewPoint(from.row, from.col)
-  const toPoint = toViewPoint(to.row, to.col)
-  return {
-    key,
-    x1: xPercent(fromPoint.col),
-    y1: yPercent(fromPoint.row),
-    x2: xPercent(toPoint.col),
-    y2: yPercent(toPoint.row)
-  }
-}
-
-function anchorStyle(coord) {
-  const point = toViewPoint(coord.row, coord.col)
-  return {
-    left: `${xPercent(point.col)}%`,
-    top: `${yPercent(point.row)}%`
   }
 }
 
@@ -955,8 +861,7 @@ function getLegalMoves(stateBoard, row, col) {
   aspect-ratio: 8 / 9;
 }
 
-.grid-line,
-.palace-overlay {
+.grid-line {
   position: absolute;
   pointer-events: none;
 }
@@ -973,62 +878,6 @@ function getLegalMoves(stateBoard, row, col) {
   width: 1.4px;
   background: rgba(115, 65, 12, 0.84);
   transform: translateX(-50%);
-}
-
-.palace-overlay {
-  inset: 0;
-}
-
-.palace-overlay line {
-  stroke: rgba(115, 65, 12, 0.45);
-  stroke-width: 1.4;
-}
-
-.anchor-mark {
-  position: absolute;
-  width: 24px;
-  height: 24px;
-  transform: translate(-50%, -50%);
-  pointer-events: none;
-}
-
-.anchor-mark.left .tr,
-.anchor-mark.left .br,
-.anchor-mark.right .tl,
-.anchor-mark.right .bl {
-  display: none;
-}
-
-.anchor {
-  position: absolute;
-  width: 6px;
-  height: 6px;
-  border-color: rgba(115, 65, 12, 0.82);
-  border-style: solid;
-}
-
-.anchor.tl {
-  top: 0;
-  left: 0;
-  border-width: 1.2px 0 0 1.2px;
-}
-
-.anchor.tr {
-  top: 0;
-  right: 0;
-  border-width: 1.2px 1.2px 0 0;
-}
-
-.anchor.bl {
-  bottom: 0;
-  left: 0;
-  border-width: 0 0 1.2px 1.2px;
-}
-
-.anchor.br {
-  right: 0;
-  bottom: 0;
-  border-width: 0 1.2px 1.2px 0;
 }
 
 .river-label {
@@ -1070,8 +919,7 @@ function getLegalMoves(stateBoard, row, col) {
 
 .piece-token,
 .move-dot,
-.capture-ring,
-.trace {
+.capture-ring {
   position: absolute;
   display: block;
   pointer-events: none;
@@ -1120,24 +968,6 @@ function getLegalMoves(stateBoard, row, col) {
   height: 36px;
   border-radius: 50%;
   box-shadow: inset 0 0 0 2px rgba(255, 110, 68, 0.86);
-}
-
-.trace {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-}
-
-.trace.from {
-  background: rgba(55, 124, 255, 0.18);
-  box-shadow: inset 0 0 0 1px rgba(55, 124, 255, 0.5);
-}
-
-.trace.to {
-  width: 14px;
-  height: 14px;
-  background: rgba(255, 142, 63, 0.24);
-  box-shadow: inset 0 0 0 1px rgba(255, 142, 63, 0.72);
 }
 
 .info-strip {

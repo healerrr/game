@@ -39,13 +39,13 @@
       <!-- 中间分组手牌 -->
       <div class="hand-groups" ref="handRef">
         <div v-for="(group, gi) in groupedHand" :key="gi" class="card-group"
-             :style="{ height: (80 + (group.length - 1) * 25) + 'px' }">
+             :style="handGroupStyle(group)">
           <div v-for="(card, ci) in group" :key="cardKey(card) + '-' + ci"
                class="card-slot"
                :class="{ selected: isSelected(card), wild: isWildCard(card) }"
-               :style="{ top: ci * 25 + 'px' }"
+               :style="handCardStyle(ci)"
                @click="toggleSelect(card)">
-            <PlayingCard :card="card" />
+            <PlayingCard :card="card" small />
             <span v-if="isWildCard(card)" class="wild-star">&#9733;</span>
           </div>
         </div>
@@ -121,6 +121,16 @@ let resizeObserver = null
 // --- Constants ---
 const SEAT_ORDER = ['south', 'east', 'north', 'west']
 const RANK_VALUES = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14, 'SJ': 16, 'BJ': 17 }
+const HAND_CARD_BASE_H = 62
+const HAND_STACK_STEP = 18
+
+function handGroupStyle(group) {
+  return { height: `${HAND_CARD_BASE_H + (group.length - 1) * HAND_STACK_STEP}px` }
+}
+
+function handCardStyle(index) {
+  return { top: `${index * HAND_STACK_STEP}px` }
+}
 
 // --- Computed ---
 const currentLevel = computed(() => props.gs.level || '2')
@@ -617,17 +627,52 @@ function drawTable() {
   const H = renderer._logicalHeight
   renderer.clear()
 
-  // Background
-  renderer.drawWoodFrame(0, 0, W, H, 10)
-
   const ctx = renderer._ctx
-  // Central decorative ellipse
+
+  const outerPad = Math.max(8, Math.min(W, H) * 0.025)
+  const rail = Math.max(10, Math.min(W, H) * 0.045)
+  const tableX = outerPad
+  const tableY = outerPad
+  const tableW = W - outerPad * 2
+  const tableH = H - outerPad * 2
+  const feltX = tableX + rail
+  const feltY = tableY + rail
+  const feltW = tableW - rail * 2
+  const feltH = tableH - rail * 2
+
+  // Layered table surface
+  const bg = ctx.createLinearGradient(0, 0, 0, H)
+  bg.addColorStop(0, '#0e4a2d')
+  bg.addColorStop(1, '#062615')
+  renderer.drawRoundRect(0, 0, W, H, 0, bg)
+
+  const railGrad = ctx.createLinearGradient(tableX, tableY, tableX, tableY + tableH)
+  railGrad.addColorStop(0, '#c2762d')
+  railGrad.addColorStop(0.45, '#7f3d13')
+  railGrad.addColorStop(1, '#4c240d')
+  renderer.drawRoundRect(tableX, tableY, tableW, tableH, 18, railGrad, 'rgba(255, 195, 98, 0.32)', 1.5)
+
+  const feltGrad = ctx.createRadialGradient(W / 2, H / 2, 0, W / 2, H / 2, Math.max(W, H) * 0.52)
+  feltGrad.addColorStop(0, '#197343')
+  feltGrad.addColorStop(0.62, '#0f5d35')
+  feltGrad.addColorStop(1, '#07351f')
+  renderer.drawRoundRect(feltX, feltY, feltW, feltH, 12, feltGrad, 'rgba(0, 0, 0, 0.45)', 2)
+
   ctx.save()
-  ctx.strokeStyle = 'rgba(255,255,255,0.06)'
-  ctx.lineWidth = 1.5
+  ctx.globalAlpha = 0.15
+  ctx.strokeStyle = '#ffffff'
+  ctx.lineWidth = 1.2
   ctx.beginPath()
-  ctx.ellipse(W / 2, H / 2, W * 0.32, H * 0.35, 0, 0, Math.PI * 2)
+  ctx.ellipse(W / 2, H / 2, W * 0.31, H * 0.34, 0, 0, Math.PI * 2)
   ctx.stroke()
+  ctx.restore()
+
+  // Subtle center focus
+  ctx.save()
+  ctx.fillStyle = 'rgba(255,255,255,0.045)'
+  ctx.beginPath()
+  ctx.ellipse(W / 2, H / 2, W * 0.17, H * 0.18, 0, 0, Math.PI * 2)
+  ctx.fill()
   ctx.restore()
 
   const rs = relativeSeats.value
@@ -635,49 +680,51 @@ function drawTable() {
   // Top player (horizontal cards)
   if (rs.top) {
     const seatX = W / 2 - 20
-    const seatY = 18
+    const seatY = Math.max(8, feltY + 2)
     renderer.drawSeatInfo(seatX, seatY, {
       name: getPlayerName(rs.top.playerId),
       count: getCardCount(rs.top.playerId),
       isCurrentTurn: props.gs.currentPlayer === rs.top.playerId
     })
-    const backW = 20, backH = 30, gap = 3
-    const total = Math.min(getCardCount(rs.top.playerId) || 9, 12)
+    const backW = Math.max(16, Math.min(22, W * 0.022))
+    const backH = backW * 1.42
+    const gap = 4
+    const total = Math.min(getCardCount(rs.top.playerId) || 9, 13)
     const startX = W / 2 - (total * (backW + gap) - gap) / 2
     for (let i = 0; i < total; i++) {
-      renderer.drawCardBack(startX + i * (backW + gap), seatY + 80, backW, backH)
+      renderer.drawCardBack(startX + i * (backW + gap), seatY + 66, backW, backH)
     }
   }
 
   // Left player (vertical cards)
   if (rs.left) {
-    const seatX = 18
+    const seatX = feltX + 10
     const seatY = H / 2 - 50
     renderer.drawSeatInfo(seatX, seatY, {
       name: getPlayerName(rs.left.playerId),
       count: getCardCount(rs.left.playerId),
       isCurrentTurn: props.gs.currentPlayer === rs.left.playerId
     })
-    const backW = 24, backH = 16, gap = 2
-    const total = Math.min(getCardCount(rs.left.playerId) || 7, 5)
+    const backW = 26, backH = 17, gap = 3
+    const total = Math.min(getCardCount(rs.left.playerId) || 7, 6)
     for (let i = 0; i < total; i++) {
-      renderer.drawCardBack(seatX + 50, seatY - 30 + i * (backH + gap), backW, backH, { horizontal: true })
+      renderer.drawCardBack(seatX + 48, seatY - 34 + i * (backH + gap), backW, backH, { horizontal: true })
     }
   }
 
   // Right player (vertical cards)
   if (rs.right) {
-    const seatX = W - 62
+    const seatX = W - feltX - 50
     const seatY = H / 2 - 50
     renderer.drawSeatInfo(seatX, seatY, {
       name: getPlayerName(rs.right.playerId),
       count: getCardCount(rs.right.playerId),
       isCurrentTurn: props.gs.currentPlayer === rs.right.playerId
     })
-    const backW = 24, backH = 16, gap = 2
-    const total = Math.min(getCardCount(rs.right.playerId) || 7, 5)
+    const backW = 26, backH = 17, gap = 3
+    const total = Math.min(getCardCount(rs.right.playerId) || 7, 6)
     for (let i = 0; i < total; i++) {
-      renderer.drawCardBack(seatX - 28, seatY - 30 + i * (backH + gap), backW, backH, { horizontal: true })
+      renderer.drawCardBack(seatX - 30, seatY - 34 + i * (backH + gap), backW, backH, { horizontal: true })
     }
   }
 
@@ -689,7 +736,7 @@ function drawTable() {
     const totalCardsW = lastCards.length * (cardW + gap) - gap
     const panelW = Math.max(totalCardsW + 24, 130)
     const panelX = W / 2 - panelW / 2
-    const panelY = H / 2 - 50
+    const panelY = H / 2 - 24
     const labelText = patternName(identifyPattern(lastCards, currentLevel.value)?.type) || ''
     renderer.drawPlayedCards(panelX, panelY, lastCards, {
       title: `${getPlayerName(lastPlay.playerId)} 出牌`,
@@ -708,8 +755,8 @@ function drawTable() {
 
   // Level badge
   const lvlText = `级牌 ${currentLevel.value}`
-  renderer.drawRoundRect(16, 14, 70, 22, 11, 'rgba(255,175,26,0.9)')
-  renderer.drawText(lvlText, 51, 25, { font: 'bold 11px sans-serif', color: '#3a2300', align: 'center', baseline: 'middle' })
+  renderer.drawRoundRect(feltX + 8, feltY + 8, 74, 24, 12, 'rgba(255,185,36,0.96)')
+  renderer.drawText(lvlText, feltX + 45, feltY + 20, { font: 'bold 12px sans-serif', color: '#3a2300', align: 'center', baseline: 'middle' })
 }
 
 function sizeCanvas() {
@@ -1111,4 +1158,378 @@ watch(() => props.gs?.currentPlayer, () => {
 }
 
 /* 横屏锁定提示 (旧覆盖层已移除，保留 fade 过渡) */
+
+/* Professional landscape table polish */
+.game-wrapper {
+  height: 100dvh;
+  background:
+    radial-gradient(circle at 50% -12%, rgba(255, 211, 93, 0.18), transparent 28%),
+    linear-gradient(180deg, #0b4a2c 0%, #052717 100%);
+}
+
+.gd-board {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(37, 178, 105, 0.14), transparent 28%),
+    linear-gradient(180deg, #0b4a2c 0%, #052717 100%);
+}
+
+.gd-info-bar {
+  flex-basis: 46px;
+  min-height: 46px;
+  gap: 10px;
+  padding: 0 14px;
+  background:
+    linear-gradient(180deg, rgba(18, 92, 55, 0.98), rgba(7, 58, 33, 0.98));
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.22);
+  font-size: 14px;
+  overflow: hidden;
+}
+
+.back-btn {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+  background: rgba(255, 255, 255, 0.14);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.info-item {
+  color: rgba(255, 255, 255, 0.88);
+  font-weight: 800;
+}
+
+.info-item b {
+  color: #ffdc45;
+  font-size: 17px;
+}
+
+.team-vs {
+  min-width: 0;
+  flex: 1 1 auto;
+  justify-content: center;
+  font-weight: 900;
+  overflow: hidden;
+}
+
+.team-mine-label,
+.team-opp-label {
+  max-width: 38%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.team-mine-label {
+  color: #7dffba;
+}
+
+.team-opp-label {
+  color: #ff8f9a;
+}
+
+.vs {
+  color: #ffe15b;
+  font-size: 12px;
+  flex: 0 0 auto;
+}
+
+.canvas-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  margin: 8px 10px 0;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 214, 114, 0.28);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 14px 28px rgba(0, 0, 0, 0.28);
+}
+
+.bottom-zone {
+  position: relative;
+  flex: 0 0 clamp(154px, 35vh, 190px);
+  min-height: 154px;
+  max-height: 190px;
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr) 154px;
+  align-items: stretch;
+  gap: 10px;
+  margin: 8px 10px 10px;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background:
+    linear-gradient(180deg, rgba(14, 65, 39, 0.98), rgba(7, 42, 24, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 14px 28px rgba(0, 0, 0, 0.22);
+}
+
+.my-info {
+  flex: none;
+  min-width: 0;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  justify-content: center;
+  padding: 8px 6px;
+}
+
+.my-avatar {
+  width: 44px;
+  height: 44px;
+  border: 3px solid rgba(255, 255, 255, 0.78);
+  font-size: 18px;
+}
+
+.my-meta strong {
+  max-width: 76px;
+  color: #fff;
+  font-size: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.my-meta span {
+  color: #87e6ae;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.pattern-label {
+  max-width: 78px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  background: rgba(255, 203, 67, 0.16);
+  color: #ffd45a;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hand-groups {
+  --hand-card-w: clamp(34px, 3.6vw, 42px);
+  --hand-card-h: calc(var(--hand-card-w) * 1.42);
+  min-width: 0;
+  padding: 14px 6px 6px;
+  gap: 3px;
+  align-items: flex-end;
+  justify-content: center;
+  border-radius: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.035));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow-x: hidden;
+  overflow-y: visible;
+  scrollbar-width: none;
+}
+
+.hand-groups::-webkit-scrollbar {
+  display: none;
+}
+
+.hand-groups::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 999px;
+}
+
+.hand-groups::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.26);
+  border-radius: 999px;
+}
+
+.card-group {
+  width: var(--hand-card-w);
+  flex: 0 0 var(--hand-card-w);
+}
+
+.card-slot {
+  transition: transform 0.14s ease, filter 0.14s ease;
+  filter: drop-shadow(0 9px 10px rgba(0, 0, 0, 0.18));
+}
+
+.card-slot:hover {
+  transform: translateY(-3px);
+}
+
+.card-slot.selected {
+  transform: translateY(-14px);
+  z-index: 8;
+}
+
+.card-slot.selected::after {
+  top: -9px;
+  width: 26px;
+  height: 6px;
+  border-radius: 999px;
+  background: #ffcc3d;
+  box-shadow: 0 0 12px rgba(255, 204, 61, 0.8);
+}
+
+.card-slot :deep(.playing-card) {
+  width: var(--hand-card-w);
+  height: var(--hand-card-h);
+  border-radius: 8px;
+}
+
+.wild-star {
+  top: -5px;
+  right: -5px;
+  font-size: 13px;
+}
+
+.action-buttons {
+  flex: none;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 6px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.action-buttons button {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  min-height: 40px;
+  border-radius: 999px;
+  font-size: 14px;
+  letter-spacing: 0;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.24),
+    0 8px 15px rgba(0, 0, 0, 0.18);
+}
+
+.btn-pass {
+  background: linear-gradient(180deg, #3d8dff, #1162d8);
+}
+
+.btn-hint {
+  background: linear-gradient(180deg, #ffb433, #f18400);
+}
+
+.btn-play {
+  background: linear-gradient(180deg, #39c673, #168844);
+}
+
+.action-buttons button:disabled {
+  opacity: 0.38;
+  filter: grayscale(0.15);
+}
+
+.timer-circle {
+  width: 48px;
+  height: 48px;
+  margin-top: 0;
+}
+
+.timer-num {
+  color: #77c7ff;
+  font-size: 15px;
+}
+
+.result-zone {
+  margin: 8px 10px 10px;
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+@media (max-height: 600px) {
+  .gd-info-bar {
+    flex-basis: 40px;
+    min-height: 40px;
+    font-size: 12px;
+  }
+
+  .back-btn {
+    width: 30px;
+    height: 30px;
+    flex-basis: 30px;
+  }
+
+  .canvas-area {
+    margin: 6px 8px 0;
+  }
+
+  .bottom-zone {
+    flex-basis: clamp(126px, 33vh, 156px);
+    min-height: 126px;
+    max-height: 156px;
+    grid-template-columns: 74px minmax(0, 1fr) 136px;
+    gap: 7px;
+    margin: 6px 8px 8px;
+    padding: 8px;
+  }
+
+  .my-avatar {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+  }
+
+  .my-meta strong {
+    font-size: 12px;
+  }
+
+  .pattern-label {
+    font-size: 11px;
+    padding: 3px 7px;
+  }
+
+  .hand-groups {
+    --hand-card-w: clamp(32px, 3.3vw, 38px);
+    padding: 10px 4px 4px;
+    gap: 2px;
+  }
+
+  .card-slot :deep(.playing-card) {
+    width: var(--hand-card-w);
+    height: var(--hand-card-h);
+  }
+
+  .card-slot.selected {
+    transform: translateY(-11px);
+  }
+
+  .action-buttons {
+    gap: 6px;
+  }
+
+  .action-buttons button {
+    height: 34px;
+    min-height: 34px;
+    font-size: 12px;
+  }
+
+  .timer-circle {
+    width: 42px;
+    height: 42px;
+  }
+}
+
+@media (max-width: 680px) {
+  .info-sep {
+    display: none;
+  }
+
+  .gd-info-bar {
+    gap: 7px;
+  }
+
+  .info-item:not(.team-vs) {
+    font-size: 12px;
+  }
+
+  .team-mine-label,
+  .team-opp-label {
+    max-width: 34%;
+  }
+}
 </style>
