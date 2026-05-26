@@ -23,7 +23,13 @@ app.use(express.json());
 
 // 生产环境：提供前端静态文件
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
-app.use(express.static(clientDist));
+app.use(express.static(clientDist, {
+  setHeaders(res, filePath) {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-store');
+    }
+  }
+}));
 
 // ========== HTTP API ==========
 
@@ -112,6 +118,7 @@ app.get('/api/rooms/active', (req, res) => {
 
 // SPA fallback
 app.get('*', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   res.sendFile(path.join(clientDist, 'index.html'));
 });
 

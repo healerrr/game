@@ -2,71 +2,100 @@
   <section class="gomoku-board">
     <div v-if="!isReady" class="loading">
       <div class="loading-spinner"></div>
-      <p>正在加载五子棋棋盘...</p>
+      <p>正在同步五子棋棋局...</p>
     </div>
 
     <template v-else>
-      <header class="versus-panel">
-        <div class="player-card">
+      <section class="battle-card">
+        <div class="player-mini">
           <div class="avatar">{{ myName.slice(0, 1) }}</div>
-          <div>
+          <div class="player-mini__copy">
             <strong>{{ myName }}</strong>
-            <span>{{ myIndex === 0 ? '我方 · 黑棋' : '我方 · 白棋' }}</span>
+            <span>{{ mySideLabel }}</span>
           </div>
         </div>
-        <div class="vs-word">VS</div>
-        <div class="player-card opponent">
-          <div>
+
+        <div class="battle-meta">
+          <div class="battle-meta__turn" :class="{ mine: isMyTurn, done: gamePhase === 'finished' }">
+            {{ gamePhase === 'finished' ? resultText : turnText }}
+          </div>
+          <div class="battle-meta__score">
+            <span>手数 {{ moveCount }}</span>
+            <span>{{ gamePhase === 'finished' ? resultDetail : `对手 ${opponentName}` }}</span>
+          </div>
+        </div>
+
+        <div class="player-mini opponent">
+          <div class="player-mini__copy">
             <strong>{{ opponentName }}</strong>
-            <span>{{ myIndex === 0 ? '对手 · 白棋' : '对手 · 黑棋' }}</span>
+            <span>{{ opponentSideLabel }}</span>
           </div>
           <div class="avatar ghost">{{ opponentName.slice(0, 1) }}</div>
         </div>
-      </header>
+      </section>
 
-      <div class="turn-banner">
-        {{ gamePhase === 'finished' ? '对局结束' : turnText }}
-      </div>
+      <section class="board-card">
+        <div class="board-head">
+          <span class="mode-chip">{{ myPieceName }}</span>
+          <span class="mode-chip soft">{{ hintMove ? `提示 ${toCoord(hintMove.x, hintMove.y)}` : '15 x 15 标准棋盘' }}</span>
+        </div>
 
-      <div class="board-frame">
-        <canvas
-          ref="boardCanvas"
-          class="board-canvas"
-          @click="handleCanvasClick"
-          @mousemove="handleCanvasMove"
-          @mouseleave="hideHoverPiece"
-          @touchstart.prevent="handleTouchStart"
-          @touchmove.prevent="handleTouchMove"
-          @touchend.prevent="handleTouchEnd"
-          @touchcancel.prevent="handleTouchEnd"
-        ></canvas>
-      </div>
+        <div class="board-shell">
+          <div class="board-surface">
+            <div class="board-playarea">
+              <button
+                v-for="cell in cells"
+                :key="`${cell.x}-${cell.y}`"
+                type="button"
+                class="intersection"
+                :class="{ disabled: !canPlace(cell) }"
+                :style="pointStyle(cell)"
+                :disabled="!canPlace(cell)"
+                @click="placeAt(cell)"
+              >
+                <span v-if="cell.value === 0 && isStarCell(cell)" class="star-dot"></span>
+                <span v-if="isHintCell(cell)" class="hint-ring"></span>
+                <span v-if="cell.value !== 0" class="piece" :class="cell.value === 1 ? 'black' : 'white'"></span>
+                <span v-if="isLastMoveCell(cell)" class="last-dot"></span>
+              </button>
+            </div>
+          </div>
+        </div>
+      </section>
 
-      <div class="tool-row">
-        <button class="tool-card hint" @click="showSuggestedMove">
-          <span>🔍</span>
-          <strong>落子提示</strong>
+      <section class="action-grid">
+        <button type="button" class="action-btn hint" @click="showSuggestedMove">
+          <span class="action-btn__icon">◎</span>
+          <span class="action-btn__copy">
+            <strong>落子提示</strong>
+            <small>推荐下一手</small>
+          </span>
         </button>
-        <button class="tool-card undo" @click="showToast('当前版本暂未开放悔棋')">
-          <span>↩</span>
-          <strong>悔棋</strong>
-        </button>
-        <button class="tool-card restart" @click="$emit('rematch')">
-          <span>🔄</span>
-          <strong>重新开始</strong>
-        </button>
-        <button class="tool-card invite" @click="showToast('邀请对战功能稍后开放')">
-          <span>👥</span>
-          <strong>邀请对战</strong>
-        </button>
-      </div>
 
-      <div class="status-panel">
-        <strong>{{ gamePhase === 'finished' ? resultText : '对局进行中' }}</strong>
-        <span>{{ gamePhase === 'finished' ? resultDetail : `当前手数：第 ${moveCount} 手` }}</span>
-      </div>
+        <button type="button" class="action-btn undo" @click="showToast('当前版本暂未开放悔棋')">
+          <span class="action-btn__icon">↶</span>
+          <span class="action-btn__copy">
+            <strong>悔棋</strong>
+            <small>功能预留</small>
+          </span>
+        </button>
 
-      <div class="bottom-banner">轻松互动，欢乐同行 · 团队合作 共创精彩</div>
+        <button type="button" class="action-btn restart" @click="$emit('rematch')">
+          <span class="action-btn__icon">↻</span>
+          <span class="action-btn__copy">
+            <strong>再来一局</strong>
+            <small>快速重开</small>
+          </span>
+        </button>
+
+        <button type="button" class="action-btn back" @click="$emit('back')">
+          <span class="action-btn__icon">←</span>
+          <span class="action-btn__copy">
+            <strong>返回大厅</strong>
+            <small>离开对局</small>
+          </span>
+        </button>
+      </section>
     </template>
 
     <transition name="fade">
@@ -75,13 +104,15 @@
 
     <transition name="fade">
       <div v-if="gamePhase === 'finished'" class="result-panel">
-        <div class="result-content">
-          <div class="result-badge" :class="winnerClass">{{ gs.winner === myId ? '胜' : gs.winner === 'draw' ? '和' : '负' }}</div>
+        <div class="result-card">
+          <div class="result-badge" :class="winnerClass">
+            {{ props.gs.winner === myId ? '胜' : props.gs.winner === 'draw' ? '和' : '负' }}
+          </div>
           <h2>{{ resultText }}</h2>
           <p>{{ resultDetail }}</p>
           <div class="result-actions">
-            <button class="primary-btn" @click="$emit('rematch')">再来一局</button>
-            <button class="secondary-btn" @click="$emit('back')">返回大厅</button>
+            <button type="button" class="primary-btn" @click="$emit('rematch')">再来一局</button>
+            <button type="button" class="secondary-btn" @click="$emit('back')">返回大厅</button>
           </div>
         </div>
       </div>
@@ -90,7 +121,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 
 const props = defineProps({
   gs: { type: Object, default: () => ({}) },
@@ -100,65 +131,64 @@ const props = defineProps({
 
 const emit = defineEmits(['action', 'rematch', 'back'])
 
-const boardCanvas = ref(null)
-const hoverPos = ref({ x: -1, y: -1 })
-const hintMove = ref(null)
-const toast = ref('')
-
 const BOARD_SIZE = 15
-const CELL_SIZE = 32
-const PADDING = 16
-const CANVAS_SIZE = (BOARD_SIZE - 1) * CELL_SIZE + PADDING * 2
+const STAR_POINTS = new Set(['3,3', '3,7', '3,11', '7,3', '7,7', '7,11', '11,3', '11,7', '11,11'])
+const toast = ref('')
+const hintMove = ref(null)
+
+let toastTimer = null
+
+const emptyBoard = () => Array.from({ length: BOARD_SIZE }, () => Array(BOARD_SIZE).fill(0))
 
 const board = computed(() => {
-  if (!props.gs || !props.gs.board) {
-    return Array(BOARD_SIZE).fill(null).map(() => Array(BOARD_SIZE).fill(0))
-  }
-  return props.gs.board
+  return props.gs?.board?.length ? props.gs.board : emptyBoard()
 })
 
-const isReady = computed(() => props.gs && props.gs.board && props.gs.players)
+const isReady = computed(() => Boolean(props.gs?.board && props.gs?.players?.length))
 const myId = computed(() => props.player?.id || '')
 
 const myIndex = computed(() => {
-  if (!props.gs.players || !myId.value) return 0
-  const idx = props.gs.players.indexOf(myId.value)
+  const players = props.gs?.players || []
+  const idx = players.indexOf(myId.value)
   return idx >= 0 ? idx : 0
 })
 
+const myPiece = computed(() => (myIndex.value === 0 ? 1 : 2))
+const myPieceName = computed(() => (myPiece.value === 1 ? '我方 · 黑棋' : '我方 · 白棋'))
+const mySideLabel = computed(() => myPieceName.value)
+const opponentSideLabel = computed(() => (myPiece.value === 1 ? '对手 · 白棋' : '对手 · 黑棋'))
+
 const myName = computed(() => props.player?.nickname || '我方')
 const opponentName = computed(() => {
-  const opponentId = props.gs.players?.find((id) => id !== myId.value)
+  const opponentId = props.gs?.players?.find((id) => id !== myId.value)
   return props.roomPlayers.find((item) => item.id === opponentId)?.nickname || '对手'
 })
 
-const isMyTurn = computed(() => props.gs.currentPlayer === myId.value && props.gs.phase === 'playing')
-const gamePhase = computed(() => props.gs.phase || 'waiting')
-const moveCount = computed(() => props.gs.moveHistory?.length || 0)
-const lastMoveX = computed(() => props.gs.lastMove?.x ?? -1)
-const lastMoveY = computed(() => props.gs.lastMove?.y ?? -1)
+const isMyTurn = computed(() => props.gs?.phase === 'playing' && props.gs?.currentPlayer === myId.value)
+const gamePhase = computed(() => props.gs?.phase || 'waiting')
+const moveCount = computed(() => props.gs?.moveHistory?.length || 0)
+const lastMove = computed(() => props.gs?.lastMove || null)
 
 const turnText = computed(() => {
-  if (isMyTurn.value) return `轮到你落子（${myIndex.value === 0 ? '黑棋' : '白棋'}）`
-  return `等待 ${opponentName.value} 落子`
+  return isMyTurn.value ? '轮到你落子' : `等待 ${opponentName.value}`
 })
 
 const winnerClass = computed(() => {
-  if (props.gs.winner === myId.value) return 'winner'
-  if (props.gs.winner === 'draw') return 'draw'
+  if (props.gs?.winner === myId.value) return 'winner'
+  if (props.gs?.winner === 'draw') return 'draw'
   return 'loser'
 })
 
 const resultText = computed(() => {
-  if (!props.gs.winner) return ''
+  if (!props.gs?.winner) return ''
   if (props.gs.winner === 'draw') return '平局'
   return props.gs.winner === myId.value ? '恭喜获胜' : '再接再厉'
 })
 
 const resultDetail = computed(() => {
-  if (!props.gs.winner) return ''
+  if (!props.gs?.winner) return ''
   if (props.gs.winner === 'draw') return '棋盘已满，双方握手言和。'
-  return props.gs.winner === myId.value ? '你率先连成五子，拿下本局。' : `${opponentName.value} 完成五子连珠。`
+  return props.gs.winner === myId.value ? '你率先连成五子，拿下本局。' : `${opponentName.value} 完成了五子连珠。`
 })
 
 const suggestedMove = computed(() => {
@@ -166,9 +196,9 @@ const suggestedMove = computed(() => {
   if (board.value[center][center] === 0) return { x: center, y: center }
 
   for (let radius = 1; radius < BOARD_SIZE; radius += 1) {
-    for (let x = Math.max(0, center - radius); x <= Math.min(BOARD_SIZE - 1, center + radius); x += 1) {
-      for (let y = Math.max(0, center - radius); y <= Math.min(BOARD_SIZE - 1, center + radius); y += 1) {
-        if (board.value[x][y] === 0) return { x, y }
+    for (let y = Math.max(0, center - radius); y <= Math.min(BOARD_SIZE - 1, center + radius); y += 1) {
+      for (let x = Math.max(0, center - radius); x <= Math.min(BOARD_SIZE - 1, center + radius); x += 1) {
+        if (board.value[y][x] === 0) return { x, y }
       }
     }
   }
@@ -176,10 +206,79 @@ const suggestedMove = computed(() => {
   return null
 })
 
+const cells = computed(() => {
+  const list = []
+  for (let y = 0; y < BOARD_SIZE; y += 1) {
+    for (let x = 0; x < BOARD_SIZE; x += 1) {
+      list.push({
+        x,
+        y,
+        value: board.value[x][y]
+      })
+    }
+  }
+  return list
+})
+
+onBeforeUnmount(() => {
+  if (toastTimer) {
+    clearTimeout(toastTimer)
+  }
+})
+
+function toCoord(x, y) {
+  return `${String.fromCharCode(65 + x)}${y + 1}`
+}
+
+function pointStyle(cell) {
+  return {
+    left: `${(cell.x / (BOARD_SIZE - 1)) * 100}%`,
+    top: `${(cell.y / (BOARD_SIZE - 1)) * 100}%`
+  }
+}
+
+function canPlace(cell) {
+  if (!isMyTurn.value) return false
+  return board.value[cell.x][cell.y] === 0
+}
+
+function placeAt(cell) {
+  if (!canPlace(cell)) return
+  hintMove.value = null
+  emit('action', { type: 'place', x: cell.x, y: cell.y })
+}
+
+function isLastMoveCell(cell) {
+  if (!lastMove.value) return false
+  return lastMove.value.x === cell.x && lastMove.value.y === cell.y
+}
+
+function isHintCell(cell) {
+  if (!hintMove.value) return false
+  return hintMove.value.x === cell.x && hintMove.value.y === cell.y
+}
+
+function isStarCell(cell) {
+  return STAR_POINTS.has(`${cell.x},${cell.y}`)
+}
+
+function cellClasses(cell) {
+  return {
+    occupied: cell.value !== 0,
+    star: STAR_POINTS.has(`${cell.x},${cell.y}`),
+    disabled: !canPlace(cell)
+  }
+}
+
 function showToast(text) {
   toast.value = text
-  setTimeout(() => {
-    if (toast.value === text) toast.value = ''
+  if (toastTimer) {
+    clearTimeout(toastTimer)
+  }
+  toastTimer = setTimeout(() => {
+    if (toast.value === text) {
+      toast.value = ''
+    }
   }, 1800)
 }
 
@@ -189,428 +288,341 @@ function showSuggestedMove() {
     return
   }
   hintMove.value = suggestedMove.value
-  drawBoard()
+  showToast(`推荐 ${toCoord(suggestedMove.value.x, suggestedMove.value.y)}`)
 }
-
-function drawBoard() {
-  const canvas = boardCanvas.value
-  if (!canvas) return
-
-  const ctx = canvas.getContext('2d')
-  const dpr = window.devicePixelRatio || 1
-
-  canvas.width = CANVAS_SIZE * dpr
-  canvas.height = CANVAS_SIZE * dpr
-  canvas.style.width = `${CANVAS_SIZE}px`
-  canvas.style.height = `${CANVAS_SIZE}px`
-  ctx.scale(dpr, dpr)
-
-  ctx.fillStyle = '#f7d99e'
-  ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE)
-
-  ctx.strokeStyle = '#9b6a2d'
-  ctx.lineWidth = 1
-  ctx.globalAlpha = 0.82
-
-  for (let i = 0; i < BOARD_SIZE; i += 1) {
-    const pos = PADDING + i * CELL_SIZE
-    ctx.beginPath()
-    ctx.moveTo(pos, PADDING)
-    ctx.lineTo(pos, PADDING + (BOARD_SIZE - 1) * CELL_SIZE)
-    ctx.stroke()
-
-    ctx.beginPath()
-    ctx.moveTo(PADDING, pos)
-    ctx.lineTo(PADDING + (BOARD_SIZE - 1) * CELL_SIZE, pos)
-    ctx.stroke()
-  }
-
-  ctx.fillStyle = '#744511'
-  ;[3, 7, 11].forEach((x) => {
-    ;[3, 7, 11].forEach((y) => {
-      ctx.beginPath()
-      ctx.arc(PADDING + x * CELL_SIZE, PADDING + y * CELL_SIZE, 3, 0, Math.PI * 2)
-      ctx.fill()
-    })
-  })
-
-  ctx.globalAlpha = 1
-  for (let x = 0; x < BOARD_SIZE; x += 1) {
-    for (let y = 0; y < BOARD_SIZE; y += 1) {
-      if (board.value[x][y] !== 0) drawPiece(ctx, x, y, board.value[x][y])
-    }
-  }
-
-  if (lastMoveX.value >= 0 && lastMoveY.value >= 0) {
-    ctx.fillStyle = '#ff5d5d'
-    ctx.beginPath()
-    ctx.arc(PADDING + lastMoveX.value * CELL_SIZE, PADDING + lastMoveY.value * CELL_SIZE, 4, 0, Math.PI * 2)
-    ctx.fill()
-  }
-
-  if (hintMove.value) {
-    const cx = PADDING + hintMove.value.x * CELL_SIZE
-    const cy = PADDING + hintMove.value.y * CELL_SIZE
-    ctx.strokeStyle = '#23a86c'
-    ctx.lineWidth = 3
-    ctx.beginPath()
-    ctx.arc(cx, cy, 12, 0, Math.PI * 2)
-    ctx.stroke()
-  }
-
-  if (hoverPos.value.x >= 0 && hoverPos.value.y >= 0 && isMyTurn.value && board.value[hoverPos.value.x][hoverPos.value.y] === 0) {
-    ctx.globalAlpha = 0.4
-    drawPiece(ctx, hoverPos.value.x, hoverPos.value.y, myIndex.value === 0 ? 1 : 2)
-    ctx.globalAlpha = 1
-  }
-}
-
-function drawPiece(ctx, x, y, playerIndex) {
-  const cx = PADDING + x * CELL_SIZE
-  const cy = PADDING + y * CELL_SIZE
-  const radius = 13
-  const gradient = ctx.createRadialGradient(cx - 4, cy - 4, 0, cx, cy, radius)
-
-  ctx.beginPath()
-  ctx.arc(cx, cy, radius, 0, Math.PI * 2)
-
-  if (playerIndex === 1) {
-    gradient.addColorStop(0, '#737373')
-    gradient.addColorStop(1, '#111111')
-  } else {
-    gradient.addColorStop(0, '#ffffff')
-    gradient.addColorStop(1, '#dcdcdc')
-  }
-
-  ctx.fillStyle = gradient
-  ctx.fill()
-
-  if (playerIndex === 2) {
-    ctx.strokeStyle = '#c7c7c7'
-    ctx.lineWidth = 1
-    ctx.stroke()
-  }
-}
-
-function getCellFromPosition(px, py) {
-  const x = Math.round((px - PADDING) / CELL_SIZE)
-  const y = Math.round((py - PADDING) / CELL_SIZE)
-  if (x >= 0 && x < BOARD_SIZE && y >= 0 && y < BOARD_SIZE) return { x, y }
-  return null
-}
-
-function handleBoardInteraction(px, py) {
-  if (!isMyTurn.value) return
-  const cell = getCellFromPosition(px, py)
-  if (cell && board.value[cell.x][cell.y] === 0) {
-    hintMove.value = null
-    emit('action', { type: 'place', x: cell.x, y: cell.y })
-  }
-}
-
-function handleBoardHover(px, py) {
-  if (!isMyTurn.value) {
-    hideHoverPiece()
-    return
-  }
-  const cell = getCellFromPosition(px, py)
-  if (cell && board.value[cell.x][cell.y] === 0) {
-    hoverPos.value = cell
-  } else {
-    hideHoverPiece()
-  }
-}
-
-function normalizeCanvasPoint(rawX, rawY) {
-  const rect = boardCanvas.value?.getBoundingClientRect()
-  if (!rect || !rect.width || !rect.height) {
-    return { x: rawX, y: rawY }
-  }
-  return {
-    x: rawX * (CANVAS_SIZE / rect.width),
-    y: rawY * (CANVAS_SIZE / rect.height)
-  }
-}
-
-function handleCanvasClick(event) {
-  const rect = boardCanvas.value.getBoundingClientRect()
-  const point = normalizeCanvasPoint(event.clientX - rect.left, event.clientY - rect.top)
-  handleBoardInteraction(point.x, point.y)
-}
-
-function handleCanvasMove(event) {
-  const rect = boardCanvas.value.getBoundingClientRect()
-  const point = normalizeCanvasPoint(event.clientX - rect.left, event.clientY - rect.top)
-  handleBoardHover(point.x, point.y)
-}
-
-function handleTouchStart(event) {
-  if (!event.touches || event.touches.length === 0) return
-  const touch = event.touches[0]
-  const rect = boardCanvas.value.getBoundingClientRect()
-  const point = normalizeCanvasPoint(touch.clientX - rect.left, touch.clientY - rect.top)
-  handleBoardHover(point.x, point.y)
-  handleBoardInteraction(point.x, point.y)
-}
-
-function handleTouchMove(event) {
-  if (!event.touches || event.touches.length === 0) return
-  const touch = event.touches[0]
-  const rect = boardCanvas.value.getBoundingClientRect()
-  const point = normalizeCanvasPoint(touch.clientX - rect.left, touch.clientY - rect.top)
-  handleBoardHover(point.x, point.y)
-}
-
-function handleTouchEnd() {
-  hideHoverPiece()
-}
-
-function hideHoverPiece() {
-  hoverPos.value = { x: -1, y: -1 }
-}
-
-onMounted(() => {
-  nextTick(() => {
-    drawBoard()
-  })
-})
-
-watch([board, lastMoveX, lastMoveY, hoverPos, isMyTurn, myIndex, hintMove], () => {
-  drawBoard()
-})
 </script>
 
 <style scoped>
 .gomoku-board {
-  min-height: calc(100vh - 88px);
-  padding: 8px 0 18px;
-  position: relative;
+  width: min(100%, 430px);
+  margin: 0 auto;
+  padding: 0 0 12px;
+  display: grid;
+  gap: 10px;
   color: #fff;
-}
-
-.gomoku-board::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 28px;
-  background:
-    linear-gradient(rgba(14, 102, 240, 0.22), rgba(14, 102, 240, 0.22)),
-    url('/assets/ui-ref/gomoku.png') center top / cover no-repeat;
-  opacity: 0.3;
-  pointer-events: none;
 }
 
 .loading {
-  min-height: 70vh;
+  min-height: 58vh;
   display: grid;
   place-items: center;
-  gap: 16px;
-  color: #fff;
+  gap: 14px;
 }
 
 .loading-spinner {
-  width: 52px;
-  height: 52px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   border: 4px solid rgba(255, 255, 255, 0.18);
   border-top-color: #ffd34d;
   animation: spin 0.9s linear infinite;
 }
 
-.versus-panel,
-.turn-banner,
-.board-frame,
-.tool-row,
-.status-panel,
-.bottom-banner {
+.battle-card,
+.board-card,
+.action-grid {
   position: relative;
   z-index: 1;
-  max-width: 920px;
-  margin-left: auto;
-  margin-right: auto;
 }
 
-.versus-panel {
-  border-radius: 24px;
-  padding: 14px 18px;
+.battle-card {
+  padding: 12px;
+  border-radius: 22px;
+  background: linear-gradient(180deg, rgba(244, 250, 255, 0.98), rgba(225, 239, 255, 0.95));
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 12px 24px rgba(8, 66, 160, 0.14);
   display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
-  border: 1px solid rgba(255, 255, 255, 0.45);
-  background: linear-gradient(180deg, rgba(245, 250, 255, 0.96), rgba(223, 237, 255, 0.92));
-  color: #24477d;
+  color: #20457d;
 }
 
-.player-card {
+.player-mini {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 
-.player-card.opponent {
-  justify-content: flex-end;
+.player-mini.opponent {
+  justify-content: space-between;
+}
+
+.player-mini.opponent .player-mini__copy {
+  text-align: right;
 }
 
 .avatar {
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
+  width: 42px;
+  height: 42px;
+  border-radius: 14px;
   display: grid;
   place-items: center;
   background: linear-gradient(180deg, #ffffff, #dfeaff);
-  border: 2px solid rgba(255, 255, 255, 0.8);
   color: #1d6bde;
-  font-size: 30px;
+  font-size: 20px;
   font-weight: 900;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
 .avatar.ghost {
-  color: #6f8dbf;
+  color: #708bb7;
 }
 
-.player-card strong {
+.player-mini__copy strong,
+.player-mini__copy span {
   display: block;
-  font-size: 28px;
 }
 
-.player-card span {
-  display: block;
-  margin-top: 4px;
-  color: #5f7cad;
+.player-mini__copy strong {
+  font-size: 16px;
+  line-height: 1.15;
+}
+
+.player-mini__copy span {
+  margin-top: 3px;
+  color: #6785b4;
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.battle-meta {
+  padding: 10px 12px;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #2f8fff, #0f62ef);
+  color: #fff;
+  text-align: center;
+}
+
+.battle-meta__turn {
   font-size: 18px;
-}
-
-.vs-word {
-  font-size: 44px;
+  line-height: 1.2;
   font-weight: 900;
-  color: #ffb200;
-  text-shadow: 0 4px 10px rgba(195, 113, 12, 0.35);
 }
 
-.turn-banner {
-  margin-top: 12px;
-  min-height: 52px;
+.battle-meta__turn.mine {
+  color: #fff0a9;
+}
+
+.battle-meta__turn.done {
+  color: #ffffff;
+}
+
+.battle-meta__score {
+  margin-top: 6px;
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.battle-meta__score span {
+  min-height: 24px;
+  padding: 0 10px;
   border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.board-card {
+  padding: 10px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(242, 248, 255, 0.95));
+  box-shadow: 0 14px 26px rgba(8, 63, 162, 0.14);
+}
+
+.board-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.mode-chip {
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #2f8fff, #0f62ef);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.mode-chip.soft {
+  background: #edf5ff;
+  color: #1b5fd9;
+}
+
+.board-shell {
+  padding: 12px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #f9dfab, #f2c679);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.board-surface {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #f6dda7, #efcc88);
+  overflow: hidden;
+}
+
+.board-playarea {
+  --grid-pad: 8%;
+  position: absolute;
+  inset: var(--grid-pad);
+  overflow: visible;
+  background:
+    linear-gradient(to right, rgba(139, 103, 42, 0.72) 0 1px, transparent 1px) 0 0 / calc(100% / 14) 100% repeat-x,
+    linear-gradient(to bottom, rgba(139, 103, 42, 0.72) 0 1px, transparent 1px) 0 0 / 100% calc(100% / 14) repeat-y;
+  border: 1px solid rgba(139, 103, 42, 0.72);
+}
+
+.intersection {
+  position: absolute;
+  width: 8.6%;
+  height: 8.6%;
+  padding: 0;
+  border: none;
+  background: transparent;
+  transform: translate(-50%, -50%);
+}
+
+.intersection:not(.disabled) {
+  cursor: pointer;
+}
+
+.intersection.disabled {
+  cursor: default;
+}
+
+.piece,
+.star-dot,
+.hint-ring,
+.last-dot {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.piece {
+  width: 74%;
+  height: 74%;
+  border-radius: 50%;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.15);
+}
+
+.piece.black {
+  background: radial-gradient(circle at 30% 30%, #666, #1a1a1a 72%);
+}
+
+.piece.white {
+  background: radial-gradient(circle at 30% 30%, #ffffff, #dadada 72%);
+  border: 1px solid rgba(168, 168, 168, 0.9);
+}
+
+.hint-ring {
+  width: 66%;
+  height: 66%;
+  border-radius: 50%;
+  border: 2px dashed #1fb26d;
+}
+
+.star-dot {
+  width: 16%;
+  height: 16%;
+  border-radius: 50%;
+  background: #784913;
+}
+
+.last-dot {
+  width: 18%;
+  height: 18%;
+  border-radius: 50%;
+  background: #ff5d5d;
+}
+
+.action-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.action-btn {
+  min-height: 62px;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 18px;
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  text-align: left;
+  color: #fff;
+  box-shadow: 0 10px 18px rgba(8, 72, 182, 0.16);
+}
+
+.action-btn__icon {
   display: grid;
   place-items: center;
-  font-size: 28px;
+  font-size: 20px;
   font-weight: 900;
-  background: linear-gradient(180deg, rgba(244, 252, 255, 0.97), rgba(225, 239, 255, 0.94));
-  color: #1f54aa;
-  border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
-.board-frame {
-  margin-top: 12px;
-  padding: 18px;
-  border-radius: 26px;
-  background: linear-gradient(180deg, rgba(252, 243, 221, 0.97), rgba(247, 228, 184, 0.95));
-  box-shadow: 0 16px 32px rgba(8, 63, 162, 0.18);
-  display: flex;
-  justify-content: center;
-}
-
-.board-canvas {
+.action-btn__copy strong,
+.action-btn__copy small {
   display: block;
-  border-radius: 18px;
-  box-shadow: inset 0 0 0 3px rgba(160, 106, 38, 0.3);
-  cursor: pointer;
-  touch-action: none;
-  -webkit-tap-highlight-color: transparent;
-  user-select: none;
-  -webkit-user-select: none;
 }
 
-.tool-row {
-  margin-top: 14px;
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+.action-btn__copy strong {
+  font-size: 14px;
+  line-height: 1.15;
+  font-weight: 800;
 }
 
-.tool-card {
-  min-height: 110px;
-  border-radius: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.62);
-  color: #fff;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  box-shadow: 0 12px 20px rgba(8, 72, 182, 0.18);
+.action-btn__copy small {
+  margin-top: 4px;
+  font-size: 11px;
+  line-height: 1.2;
+  opacity: 0.88;
 }
 
-.tool-card span {
-  font-size: 34px;
-}
-
-.tool-card strong {
-  font-size: 26px;
-}
-
-.tool-card.hint {
+.action-btn.hint {
   background: linear-gradient(180deg, #42d0bf, #17a893);
 }
 
-.tool-card.undo {
+.action-btn.undo {
   background: linear-gradient(180deg, #4189ff, #1957de);
 }
 
-.tool-card.restart {
+.action-btn.restart {
   background: linear-gradient(180deg, #ffc954, #f29b0b);
 }
 
-.tool-card.invite {
+.action-btn.back {
   background: linear-gradient(180deg, #a973ff, #7a4ce1);
-}
-
-.status-panel {
-  margin-top: 14px;
-  border-radius: 20px;
-  padding: 16px;
-  text-align: center;
-  background: linear-gradient(180deg, rgba(247, 251, 255, 0.97), rgba(232, 241, 255, 0.95));
-  color: #21467f;
-}
-
-.status-panel strong {
-  display: block;
-  font-size: 32px;
-}
-
-.status-panel span {
-  display: block;
-  margin-top: 6px;
-  color: #6887b4;
-  font-size: 20px;
-}
-
-.bottom-banner {
-  margin-top: 14px;
-  border-radius: 18px;
-  min-height: 74px;
-  display: grid;
-  place-items: center;
-  background: linear-gradient(90deg, rgba(216, 245, 255, 0.95), rgba(244, 251, 255, 0.95));
-  color: #1d57b1;
-  font-size: 30px;
-  font-weight: 900;
 }
 
 .toast {
   position: fixed;
   left: 50%;
-  bottom: 24px;
+  bottom: 20px;
   transform: translateX(-50%);
   z-index: 12;
   background: rgba(18, 84, 206, 0.96);
   color: #fff;
   padding: 12px 18px;
   border-radius: 999px;
-  font-size: 15px;
+  font-size: 14px;
   box-shadow: 0 10px 24px rgba(8, 56, 148, 0.35);
+  white-space: nowrap;
 }
 
 .result-panel {
@@ -620,9 +632,10 @@ watch([board, lastMoveX, lastMoveY, hoverPos, isMyTurn, myIndex, hintMove], () =
   background: rgba(7, 24, 60, 0.58);
   display: grid;
   place-items: center;
+  padding: 16px;
 }
 
-.result-content {
+.result-card {
   width: min(92vw, 360px);
   border-radius: 22px;
   padding: 22px 18px;
@@ -655,14 +668,15 @@ watch([board, lastMoveX, lastMoveY, hoverPos, isMyTurn, myIndex, hintMove], () =
   background: linear-gradient(180deg, #ff7865, #e14d4d);
 }
 
-.result-content h2 {
+.result-card h2 {
   margin: 0;
-  font-size: 30px;
+  font-size: 28px;
 }
 
-.result-content p {
+.result-card p {
   margin: 8px 0 0;
   color: #5d7baa;
+  line-height: 1.45;
 }
 
 .result-actions {
@@ -676,7 +690,7 @@ watch([board, lastMoveX, lastMoveY, hoverPos, isMyTurn, myIndex, hintMove], () =
 .secondary-btn {
   min-height: 46px;
   border-radius: 999px;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 800;
 }
 
@@ -707,177 +721,36 @@ watch([board, lastMoveX, lastMoveY, hoverPos, isMyTurn, myIndex, hintMove], () =
   }
 }
 
-@media (max-width: 720px) {
-  .versus-panel {
-    grid-template-columns: 1fr;
-    text-align: center;
-  }
-
-  .player-card,
-  .player-card.opponent {
-    justify-content: center;
-  }
-
-  .tool-row {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .bottom-banner,
-  .status-panel strong {
-    font-size: 20px;
-  }
-
-  .player-card strong {
-    font-size: 20px;
-  }
-}
-
-/* Reference-art refresh */
-.gomoku-board::before {
-  opacity: 0.36;
-  filter: saturate(1.08);
-}
-
-.versus-panel,
-.turn-banner,
-.board-frame,
-.status-panel {
-  border: 2px solid var(--panel-border);
-  box-shadow: var(--shadow-soft);
-}
-
-.versus-panel {
-  border-radius: 30px;
-}
-
-.vs-word {
-  color: #ffc12d;
-  -webkit-text-stroke: 1px #fff4bf;
-}
-
-.turn-banner {
-  box-shadow: var(--shadow-soft);
-}
-
-.board-frame {
-  border-radius: 30px;
-  padding: 20px;
-  background:
-    linear-gradient(180deg, rgba(255, 243, 214, 0.98), rgba(247, 224, 177, 0.96));
-}
-
-.board-canvas {
-  border: 2px solid rgba(172, 108, 36, 0.5);
-  box-shadow:
-    inset 0 0 0 3px rgba(160, 106, 38, 0.26),
-    0 12px 24px rgba(104, 63, 18, 0.16);
-}
-
-.tool-card {
-  min-height: 118px;
-  border-radius: 20px;
-  box-shadow:
-    inset 0 2px 0 rgba(255, 255, 255, 0.42),
-    0 10px 0 rgba(0, 0, 0, 0.1),
-    0 16px 24px rgba(8, 72, 182, 0.18);
-}
-
-.bottom-banner {
-  min-height: 88px;
-  border: 2px solid #cce8ff;
-  background:
-    radial-gradient(circle at 12% 70%, rgba(40, 180, 113, 0.24), transparent 25%),
-    radial-gradient(circle at 86% 68%, rgba(255, 174, 34, 0.2), transparent 23%),
-    linear-gradient(90deg, rgba(216, 245, 255, 0.96), rgba(255, 255, 255, 0.98) 52%, rgba(223, 247, 255, 0.96));
-  text-shadow: 0 2px 0 #fff;
-}
-
-.gomoku-board {
-  min-height: 0;
-  height: var(--game-viewport-height, calc(100dvh - 60px));
-  max-height: var(--game-viewport-height, calc(100dvh - 60px));
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto auto auto;
-  overflow: hidden;
-  padding-bottom: 10px;
-}
-
-.board-frame {
-  min-height: 0;
-  padding: 14px;
-}
-
-.board-canvas {
-  width: min(100%, 420px) !important;
-  height: auto !important;
-  aspect-ratio: 1 / 1;
-}
-
-@media (max-width: 760px), (max-height: 820px) {
-  .gomoku-board {
-    padding-top: 4px;
-    grid-template-rows: auto auto minmax(0, 1fr) auto auto;
-  }
-
-  .versus-panel {
-    padding: 10px 12px;
-    border-radius: 22px;
-  }
-
-  .avatar {
-    width: 48px;
-    height: 48px;
-    font-size: 24px;
-  }
-
-  .turn-banner {
-    margin-top: 8px;
-    min-height: 42px;
-    font-size: 20px;
-  }
-
-  .board-frame {
-    margin-top: 8px;
+@media (max-width: 380px) {
+  .battle-card {
     padding: 10px;
-    border-radius: 22px;
   }
 
-  .tool-row {
-    margin-top: 10px;
-    gap: 8px;
+  .board-card {
+    padding: 8px;
   }
 
-  .tool-card {
-    min-height: 74px;
-    border-radius: 16px;
-    box-shadow:
-      inset 0 2px 0 rgba(255, 255, 255, 0.42),
-      0 8px 18px rgba(8, 72, 182, 0.16);
+  .board-shell {
+    padding: 10px;
   }
 
-  .tool-card span {
-    font-size: 24px;
+  .player-mini__copy strong {
+    font-size: 15px;
   }
 
-  .tool-card strong {
-    font-size: 16px;
+  .battle-meta__turn {
+    font-size: 17px;
   }
 
-  .status-panel {
-    margin-top: 10px;
-    padding: 12px;
+  .action-btn {
+    min-height: 58px;
+    padding: 9px 10px;
   }
 
-  .status-panel strong {
-    font-size: 22px;
-  }
-
-  .status-panel span {
-    font-size: 14px;
-  }
-
-  .bottom-banner {
-    display: none;
+  .toast {
+    max-width: calc(100vw - 24px);
+    white-space: normal;
+    text-align: center;
   }
 }
 </style>

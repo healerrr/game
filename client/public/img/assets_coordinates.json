@@ -1,0 +1,550 @@
+{
+  "source": "image(15).png",
+  "note": "坐标 box 为原图像素坐标 (left, top, right, bottom)。这些是从截图中手动切出的页面还原素材；部分复杂图形保留了原卡片/区域背景，便于 Codex 直接定位还原。",
+  "original_size": [
+    941,
+    1672
+  ],
+  "assets": [
+    {
+      "file": "page_visible_without_black.png",
+      "box": [
+        0,
+        0,
+        941,
+        934
+      ],
+      "size": [
+        941,
+        934
+      ],
+      "rounded": null,
+      "circle": false
+    },
+    {
+      "file": "header_blue_area.png",
+      "box": [
+        0,
+        0,
+        941,
+        568
+      ],
+      "size": [
+        941,
+        568
+      ],
+      "rounded": null,
+      "circle": false
+    },
+    {
+      "file": "main_white_panel_top.png",
+      "box": [
+        0,
+        561,
+        941,
+        934
+      ],
+      "size": [
+        941,
+        373
+      ],
+      "rounded": 30,
+      "circle": false
+    },
+    {
+      "file": "title_logo_游戏平码.png",
+      "box": [
+        255,
+        60,
+        670,
+        164
+      ],
+      "size": [
+        415,
+        104
+      ],
+      "rounded": null,
+      "circle": false
+    },
+    {
+      "file": "avatar_circle.png",
+      "box": [
+        51,
+        169,
+        186,
+        309
+      ],
+      "size": [
+        135,
+        140
+      ],
+      "rounded": null,
+      "circle": true
+    },
+    {
+      "file": "vehicle_badge_1号车.png",
+      "box": [
+        395,
+        192,
+        535,
+        234
+      ],
+      "size": [
+        140,
+        42
+      ],
+      "rounded": 22,
+      "circle": false
+    },
+    {
+      "file": "button_今日排行.png",
+      "box": [
+        608,
+        180,
+        731,
+        298
+      ],
+      "size": [
+        123,
+        118
+      ],
+      "rounded": 20,
+      "circle": false
+    },
+    {
+      "file": "button_活动规则.png",
+      "box": [
+        763,
+        180,
+        884,
+        297
+      ],
+      "size": [
+        121,
+        117
+      ],
+      "rounded": 20,
+      "circle": false
+    },
+    {
+      "file": "rank_trophy_icon.png",
+      "box": [
+        633,
+        194,
+        704,
+        254
+      ],
+      "size": [
+        71,
+        60
+      ],
+      "rounded": 10,
+      "circle": false
+    },
+    {
+      "file": "rules_book_icon.png",
+      "box": [
+        796,
+        195,
+        851,
+        254
+      ],
+      "size": [
+        55,
+        59
+      ],
+      "rounded": 8,
+      "circle": false
+    },
+    {
+      "file": "score_panel_full.png",
+      "box": [
+        60,
+        342,
+        879,
+        563
+      ],
+      "size": [
+        819,
+        221
+      ],
+      "rounded": 52,
+      "circle": false
+    },
+    {
+      "file": "score_trophy_left.png",
+      "box": [
+        72,
+        397,
+        213,
+        548
+      ],
+      "size": [
+        141,
+        151
+      ],
+      "rounded": null,
+      "circle": false
+    },
+    {
+      "file": "score_gift_right.png",
+      "box": [
+        701,
+        382,
+        853,
+        551
+      ],
+      "size": [
+        152,
+        169
+      ],
+      "rounded": null,
+      "circle": false
+    },
+    {
+      "file": "score_coin.png",
+      "box": [
+        702,
+        476,
+        791,
+        552
+      ],
+      "size": [
+        89,
+        76
+      ],
+      "rounded": null,
+      "circle": true
+    },
+    {
+      "file": "score_number_1000.png",
+      "box": [
+        315,
+        431,
+        632,
+        529
+      ],
+      "size": [
+        317,
+        98
+      ],
+      "rounded": null,
+      "circle": false
+    },
+    {
+      "file": "score_title_当前积分.png",
+      "box": [
+        398,
+        374,
+        541,
+        410
+      ],
+      "size": [
+        143,
+        36
+      ],
+      "rounded": null,
+      "circle": false
+    },
+    {
+      "file": "card_剪刀石头布_full.png",
+      "box": [
+        27,
+        607,
+        235,
+        894
+      ],
+      "size": [
+        208,
+        287
+      ],
+      "rounded": 28,
+      "circle": false
+    },
+    {
+      "file": "card_猜数字_full.png",
+      "box": [
+        249,
+        607,
+        459,
+        894
+      ],
+      "size": [
+        210,
+        287
+      ],
+      "rounded": 28,
+      "circle": false
+    },
+    {
+      "file": "card_快问快答_full.png",
+      "box": [
+        475,
+        607,
+        684,
+        894
+      ],
+      "size": [
+        209,
+        287
+      ],
+      "rounded": 28,
+      "circle": false
+    },
+    {
+      "file": "card_五子棋_full.png",
+      "box": [
+        700,
+        607,
+        911,
+        894
+      ],
+      "size": [
+        211,
+        287
+      ],
+      "rounded": 28,
+      "circle": false
+    },
+    {
+      "file": "icon_剪刀石头布.png",
+      "box": [
+        31,
+        607,
+        231,
+        826
+      ],
+      "size": [
+        200,
+        219
+      ],
+      "rounded": 22,
+      "circle": false
+    },
+    {
+      "file": "label_剪刀石头布.png",
+      "box": [
+        31,
+        826,
+        231,
+        884
+      ],
+      "size": [
+        200,
+        58
+      ],
+      "rounded": 12,
+      "circle": false
+    },
+    {
+      "file": "icon_猜数字.png",
+      "box": [
+        254,
+        608,
+        455,
+        826
+      ],
+      "size": [
+        201,
+        218
+      ],
+      "rounded": 22,
+      "circle": false
+    },
+    {
+      "file": "label_猜数字.png",
+      "box": [
+        255,
+        826,
+        454,
+        884
+      ],
+      "size": [
+        199,
+        58
+      ],
+      "rounded": 12,
+      "circle": false
+    },
+    {
+      "file": "icon_快问快答.png",
+      "box": [
+        480,
+        607,
+        680,
+        826
+      ],
+      "size": [
+        200,
+        219
+      ],
+      "rounded": 22,
+      "circle": false
+    },
+    {
+      "file": "label_快问快答.png",
+      "box": [
+        480,
+        826,
+        681,
+        884
+      ],
+      "size": [
+        201,
+        58
+      ],
+      "rounded": 12,
+      "circle": false
+    },
+    {
+      "file": "icon_五子棋.png",
+      "box": [
+        705,
+        607,
+        906,
+        826
+      ],
+      "size": [
+        201,
+        219
+      ],
+      "rounded": 22,
+      "circle": false
+    },
+    {
+      "file": "label_五子棋.png",
+      "box": [
+        705,
+        826,
+        906,
+        884
+      ],
+      "size": [
+        201,
+        58
+      ],
+      "rounded": 12,
+      "circle": false
+    },
+    {
+      "file": "hand_game_illustration_only.png",
+      "box": [
+        38,
+        622,
+        224,
+        817
+      ],
+      "size": [
+        186,
+        195
+      ],
+      "rounded": null,
+      "circle": false
+    },
+    {
+      "file": "number_game_illustration_only.png",
+      "box": [
+        267,
+        628,
+        443,
+        807
+      ],
+      "size": [
+        176,
+        179
+      ],
+      "rounded": null,
+      "circle": false
+    },
+    {
+      "file": "qa_game_illustration_only.png",
+      "box": [
+        492,
+        628,
+        667,
+        810
+      ],
+      "size": [
+        175,
+        182
+      ],
+      "rounded": null,
+      "circle": false
+    },
+    {
+      "file": "gomoku_illustration_only.png",
+      "box": [
+        721,
+        634,
+        891,
+        795
+      ],
+      "size": [
+        170,
+        161
+      ],
+      "rounded": null,
+      "circle": false
+    },
+    {
+      "file": "second_row_visible_partial_left.png",
+      "box": [
+        28,
+        914,
+        235,
+        934
+      ],
+      "size": [
+        207,
+        20
+      ],
+      "rounded": 20,
+      "circle": false
+    },
+    {
+      "file": "second_row_visible_partial_middle1.png",
+      "box": [
+        250,
+        914,
+        459,
+        934
+      ],
+      "size": [
+        209,
+        20
+      ],
+      "rounded": 20,
+      "circle": false
+    },
+    {
+      "file": "second_row_visible_partial_middle2.png",
+      "box": [
+        476,
+        914,
+        684,
+        934
+      ],
+      "size": [
+        208,
+        20
+      ],
+      "rounded": 20,
+      "circle": false
+    },
+    {
+      "file": "second_row_visible_partial_right.png",
+      "box": [
+        702,
+        914,
+        911,
+        934
+      ],
+      "size": [
+        209,
+        20
+      ],
+      "rounded": 20,
+      "circle": false
+    }
+  ]
+}

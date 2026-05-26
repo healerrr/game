@@ -1,151 +1,119 @@
 <template>
   <main class="lobby-page">
-    <div class="lobby-container">
-      <!-- 顶部装饰 -->
-      <div class="top-decorations">
-        <div class="flags">
-          <span class="flag flag-1"></span>
-          <span class="flag flag-2">🚩</span>
-          <span class="flag flag-3">🚩</span>
-        </div>
-        <div class="balloon">🎈</div>
-        <div class="confetti">
-          <span class="confetti-piece"></span>
-          <span class="confetti-piece"></span>
-          <span class="confetti-piece"></span>
-        </div>
-      </div>
-
-      <!-- 标题 -->
-      <h1 class="main-title">游戏平台</h1>
-
-      <!-- 用户信息区 -->
-      <div class="user-section">
-        <div class="user-info">
-          <div class="avatar-wrapper">
-            <img :src="playerAvatar" alt="avatar" class="user-avatar" />
+    <div class="lobby-shell">
+      <section class="hero-strip">
+        <div class="hero-top">
+          <div class="brand-lockup">
+            <p class="eyebrow">Team Building Arcade</p>
+            <h1>小游戏大厅</h1>
           </div>
-          <div class="user-details">
-            <div class="user-name-row">
-              <span class="greeting">Hi, {{ player?.nickname || '游客' }}</span>
-              <span class="bus-badge">🚌 {{ player?.busNumber || '-' }}号车</span>
+
+          <div class="hero-actions">
+            <button type="button" class="icon-action" @click="$router.push('/leaderboard')">
+              <img src="/assets/lobby/feature-ranking.png" alt="排行榜" />
+            </button>
+            <button type="button" class="icon-action" @click="showRules = true">
+              <img src="/assets/lobby/btn-rules.png" alt="活动规则" />
+            </button>
+          </div>
+        </div>
+
+        <div class="player-row">
+          <div class="avatar-badge">{{ playerInitial }}</div>
+
+          <div class="player-copy">
+            <div class="player-title">
+              <strong>{{ player?.nickname || '游客' }}</strong>
+              <span class="bus-tag">{{ player?.busNumber || '-' }}号车</span>
             </div>
-            <p class="welcome-text">欢迎来到公司团建小游戏平台！</p>
+            <p>轻松开局，实时积分，随时和机器人来一局。</p>
           </div>
         </div>
-        <div class="action-buttons">
-          <button class="action-btn" @click="$router.push('/leaderboard')">
-            <span class="action-icon"></span>
-            <span class="action-text">今日排行</span>
-          </button>
-          <button class="action-btn" @click="showRuleHint = !showRuleHint">
-            <span class="action-icon">📘</span>
-            <span class="action-text">活动规则</span>
-          </button>
-        </div>
-      </div>
 
-      <!-- 积分展示区 -->
-      <div class="score-section">
-        <div class="score-card">
-          <div class="score-left">
-            <img src="/assets/lobby/score-trophy-left.png" alt="trophy" class="trophy-img" />
+        <div class="score-band">
+          <div class="score-main">
+            <span class="score-kicker">当前积分</span>
+            <strong>{{ player?.points ?? 0 }}</strong>
           </div>
-          <div class="score-center">
-            <div class="score-label">
-              <span class="star">⭐</span>
-              <span>当前积分</span>
-              <span class="star">⭐</span>
-            </div>
-            <div class="score-value">{{ player?.points ?? 0 }}</div>
-          </div>
-          <div class="score-right">
-            <img src="/assets/lobby/score-gift-right.png" alt="gift" class="gift-img" />
+
+          <div class="score-side">
+            <span>8款游戏</span>
+            <span>即点即玩</span>
           </div>
         </div>
-      </div>
+      </section>
 
-      <!-- 游戏网格区 -->
-      <div class="games-section">
+      <section class="games-panel">
+        <div class="section-head">
+          <div>
+            <p>精选游戏</p>
+            <h2>紧凑排布，单手就能点到</h2>
+          </div>
+          <span class="section-pill">H5</span>
+        </div>
+
         <div class="games-grid">
-          <div
+          <button
             v-for="game in gameCards"
             :key="game.key"
-            class="game-card"
+            type="button"
+            class="game-tile"
             @click="joinGame(game.key)"
           >
-            <div class="game-image-wrapper">
-              <img :src="game.art" :alt="game.name" class="game-image" />
+            <img :src="game.image" :alt="game.name" class="game-tile__image" />
+            <div class="game-tile__meta">
+              <strong>{{ game.name }}</strong>
+              <span>{{ game.tag }}</span>
             </div>
-            <div class="game-name">{{ game.name }}</div>
-          </div>
+          </button>
         </div>
-      </div>
+      </section>
 
-      <!-- 宣传横幅 -->
-      <div class="promo-banner">
-        <img src="/assets/lobby/promo-strip.png" alt="promo" class="promo-image" />
-      </div>
+      <section class="utility-panel">
+        <button
+          v-for="item in utilities"
+          :key="item.key"
+          type="button"
+          class="utility-item"
+          @click="handleUtility(item)"
+        >
+          <img :src="item.icon" :alt="item.label" class="utility-item__icon" />
+          <div class="utility-item__copy">
+            <strong>{{ item.label }}</strong>
+            <span>{{ item.desc }}</span>
+          </div>
+        </button>
+      </section>
 
-      <!-- 底部功能区 -->
-      <div class="bottom-section">
-        <div class="feature-grid">
-          <div class="feature-item" @click="$router.push('/leaderboard')">
-            <img src="/assets/lobby/feature-record.png" alt="record" class="feature-icon-img" />
-            <div class="feature-text">
-              <div class="feature-title">积分记录</div>
-              <div class="feature-subtitle">明细查询</div>
-            </div>
-          </div>
-          <div class="feature-item">
-            <img src="/assets/lobby/feature-achievement.png" alt="achievement" class="feature-icon-img" />
-            <div class="feature-text">
-              <div class="feature-title">我的战绩</div>
-              <div class="feature-subtitle">历史成绩</div>
-            </div>
-          </div>
-          <div class="feature-item" @click="$router.push('/leaderboard')">
-            <img src="/assets/lobby/feature-ranking.png" alt="ranking" class="feature-icon-img" />
-            <div class="feature-text">
-              <div class="feature-title">排行榜</div>
-              <div class="feature-subtitle">实时排名</div>
-            </div>
-          </div>
-          <div class="feature-item" @click="showReward = true">
-            <img src="/assets/lobby/feature-reward.png" alt="reward" class="feature-icon-img" />
-            <div class="feature-text">
-              <div class="feature-title">兑奖区</div>
-              <div class="feature-subtitle">兑换好礼</div>
-            </div>
-          </div>
-        </div>
-      </div>
+      <p class="footer-tip">积极参与，赢取积分，兑换丰厚好礼。</p>
 
-      <!-- 底部提示 -->
-      <div class="footer-note">
-        <span class="note-decoration">🎁</span>
-        <span>积极参与，赢取积分，兑换丰厚好礼！</span>
-        <span class="note-decoration">🎁</span>
-      </div>
-
-      <!-- 匹配弹窗 -->
       <transition name="fade">
         <div v-if="matching" class="overlay" @click="cancelMatch">
-          <div class="loading-box">
+          <div class="dialog" @click.stop>
             <div class="spinner"></div>
             <h3>正在创建房间</h3>
             <p>{{ selectedGameName }}</p>
-            <button class="confirm-btn" @click.stop="cancelMatch">取消匹配</button>
+            <button type="button" class="dialog-btn" @click="cancelMatch">取消匹配</button>
           </div>
         </div>
       </transition>
 
-      <!-- 奖励弹窗 -->
       <transition name="fade">
-        <div v-if="showReward" class="overlay" @click.self="showReward = false">
-          <div class="reward-box">
+        <div v-if="showRules" class="overlay" @click="showRules = false">
+          <div class="dialog dialog--left" @click.stop>
+            <h3>活动规则</h3>
+            <p>点击任意游戏即可和机器人快速开局，结算后积分会同步更新。</p>
+            <p>排行榜实时刷新，积分记录、我的战绩和兑奖区保留入口，后续可继续扩展。</p>
+            <button type="button" class="dialog-btn" @click="showRules = false">知道了</button>
+          </div>
+        </div>
+      </transition>
+
+      <transition name="fade">
+        <div v-if="showReward" class="overlay" @click="showReward = false">
+          <div class="dialog" @click.stop>
             <h3>奖励中心</h3>
-            <p>参与游戏即可累积积分，排名越高，可兑换的奖品越丰富。</p>
+            <p>今日继续参与游戏可累计更多积分，用于后续兑奖。</p>
             <div class="reward-stats">
               <div>
                 <span>当前积分</span>
@@ -156,48 +124,58 @@
                 <strong>2000</strong>
               </div>
             </div>
-            <button class="confirm-btn" @click="showReward = false">知道了</button>
+            <button type="button" class="dialog-btn" @click="showReward = false">继续加油</button>
           </div>
         </div>
       </transition>
 
-      <!-- 规则提示 -->
       <transition name="fade">
-        <div v-if="showRuleHint" class="toast">
-          推荐先体验：猜数字、快问快答、掼蛋、红中麻将
-        </div>
+        <div v-if="toastMessage" class="toast">{{ toastMessage }}</div>
       </transition>
     </div>
   </main>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { gameState, getPlayer, socket } from '../socket'
+
+import cardChineseChess from '../../img/card_chinese_chess_transparent.png'
+import cardEggSmash from '../../img/card_egg_smash.png'
+import cardGoldenFlower from '../../img/card_golden_flower_transparent.png'
+import cardGomoku from '../../img/card_gomoku.png'
+import cardGuessNumber from '../../img/card_guess_number.png'
+import cardMahjong from '../../img/card_mahjong.png'
+import cardQuickQa from '../../img/card_quick_qa_transparent.png'
+import cardScissorsRockPaper from '../../img/card_scissors_rock_paper.png'
 
 const router = useRouter()
 const player = computed(() => getPlayer())
 const matching = ref(false)
 const selectedGameKey = ref('')
 const showReward = ref(false)
-const showRuleHint = ref(false)
-const avatarPalette = [
-  '/assets/mahjong-theme/avatars/yun.png',
-  '/assets/mahjong-theme/avatars/xu.png',
-  '/assets/mahjong-theme/avatars/ling.png',
-  '/assets/mahjong-theme/avatars/wan.png'
-]
+const showRules = ref(false)
+const toastMessage = ref('')
+
+let toastTimer = null
 
 const gameCards = [
-  { key: 'rock_paper_scissors', name: '剪刀石头布', art: '/assets/lobby/game-rps-card.png' },
-  { key: 'guess_number', name: '猜数字', art: '/assets/lobby/game-guess-card.png' },
-  { key: 'quiz', name: '快问快答', art: '/assets/lobby/game-quiz-card.png' },
-  { key: 'gomoku', name: '五子棋', art: '/assets/lobby/game-gomoku-card.png' },
-  { key: 'chess', name: '象棋', art: '/assets/lobby/game-chess-card.png' },
-  { key: 'guandan', name: '掼蛋', art: '/assets/lobby/game-guandan-card.png' },
-  { key: 'zha_jin_hua', name: '炸金花', art: '/assets/lobby/game-zjh-card.png' },
-  { key: 'mahjong', name: '红中麻将', art: '/assets/lobby/game-mahjong-card.png' }
+  { key: 'rock_paper_scissors', name: '剪刀石头布', image: cardScissorsRockPaper, tag: '双人对战' },
+  { key: 'guess_number', name: '猜数字', image: cardGuessNumber, tag: '逻辑挑战' },
+  { key: 'quiz', name: '快问快答', image: cardQuickQa, tag: '知识竞速' },
+  { key: 'gomoku', name: '五子棋', image: cardGomoku, tag: '经典棋盘' },
+  { key: 'chess', name: '象棋', image: cardChineseChess, tag: '残局博弈' },
+  { key: 'guandan', name: '掼蛋', image: cardEggSmash, tag: '牌桌欢乐' },
+  { key: 'zha_jin_hua', name: '炸金花', image: cardGoldenFlower, tag: '运气对决' },
+  { key: 'mahjong', name: '红中麻将', image: cardMahjong, tag: '休闲搓牌' }
+]
+
+const utilities = [
+  { key: 'record', label: '积分记录', desc: '明细查询', icon: '/assets/lobby/feature-record.png' },
+  { key: 'results', label: '我的战绩', desc: '历史成绩', icon: '/assets/lobby/feature-achievement.png' },
+  { key: 'leaderboard', label: '排行榜', desc: '实时排名', icon: '/assets/lobby/feature-ranking.png' },
+  { key: 'reward', label: '兑奖区', desc: '兑换好礼', icon: '/assets/lobby/feature-reward.png' }
 ]
 
 const selectedGameName = computed(() => {
@@ -205,20 +183,31 @@ const selectedGameName = computed(() => {
 })
 
 const playerInitial = computed(() => {
-  const text = player.value?.nickname || '团'
+  const text = player.value?.nickname || '游'
   return text.slice(0, 1)
 })
 
-const playerAvatar = computed(() => {
-  const seed = `${player.value?.id || ''}${player.value?.nickname || ''}`
-  let hash = 0
-  for (let i = 0; i < seed.length; i += 1) hash += seed.charCodeAt(i)
-  return avatarPalette[hash % avatarPalette.length]
+onMounted(() => {
+  if (!player.value) {
+    router.push('/')
+  }
 })
 
-onMounted(() => {
-  if (!player.value) router.push('/')
+onBeforeUnmount(() => {
+  if (toastTimer) {
+    clearTimeout(toastTimer)
+  }
 })
+
+function showToast(message) {
+  toastMessage.value = message
+  if (toastTimer) {
+    clearTimeout(toastTimer)
+  }
+  toastTimer = setTimeout(() => {
+    toastMessage.value = ''
+  }, 2200)
+}
 
 function enterQuickPlayRoom(data) {
   gameState.currentRoom = {
@@ -254,7 +243,7 @@ function joinGame(gameType) {
     })
     .catch((err) => {
       matching.value = false
-      alert(err.message || '启动游戏失败')
+      showToast(err.message || '启动游戏失败')
     })
 }
 
@@ -263,396 +252,385 @@ function cancelMatch() {
     matching.value = false
   })
 }
+
+function handleUtility(item) {
+  if (item.key === 'leaderboard') {
+    router.push('/leaderboard')
+    return
+  }
+
+  if (item.key === 'reward') {
+    showReward.value = true
+    return
+  }
+
+  const messages = {
+    record: '积分记录功能即将开放',
+    results: '我的战绩功能即将开放'
+  }
+  showToast(messages[item.key] || `${item.label} 即将开放`)
+}
 </script>
 
 <style scoped>
 .lobby-page {
   min-height: 100vh;
-  background: linear-gradient(180deg, #1e90ff 0%, #87ceeb 100%);
-  position: relative;
+  background:
+    radial-gradient(circle at top left, rgba(255, 255, 255, 0.34), transparent 28%),
+    linear-gradient(180deg, #0a63ef 0%, #2aa6ff 36%, #e8f8ff 100%);
+  padding: 14px 10px 22px;
   overflow-x: hidden;
-  padding-bottom: 20px;
 }
 
-.lobby-container {
-  max-width: 750px;
+.lobby-shell {
+  width: min(100%, 430px);
   margin: 0 auto;
-  padding: 0 16px;
+}
+
+.hero-strip {
   position: relative;
-}
-
-/* 顶部装饰 */
-.top-decorations {
-  position: relative;
-  height: 60px;
-  margin-bottom: 10px;
-}
-
-.flags {
-  position: absolute;
-  top: 0;
-  left: 0;
-  display: flex;
-  gap: 15px;
-}
-
-.flag {
-  font-size: 24px;
-  animation: wave 2s ease-in-out infinite;
-}
-
-.flag-1 {
-  animation-delay: 0s;
-}
-
-.flag-2 {
-  animation-delay: 0.3s;
-}
-
-.flag-3 {
-  animation-delay: 0.6s;
-}
-
-.balloon {
-  position: absolute;
-  top: 0;
-  right: 20px;
-  font-size: 40px;
-  animation: float 3s ease-in-out infinite;
-}
-
-.confetti {
-  position: absolute;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-}
-
-.confetti-piece {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  margin: 0 5px;
-  border-radius: 2px;
-  animation: confetti-fall 2s ease-in-out infinite;
-}
-
-.confetti-piece:nth-child(1) {
-  background: #ff6b6b;
-  animation-delay: 0s;
-}
-
-.confetti-piece:nth-child(2) {
-  background: #ffd93d;
-  animation-delay: 0.5s;
-}
-
-.confetti-piece:nth-child(3) {
-  background: #6bcb77;
-  animation-delay: 1s;
-}
-
-/* 主标题 */
-.main-title {
-  text-align: center;
-  font-size: 48px;
-  font-weight: 900;
+  padding: 16px 16px 14px;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 16% 16%, rgba(255, 255, 255, 0.22), transparent 18%),
+    radial-gradient(circle at 86% 10%, rgba(255, 210, 95, 0.28), transparent 14%),
+    linear-gradient(165deg, #136cff 0%, #068be8 52%, #4cc2ff 100%);
   color: #fff;
-  text-shadow: 
-    0 4px 0 #1a73e8,
-    0 8px 0 #1557b0,
-    0 12px 20px rgba(0, 0, 0, 0.3);
-  margin: 0 0 20px;
-  letter-spacing: 4px;
-}
-
-/* 用户信息区 */
-.user-section {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  gap: 15px;
-}
-
-.user-info {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex: 1;
-}
-
-.avatar-wrapper {
-  width: 60px;
-  height: 60px;
-  border-radius: 50%;
-  overflow: hidden;
-  border: 3px solid #fff;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
-}
-
-.user-avatar {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.user-details {
-  color: #fff;
-}
-
-.user-name-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 4px;
-}
-
-.greeting {
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.bus-badge {
-  background: rgba(255, 255, 255, 0.9);
-  color: #1a73e8;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 14px;
-  font-weight: 600;
-}
-
-.welcome-text {
-  margin: 0;
-  font-size: 14px;
-  opacity: 0.9;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 10px;
-}
-
-.action-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 70px;
-  height: 70px;
-  background: rgba(255, 255, 255, 0.9);
-  border-radius: 16px;
-  border: none;
-  cursor: pointer;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s;
-}
-
-.action-btn:hover {
-  transform: translateY(-2px);
-}
-
-.action-icon {
-  font-size: 28px;
-  margin-bottom: 4px;
-}
-
-.action-text {
-  font-size: 12px;
-  color: #333;
-  font-weight: 600;
-}
-
-/* 积分展示区 */
-.score-section {
-  margin-bottom: 20px;
-}
-
-.score-card {
-  background: linear-gradient(135deg, #1a73e8 0%, #4a90e2 100%);
-  border-radius: 20px;
-  padding: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
-  position: relative;
+  box-shadow: 0 18px 36px rgba(3, 74, 180, 0.24);
   overflow: hidden;
 }
 
-.score-card::before {
+.hero-strip::before,
+.hero-strip::after {
   content: '';
   position: absolute;
-  top: -50%;
-  left: -50%;
-  width: 200%;
-  height: 200%;
-  background: radial-gradient(circle, rgba(255, 255, 255, 0.1) 0%, transparent 70%);
-  animation: shimmer 3s infinite;
+  border-radius: 999px;
+  pointer-events: none;
 }
 
-.score-left,
-.score-right {
-  flex: 0 0 auto;
+.hero-strip::before {
+  width: 140px;
+  height: 140px;
+  right: -46px;
+  top: -54px;
+  background: rgba(255, 255, 255, 0.1);
 }
 
-.trophy-img,
-.gift-img {
-  width: 80px;
-  height: 80px;
-  object-fit: contain;
+.hero-strip::after {
+  width: 120px;
+  height: 120px;
+  left: -42px;
+  bottom: -58px;
+  background: rgba(255, 255, 255, 0.08);
 }
 
-.score-center {
-  flex: 1;
-  text-align: center;
-  color: #fff;
+.hero-top,
+.player-row,
+.score-band {
   position: relative;
   z-index: 1;
 }
 
-.score-label {
+.hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.brand-lockup h1,
+.brand-lockup p,
+.player-copy p,
+.player-title,
+.score-band {
+  margin: 0;
+}
+
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+
+.brand-lockup h1 {
+  margin-top: 4px;
+  font-size: 30px;
+  line-height: 1.05;
+  font-weight: 900;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.icon-action {
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(10px);
+  display: grid;
+  place-items: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
+}
+
+.icon-action img {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.player-row {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  margin-top: 16px;
+}
+
+.avatar-badge {
+  width: 56px;
+  height: 56px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #fff3d5, #ffc866);
+  color: #0a58e9;
+  display: grid;
+  place-items: center;
+  font-size: 24px;
+  font-weight: 900;
+  box-shadow: 0 10px 18px rgba(0, 51, 133, 0.16);
+}
+
+.player-title {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 8px;
-  margin-bottom: 8px;
-  font-size: 18px;
-  font-weight: 600;
+  flex-wrap: wrap;
 }
 
-.star {
-  color: #ffd700;
+.player-title strong {
+  font-size: 21px;
+  line-height: 1.1;
 }
 
-.score-value {
-  font-size: 64px;
+.bus-tag {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.16);
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.player-copy p {
+  margin-top: 6px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.88);
+}
+
+.score-band {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(10px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.score-kicker {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0.82;
+}
+
+.score-main strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 42px;
+  line-height: 0.92;
   font-weight: 900;
-  color: #ffd700;
-  text-shadow: 0 4px 0 #b8860b, 0 8px 10px rgba(0, 0, 0, 0.3);
-  line-height: 1;
+  color: #fff2be;
+  text-shadow: 0 4px 14px rgba(0, 52, 135, 0.26);
 }
 
-/* 游戏网格区 */
-.games-section {
-  margin-bottom: 20px;
+.score-side {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-end;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.score-side span {
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  display: inline-flex;
+  align-items: center;
+}
+
+.games-panel {
+  margin-top: 14px;
+  padding: 16px 12px 12px;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 34px rgba(8, 72, 167, 0.12);
+}
+
+.section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.section-head p,
+.section-head h2 {
+  margin: 0;
+}
+
+.section-head p {
+  color: #5e83bd;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.section-head h2 {
+  margin-top: 4px;
+  color: #18325f;
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 800;
+}
+
+.section-pill {
+  min-height: 28px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: #edf5ff;
+  color: #1764ee;
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 900;
 }
 
 .games-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px 8px;
 }
 
-.game-card {
-  background: #fff;
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-  cursor: pointer;
-  transition: transform 0.2s, box-shadow 0.2s;
+.game-tile {
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
 }
 
-.game-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
-}
-
-.game-image-wrapper {
-  height: 100px;
-  overflow: hidden;
-}
-
-.game-image {
+.game-tile__image {
+  display: block;
   width: 100%;
-  height: 100%;
-  object-fit: cover;
+  height: auto;
+  border-radius: 20px;
+  box-shadow: 0 10px 18px rgba(8, 72, 167, 0.1);
 }
 
-.game-name {
+.game-tile__meta {
+  padding: 7px 2px 0;
+}
+
+.game-tile__meta strong,
+.game-tile__meta span {
+  display: block;
+}
+
+.game-tile__meta strong {
+  color: #153260;
+  font-size: 13px;
+  line-height: 1.25;
+  font-weight: 800;
+}
+
+.game-tile__meta span {
+  margin-top: 3px;
+  color: #7a94bc;
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.utility-panel {
+  margin-top: 12px;
   padding: 10px;
-  text-align: center;
-  font-size: 14px;
-  font-weight: 600;
-  color: #333;
-}
-
-/* 宣传横幅 */
-.promo-banner {
-  margin-bottom: 20px;
-}
-
-.promo-image {
-  width: 100%;
-  border-radius: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-/* 底部功能区 */
-.bottom-section {
-  margin-bottom: 20px;
-}
-
-.feature-grid {
+  border-radius: 22px;
+  background: rgba(255, 255, 255, 0.96);
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  background: #fff;
-  border-radius: 16px;
-  padding: 16px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-}
-
-.feature-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
-
-.feature-item:hover {
-  transform: translateY(-2px);
-}
-
-.feature-icon-img {
-  width: 48px;
-  height: 48px;
-  margin-bottom: 8px;
-}
-
-.feature-text {
-  text-align: center;
-}
-
-.feature-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #333;
-  margin-bottom: 2px;
-}
-
-.feature-subtitle {
-  font-size: 12px;
-  color: #666;
-}
-
-/* 底部提示 */
-.footer-note {
-  text-align: center;
-  color: #fff;
-  font-size: 14px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
+  box-shadow: 0 14px 34px rgba(8, 72, 167, 0.12);
 }
 
-.note-decoration {
-  font-size: 16px;
+.utility-item {
+  min-height: 72px;
+  padding: 10px;
+  border: none;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #f8fbff, #eef6ff);
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  text-align: left;
 }
 
-/* 弹窗样式 */
+.utility-item__icon {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+}
+
+.utility-item__copy strong,
+.utility-item__copy span {
+  display: block;
+}
+
+.utility-item__copy strong {
+  color: #153260;
+  font-size: 13px;
+  line-height: 1.2;
+  font-weight: 800;
+}
+
+.utility-item__copy span {
+  margin-top: 4px;
+  color: #7a94bc;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.footer-tip {
+  margin: 12px 0 0;
+  text-align: center;
+  color: #eff8ff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .overlay {
   position: fixed;
   inset: 0;
@@ -663,16 +641,31 @@ function cancelMatch() {
   padding: 20px;
 }
 
-.loading-box,
-.reward-box {
+.dialog {
   width: min(92vw, 360px);
-  border-radius: 22px;
+  border-radius: 24px;
   padding: 20px 18px;
   text-align: center;
   background: linear-gradient(180deg, #ffffff, #f4f8ff);
   color: var(--text-primary);
   border: 2px solid #d6e5f8;
   box-shadow: 0 18px 30px rgba(7, 49, 129, 0.18);
+}
+
+.dialog--left {
+  text-align: left;
+}
+
+.dialog h3 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.dialog p {
+  margin: 10px 0 0;
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.5;
 }
 
 .spinner {
@@ -685,18 +678,15 @@ function cancelMatch() {
   animation: spin 0.9s linear infinite;
 }
 
-.loading-box h3,
-.reward-box h3 {
-  margin: 0;
-  font-size: 22px;
-}
-
-.loading-box p,
-.reward-box p {
-  margin: 8px 0 0;
-  color: var(--text-secondary);
+.dialog-btn {
+  margin-top: 16px;
+  min-height: 44px;
+  padding: 0 22px;
+  border-radius: 999px;
+  color: #fff;
+  background: linear-gradient(180deg, #2e8dff, #0a59ef);
   font-size: 15px;
-  line-height: 1.45;
+  font-weight: 800;
 }
 
 .reward-stats {
@@ -727,17 +717,6 @@ function cancelMatch() {
   color: #0f5de8;
 }
 
-.confirm-btn {
-  margin-top: 14px;
-  min-height: 44px;
-  padding: 0 22px;
-  border-radius: 999px;
-  color: #fff;
-  background: linear-gradient(180deg, #2e8dff, #0a59ef);
-  font-size: 15px;
-  font-weight: 800;
-}
-
 .toast {
   position: fixed;
   left: 50%;
@@ -751,6 +730,7 @@ function cancelMatch() {
   font-size: 14px;
   font-weight: 800;
   box-shadow: var(--shadow-strong);
+  white-space: nowrap;
 }
 
 .fade-enter-active,
@@ -763,77 +743,44 @@ function cancelMatch() {
   opacity: 0;
 }
 
-/* 动画 */
-@keyframes wave {
-  0%, 100% { transform: rotate(-5deg); }
-  50% { transform: rotate(5deg); }
-}
-
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-10px); }
-}
-
-@keyframes confetti-fall {
-  0%, 100% { transform: translateY(0) rotate(0deg); }
-  50% { transform: translateY(10px) rotate(180deg); }
-}
-
-@keyframes shimmer {
-  0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
-  100% { transform: translateX(100%) translateY(100%) rotate(45deg); }
-}
-
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
 
-/* 响应式设计 */
-@media (max-width: 768px) {
-  .games-grid {
-    grid-template-columns: repeat(2, 1fr);
+@media (max-width: 390px) {
+  .lobby-page {
+    padding-inline: 8px;
   }
-  
-  .feature-grid {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .main-title {
-    font-size: 36px;
-  }
-  
-  .score-value {
-    font-size: 48px;
-  }
-}
 
-@media (max-width: 480px) {
-  .user-section {
-    flex-direction: column;
-    align-items: flex-start;
+  .brand-lockup h1 {
+    font-size: 28px;
   }
-  
-  .action-buttons {
-    width: 100%;
-    justify-content: space-around;
+
+  .player-title strong {
+    font-size: 19px;
   }
-  
+
+  .score-main strong {
+    font-size: 38px;
+  }
+
   .games-grid {
-    grid-template-columns: repeat(2, 1fr);
+    gap: 8px 6px;
+  }
+
+  .game-tile__meta strong {
+    font-size: 12px;
+  }
+
+  .utility-item {
+    min-height: 68px;
+    grid-template-columns: 36px minmax(0, 1fr);
     gap: 8px;
   }
-  
-  .feature-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-  }
-  
-  .main-title {
-    font-size: 32px;
-  }
-  
-  .score-value {
-    font-size: 40px;
+
+  .utility-item__icon {
+    width: 36px;
+    height: 36px;
   }
 }
 </style>

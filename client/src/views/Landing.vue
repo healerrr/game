@@ -51,12 +51,14 @@
 
         <button
           class="enter-btn"
-          :disabled="!nickname.trim() || !busNumber"
+          :disabled="!nickname.trim() || !busNumber || submitting"
           @click="handleSubmit"
         >
-          <span>进入游戏平台</span>
+          <span>{{ submitting ? '连接中...' : '进入游戏平台' }}</span>
           <i>›</i>
         </button>
+
+        <p v-if="submitError" class="submit-error">{{ submitError }}</p>
 
         <p class="reward-note">
           <span class="gift-icon">🎁</span>
@@ -77,6 +79,8 @@ const nickname = ref('')
 const busNumber = ref(1)
 const busCount = ref(4)
 const stats = ref({ onlinePlayers: 0, totalPlayers: 0 })
+const submitting = ref(false)
+const submitError = ref('')
 
 function toLobby(player) {
   setPlayer(player)
@@ -96,21 +100,68 @@ function restorePlayer() {
   if (!saved) return
 
   const player = JSON.parse(saved)
-  socket.emit('player:reconnect', { playerId: player.id }, (res) => {
-    if (res.player) {
-      toLobby(res.player)
-    } else {
-      localStorage.removeItem('bus_game_player')
-    }
-  })
+  ensureSocketConnected()
+    .then(() => {
+      socket.emit('player:reconnect', { playerId: player.id }, (res) => {
+        if (res.player) {
+          toLobby(res.player)
+        } else {
+          localStorage.removeItem('bus_game_player')
+        }
+      })
+    })
+    .catch(() => null)
 }
 
 function handleServerUpdate(data) {
   stats.value = data.stats || {}
 }
 
-function handleSubmit() {
+function ensureSocketConnected() {
+  if (socket.connected) return Promise.resolve()
+
+  return new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      cleanup()
+      reject(new Error('当前无法连接到游戏服务，请确认后端已启动'))
+    }, 4000)
+
+    function handleConnect() {
+      cleanup()
+      resolve()
+    }
+
+    function handleError() {
+      cleanup()
+      reject(new Error('当前无法连接到游戏服务，请确认后端已启动'))
+    }
+
+    function cleanup() {
+      window.clearTimeout(timeoutId)
+      socket.off('connect', handleConnect)
+      socket.off('connect_error', handleError)
+    }
+
+    socket.once('connect', handleConnect)
+    socket.once('connect_error', handleError)
+    socket.connect()
+  })
+}
+
+async function handleSubmit() {
   if (!nickname.value.trim() || !busNumber.value) return
+  if (submitting.value) return
+
+  submitError.value = ''
+  submitting.value = true
+
+  try {
+    await ensureSocketConnected()
+  } catch (error) {
+    submitting.value = false
+    submitError.value = error.message
+    return
+  }
 
   socket.emit(
     'player:register',
@@ -119,7 +170,16 @@ function handleSubmit() {
       busNumber: busNumber.value
     },
     (res) => {
-      if (res.player) toLobby(res.player)
+      submitting.value = false
+      if (res?.error) {
+        submitError.value = res.error
+        return
+      }
+      if (res?.player) {
+        toLobby(res.player)
+        return
+      }
+      submitError.value = '进入失败，请稍后重试'
     }
   )
 }
@@ -369,6 +429,14 @@ onUnmounted(() => {
 
 .reward-note strong {
   color: #f06d00;
+}
+
+.submit-error {
+  margin: 12px 0 0;
+  color: #d63b3b;
+  font-size: 14px;
+  font-weight: 700;
+  text-align: center;
 }
 
 @media (max-width: 390px) {

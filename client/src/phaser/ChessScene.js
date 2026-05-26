@@ -75,15 +75,15 @@ export class ChessScene extends PhaserGameScene {
     
     const palaceX1 = offset.x + 3.5 * cellWidth
     const palaceX2 = offset.x + 5.5 * cellWidth
-    const palaceY1 = offset.y + 0.5 * cellHeight
-    const palaceY2 = offset.y + 2.5 * cellHeight
-    const palaceY3 = offset.y + 7.5 * cellHeight
-    const palaceY4 = offset.y + 9.5 * cellHeight
+    const palaceY1 = offset.y
+    const palaceY2 = offset.y + 2 * cellHeight
+    const palaceY3 = offset.y + 7 * cellHeight
+    const palaceY4 = offset.y + 9 * cellHeight
     
     graphics.lineBetween(palaceX1, palaceY1, palaceX2, palaceY2)
     graphics.lineBetween(palaceX2, palaceY1, palaceX1, palaceY2)
-    graphics.lineBetween(palaceX1, palaceY3, palaceX2, palaceY4)
-    graphics.lineBetween(palaceX2, palaceY3, palaceX1, palaceY4)
+    graphics.lineBetween(palaceX1, palaceY4, palaceX2, palaceY3)
+    graphics.lineBetween(palaceX2, palaceY4, palaceX1, palaceY3)
     
     graphics.fillStyle(0x6e461c, 1)
     graphics.setFontFamily('KaiTi, STKaiti, serif')
