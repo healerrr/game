@@ -41,12 +41,14 @@ class Store {
       id,
       nickname,
       busNumber,
-      points: 500,
+      points: 1000,
       totalGames: 0,
       wins: 0,
       currentRoom: null,
       online: true,
-      createdAt: Date.now()
+      createdAt: Date.now(),
+      winStreak: 0,
+      lossStreak: 0
     };
     this.players.set(id, player);
     return player;
@@ -68,7 +70,14 @@ class Store {
     const p = this.players.get(playerId);
     if (p) {
       p.totalGames++;
-      if (won) p.wins++;
+      if (won) {
+        p.wins++;
+        p.winStreak = (p.winStreak || 0) + 1;
+        p.lossStreak = 0;
+      } else {
+        p.lossStreak = (p.lossStreak || 0) + 1;
+        p.winStreak = 0;
+      }
     }
   }
 

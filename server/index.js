@@ -331,23 +331,23 @@ function handleGameEnd(room) {
 
   const config = getGameConfig(room.gameType);
   const winnerId = room.gameState.finalWinner ?? room.gameState.winner;
+  const winningPlayers = room.gameState.winningPlayers || (winnerId ? [winnerId] : []);
+  const entryFee = config.entryFee;
 
-  // 计算积分
-  room.players.forEach(pid => {
-    const isWinner = room.gameState.winningPlayers
-      ? room.gameState.winningPlayers.includes(pid)
-      : (pid === winnerId);
-    store.recordGame(pid, isWinner);
-    if (isWinner) {
-      const poolTotal = config.entryFee * room.players.length;
-      const numWinners = room.gameState.winningPlayers ? room.gameState.winningPlayers.length : 1;
-      const winAmount = Math.floor(poolTotal * 0.7 / numWinners);
-      store.updatePoints(pid, winAmount);
-      if (room.gameState.pot) {
-        store.updatePoints(pid, Math.floor(room.gameState.pot / numWinners));
-      }
-    }
-  });
+  // 根据游戏类型采用不同的积分结算规则
+  if (room.gameType === 'zha_jin_hua' || room.gameType === 'mahjong') {
+    // 加番游戏：门票 + 加番金额
+    settleGameWithPot(room, winningPlayers);
+  } else if (room.gameType === 'guandan') {
+    // 掼蛋 2v2 团队游戏
+    settleGuandan(room, winningPlayers);
+  } else if (room.players.length === 2) {
+    // 1v1 游戏：输家输门票，赢家赢门票
+    settle1v1(room, winnerId);
+  } else {
+    // 多玩家游戏（无加番）：赢家获得全部奖池
+    settleMultiplayer(room, winningPlayers);
+  }
 
   room.status = 'finished';
   room.players.forEach(pid => {
@@ -358,12 +358,10 @@ function handleGameEnd(room) {
   // 广播结算
   io.to(`room:${room.id}`).emit('game:result', {
     winner: winnerId,
-    winningPlayers: room.gameState.winningPlayers,
+    winningPlayers: winningPlayers,
     players: room.players.map(pid => {
       const p = store.getPlayer(pid);
-      const isWinner = room.gameState.winningPlayers
-        ? room.gameState.winningPlayers.includes(pid)
-        : (pid === winnerId);
+      const isWinner = winningPlayers.includes(pid);
       return {
         id: pid,
         nickname: p ? p.nickname : '未知',
@@ -378,6 +376,96 @@ function handleGameEnd(room) {
 
   // 10分钟后清理房间
   setTimeout(() => store.removeRoom(room.id), 600000);
+}
+
+// 1v1 游戏结算（零和转移）
+function settle1v1(room, winnerId) {
+  const config = getGameConfig(room.gameType);
+  const entryFee = config.entryFee;
+
+  room.players.forEach(pid => {
+    const isWinner = pid === winnerId;
+    store.recordGame(pid, isWinner);
+    
+    if (isWinner) {
+      store.updatePoints(pid, entryFee); // 赢家净 +门票
+    } else {
+      store.updatePoints(pid, -entryFee); // 输家净 -门票
+    }
+  });
+}
+
+// 多玩家游戏结算（无加番）
+function settleMultiplayer(room, winningPlayers) {
+  const config = getGameConfig(room.gameType);
+  const entryFee = config.entryFee;
+  const totalPool = entryFee * room.players.length;
+  const numWinners = winningPlayers.length || 1;
+  const winAmount = Math.floor(totalPool / numWinners);
+
+  room.players.forEach(pid => {
+    const isWinner = winningPlayers.includes(pid);
+    store.recordGame(pid, isWinner);
+    
+    if (isWinner) {
+      store.updatePoints(pid, winAmount - entryFee);
+    } else {
+      store.updatePoints(pid, -entryFee);
+    }
+  });
+}
+
+// 掼蛋 2v2 结算
+function settleGuandan(room, winningPlayers) {
+  const entryFee = 80;
+  const totalPool = entryFee * 4;
+  const winAmount = Math.floor(totalPool / 2); // 2人平分
+
+  room.players.forEach(pid => {
+    const isWinner = winningPlayers.includes(pid);
+    store.recordGame(pid, isWinner);
+    
+    if (isWinner) {
+      store.updatePoints(pid, winAmount - entryFee); // 净 +80
+    } else {
+      store.updatePoints(pid, -entryFee); // 净 -80
+    }
+  });
+}
+
+// 加番游戏结算（炸金花、麻将）
+function settleGameWithPot(room, winningPlayers) {
+  const config = getGameConfig(room.gameType);
+  const entryFee = config.entryFee;
+  const totalPot = room.gameState.pot || (entryFee * room.players.length);
+
+  // 炸金花：赢家获得全部奖池
+  if (room.gameType === 'zha_jin_hua') {
+    room.players.forEach(pid => {
+      const isWinner = winningPlayers.includes(pid);
+      const playerBet = room.gameState.playerBets?.[pid] || entryFee;
+      store.recordGame(pid, isWinner);
+      
+      if (isWinner) {
+        store.updatePoints(pid, totalPot - playerBet);
+      } else {
+        store.updatePoints(pid, -playerBet);
+      }
+    });
+  }
+
+  // 麻将：使用游戏引擎中的 scores 进行结算
+  if (room.gameType === 'mahjong') {
+    const scores = room.gameState.scores || {};
+    room.players.forEach(pid => {
+      const isWinner = winningPlayers.includes(pid);
+      store.recordGame(pid, isWinner);
+      
+      // 麻将的 scores 已经是净收益（包含门票和番数）
+      const scoreDelta = scores[pid] || 0;
+      store.updatePoints(pid, scoreDelta);
+    });
+  }
 }
 
 // ========== 广播更新 ==========
@@ -562,21 +650,19 @@ function startQuickPlayLoop(room, bots) {
     if (room.gameState.phase === 'finished') {
       const config = getGameConfig(room.gameType);
       const winnerId = room.gameState.finalWinner ?? room.gameState.winner;
-      const winningPlayers = room.gameState.winningPlayers;
+      const winningPlayers = room.gameState.winningPlayers || (winnerId ? [winnerId] : []);
+      const entryFee = config.entryFee;
 
-      room.players.forEach(pid => {
-        const isWinner = winningPlayers
-          ? winningPlayers.includes(pid)
-          : (pid === winnerId);
-        store.recordGame(pid, isWinner);
-        if (isWinner) {
-          const poolTotal = (config.entryFee || 10) * room.players.length;
-          const numWinners = winningPlayers ? winningPlayers.length : 1;
-          const winAmount = Math.floor(poolTotal * 0.7 / numWinners);
-          store.updatePoints(pid, winAmount);
-          if (room.gameState.pot) store.updatePoints(pid, Math.floor(room.gameState.pot / numWinners));
-        }
-      });
+      // 根据游戏类型采用不同的积分结算规则
+      if (room.gameType === 'zha_jin_hua' || room.gameType === 'mahjong') {
+        settleGameWithPot(room, winningPlayers);
+      } else if (room.gameType === 'guandan') {
+        settleGuandan(room, winningPlayers);
+      } else if (room.players.length === 2) {
+        settle1v1(room, winnerId);
+      } else {
+        settleMultiplayer(room, winningPlayers);
+      }
 
       room.status = 'finished';
       room.players.forEach(pid => {
@@ -589,9 +675,7 @@ function startQuickPlayLoop(room, bots) {
         winningPlayers,
         players: room.players.map(pid => {
           const p = store.getPlayer(pid);
-          const isWinner = winningPlayers
-            ? winningPlayers.includes(pid)
-            : (pid === winnerId);
+          const isWinner = winningPlayers.includes(pid);
           return { id: pid, nickname: p ? (p.nickname || p.name) : '未知', points: p ? p.points : 0, won: isWinner };
         })
       });

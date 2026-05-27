@@ -50,7 +50,12 @@
             :aria-label="game.name"
             @click="joinGame(game.key)"
           >
-            <img :src="game.image" :alt="game.name" class="game-tile__image" />
+            <div class="game-tile__wrapper">
+              <img :src="game.image" :alt="game.name" class="game-tile__image" />
+              <div class="game-tile__overlay">
+                <span class="game-tile__fee">门票 {{ game.entryFee }}分</span>
+              </div>
+            </div>
           </button>
         </div>
       </section>
@@ -147,14 +152,14 @@ const toastMessage = ref('')
 let toastTimer = null
 
 const gameCards = [
-  { key: 'rock_paper_scissors', name: '剪刀石头布', image: cardScissorsRockPaper, tag: '双人对战' },
-  { key: 'guess_number', name: '猜数字', image: cardGuessNumber, tag: '逻辑挑战' },
-  { key: 'quiz', name: '快问快答', image: cardQuickQa, tag: '知识竞速' },
-  { key: 'gomoku', name: '五子棋', image: cardGomoku, tag: '经典棋盘' },
-  { key: 'chess', name: '象棋', image: cardChineseChess, tag: '残局博弈' },
-  { key: 'guandan', name: '掼蛋', image: cardEggSmash, tag: '牌桌欢乐' },
-  { key: 'zha_jin_hua', name: '炸金花', image: cardGoldenFlower, tag: '运气对决' },
-  { key: 'mahjong', name: '红中麻将', image: cardMahjong, tag: '休闲搓牌' }
+  { key: 'rock_paper_scissors', name: '剪刀石头布', image: cardScissorsRockPaper, tag: '双人对战', entryFee: 10 },
+  { key: 'guess_number', name: '猜数字', image: cardGuessNumber, tag: '逻辑挑战', entryFee: 15 },
+  { key: 'quiz', name: '快问快答', image: cardQuickQa, tag: '知识竞速', entryFee: 20 },
+  { key: 'gomoku', name: '五子棋', image: cardGomoku, tag: '经典棋盘', entryFee: 30 },
+  { key: 'chess', name: '象棋', image: cardChineseChess, tag: '残局博弈', entryFee: 50 },
+  { key: 'guandan', name: '掼蛋', image: cardEggSmash, tag: '牌桌欢乐', entryFee: 80 },
+  { key: 'zha_jin_hua', name: '炸金花', image: cardGoldenFlower, tag: '运气对决', entryFee: 50 },
+  { key: 'mahjong', name: '红中麻将', image: cardMahjong, tag: '休闲搓牌', entryFee: 100 }
 ]
 
 const utilities = [
@@ -487,12 +492,36 @@ function handleUtility(item) {
   text-align: left;
 }
 
+.game-tile__wrapper {
+  position: relative;
+  border-radius: 20px;
+  overflow: hidden;
+  padding-bottom:16px;
+}
+
 .game-tile__image {
   display: block;
   width: 100%;
   height: auto;
   border-radius: 20px;
-  box-shadow: 0 10px 18px rgba(8, 72, 167, 0.1);
+}
+
+.game-tile__overlay {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 0 4px 8px;
+  display: flex;
+  justify-content: center;
+  border-radius: 0 0 20px 20px;
+}
+
+.game-tile__fee {
+  font-size: 10px;
+  font-weight: 900;
+  color: #ffd700;
+  line-height: 1.1;
 }
 
 .utility-panel {

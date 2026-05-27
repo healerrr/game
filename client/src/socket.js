@@ -44,6 +44,13 @@ socket.on('game:state', (data) => {
 })
 
 socket.on('game:result', (data) => {
+  // 更新当前玩家积分
+  if (gameState.player && data.players) {
+    const playerResult = data.players.find(p => p.id === gameState.player.id)
+    if (playerResult) {
+      gameState.player.points = playerResult.points
+    }
+  }
   window.dispatchEvent(new CustomEvent('game:result', { detail: data }))
 })
 

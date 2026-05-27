@@ -10,7 +10,7 @@ class RockPaperScissors {
     return {
       phase: 'choose',        // choose | reveal | result
       round: 1,
-      maxRounds: 3,
+      maxRounds: 1,
       scores: { [players[0]]: 0, [players[1]]: 0 },
       choices: {},
       timer: 5,              // 5秒出拳倒计时
@@ -56,8 +56,8 @@ class RockPaperScissors {
 
   nextRound(state) {
     const pids = Object.keys(state.scores);
-    // 检查是否有人达到2胜
-    if (state.scores[pids[0]] >= 2 || state.scores[pids[1]] >= 2 || state.round >= state.maxRounds) {
+    // 一局定胜负
+    if (state.round >= state.maxRounds) {
       state.phase = 'finished';
       state.finalWinner = state.scores[pids[0]] > state.scores[pids[1]] ? pids[0] : pids[1];
     } else {

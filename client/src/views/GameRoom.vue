@@ -16,28 +16,29 @@
     </header>
 
     <section v-if="gameType === 'rock_paper_scissors'" class="mode-card rps-mode">
-      <div class="profile-row">
-        <div class="side side-me">
-          <div class="avatar-circle">{{ playerInitial }}</div>
-          <div>
-            <strong>{{ player?.nickname }}</strong>
-            <p>🚌 {{ player?.busNumber }}号车</p>
+      <section class="battle-card">
+        <div class="player-mini">
+          <div class="avatar">{{ myName.slice(0, 1) }}</div>
+          <div class="player-mini__copy">
+            <strong>{{ myName }}</strong>
+            <span>{{ myBusLabel }}</span>
           </div>
         </div>
-        <div class="vs-tag">VS</div>
-        <div class="side side-opponent">
-          <div>
-            <strong>{{ opponentName }}</strong>
-            <p>🚌 {{ opponentBus }}号车</p>
-          </div>
-          <div class="avatar-circle muted">{{ opponentInitial }}</div>
-        </div>
-      </div>
 
-      <div class="result-line">
-        <span>我方胜局 {{ myScore }}</span>
-        <span>对手胜局 {{ opponentScore }}</span>
-      </div>
+        <div class="battle-meta">
+          <div class="battle-meta__turn" :class="{ mine: gs.phase === 'choose', done: gs.phase === 'finished' }">
+            {{ gs.phase === 'finished' ? resultText : 'VS' }}
+          </div>
+        </div>
+
+        <div class="player-mini opponent">
+          <div class="player-mini__copy">
+            <strong>{{ opponentName }}</strong>
+            <span>{{ opponentBusLabel }}</span>
+          </div>
+          <div class="avatar ghost">{{ opponentName.slice(0, 1) }}</div>
+        </div>
+      </section>
 
       <div class="play-zone">
         <template v-if="gs.phase === 'choose'">
@@ -59,7 +60,7 @@
             </svg>
             <strong>{{ timeLeft }}s</strong>
           </div>
-          <p class="phase-copy">请选择出拳，战胜对手赢积分</p>
+          <p class="phase-copy">请选择出拳，一局定胜负</p>
           <div class="move-row">
             <button
               v-for="move in moves"
@@ -87,7 +88,10 @@
             </div>
           </div>
           <div class="round-result" :class="roundResult">{{ roundResultText }}</div>
-          <button class="primary-btn next-round-btn" @click="nextRound">开始下一轮</button>
+          <div class="dual-btns">
+            <button class="primary-btn" @click="rematch">再来一局</button>
+            <button class="secondary-btn" @click="backToLobby">返回大厅</button>
+          </div>
         </template>
 
         <template v-else-if="gs.phase === 'finished'">
@@ -364,6 +368,17 @@ const opponentName = computed(() => {
 const opponentBus = computed(() => {
   const opponent = roomPlayers.value.find((item) => item.id !== player.value?.id)
   return opponent?.busNumber || '-'
+})
+
+const myName = computed(() => player.value?.nickname || '我方')
+const myBusLabel = computed(() => `${player.value?.busNumber || 1}号车`)
+const opponentBusLabel = computed(() => `${opponentBus.value}号车`)
+
+const resultText = computed(() => {
+  if (gs.value.phase !== 'finished') return ''
+  const winner = gs.value.finalWinner || gs.value.winner
+  if (!winner) return '平局'
+  return winner === player.value?.id ? '恭喜获胜' : '再接再厉'
 })
 
 const myScore = computed(() => gs.value?.scores?.[player.value?.id] || 0)
@@ -745,6 +760,107 @@ watch(() => roomId.value, () => {
 
 .vs-tag.big {
   font-size: 30px;
+}
+
+.battle-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(236, 245, 255, 0.96));
+  color: #17305f;
+  box-shadow: 0 14px 28px rgba(38, 82, 180, 0.14);
+}
+
+.rps-mode .battle-card {
+  margin-bottom: 12px;
+}
+
+.player-mini {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.player-mini.opponent {
+  justify-content: flex-end;
+}
+
+.player-mini .avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, #65a8ff, #3069f6);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.42);
+  flex-shrink: 0;
+}
+
+.player-mini .avatar.ghost {
+  background: linear-gradient(180deg, #eef4ff, #d9e7ff);
+  color: #5e79b2;
+}
+
+.player-mini__copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.player-mini__copy strong,
+.player-mini__copy span {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.player-mini__copy strong {
+  font-size: 17px;
+  font-weight: 800;
+  color: #143372;
+}
+
+.player-mini__copy span {
+  color: #6781b8;
+  font-size: 12px;
+}
+
+.battle-meta {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.battle-meta__turn {
+  min-width: 80px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(44, 111, 255, 0.1);
+  color: #3966d5;
+  font-size: 18px;
+  font-weight: 900;
+  text-align: center;
+}
+
+.battle-meta__turn.mine {
+  background: linear-gradient(180deg, #4e9cff, #2d6eff);
+  color: #fff;
+  box-shadow: 0 10px 18px rgba(61, 110, 255, 0.28);
+}
+
+.battle-meta__turn.done {
+  background: linear-gradient(180deg, #6f7faa, #43557f);
+  color: #ffffff;
 }
 
 .small-action {
@@ -1175,12 +1291,6 @@ watch(() => roomId.value, () => {
     justify-content: flex-start;
   }
 
-  .result-line,
-  .status-chips,
-  .dual-btns {
-    grid-template-columns: 1fr;
-  }
-
   .move-row {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -1523,7 +1633,7 @@ watch(() => roomId.value, () => {
   width: min(100%, 520px);
   flex: 1 1 auto;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
   min-height: 0;
   height: var(--game-viewport-height);
@@ -2036,7 +2146,7 @@ watch(() => roomId.value, () => {
   .game-room.guess-layout .secondary-btn,
   .game-room.rps-layout .primary-btn,
   .game-room.rps-layout .secondary-btn {
-    min-height: 44px;
+    height: 42px;
     font-size: 15px;
   }
 }

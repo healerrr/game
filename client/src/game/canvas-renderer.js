@@ -439,13 +439,35 @@ class CanvasRenderer {
   }
 
   /**
-   * 绘制麻将牌面（简化版）
+   * 绘制麻将牌面（使用图片）
    */
-  drawMahjongTileFace(x, y, w, h, tile = {}) {
+  drawMahjongTileFace(x, y, w, h, tile = {}, imageUrl = null) {
     const ctx = this._ctx
     ctx.save()
-    // 白色牌面
-    this.drawRoundRect(x, y, w, h, 3, '#f5f5f0', '#999', 1)
+    
+    // 白色底色
+    this.drawRoundRect(x, y, w, h, 3, '#FFFFFF', '#d0d0d0', 1)
+    
+    // 如果有图片URL，使用图片渲染
+    if (imageUrl) {
+      const img = this._imageCache.get(imageUrl)
+      if (img && img.complete) {
+        // 圆角裁剪
+        ctx.beginPath()
+        this._roundRectPath(x, y, w, h, 3)
+        ctx.closePath()
+        ctx.clip()
+        
+        // 绘制图片（留出边距）
+        const padding = 2
+        ctx.drawImage(img, x + padding, y + padding, w - padding * 2, h - padding * 2)
+        
+        ctx.restore()
+        return
+      }
+    }
+    
+    // 如果没有图片或图片未加载，使用原来的白色背景+文字方式
     // 顶部阴影
     const shadowGrad = ctx.createLinearGradient(x, y, x, y + h * 0.15)
     shadowGrad.addColorStop(0, 'rgba(0,0,0,0.08)')
@@ -473,6 +495,9 @@ class CanvasRenderer {
       const dragons = { 1: '中', 2: '发', 3: '白' }
       display = dragons[rank] || ''
       color = rank === 1 ? '#d32f2f' : (rank === 2 ? '#2E7D32' : '#333')
+    } else if (suit === 'zhong') {
+      display = '中'
+      color = '#d32f2f'
     } else {
       display = `${rank || ''}`
     }

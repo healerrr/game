@@ -719,7 +719,8 @@ function drawCenterDiscards(innerX, innerY, innerW, innerH) {
   topDiscards.forEach((tile, i) => {
     const tx = cx - (cols * (tileW + gap) - gap) / 2 + i * (tileW + gap)
     const ty = cy - offset - tileH
-    renderer.drawMahjongTileFace(tx, ty, tileW, tileH, tile)
+    const imageUrl = getTileImageUrl(tile)
+    renderer.drawMahjongTileFace(tx, ty, tileW, tileH, tile, imageUrl)
   })
 
   // 下方弃牌
@@ -727,7 +728,8 @@ function drawCenterDiscards(innerX, innerY, innerW, innerH) {
   bottomDiscards.forEach((tile, i) => {
     const tx = cx - (cols * (tileW + gap) - gap) / 2 + i * (tileW + gap)
     const ty = cy + offset
-    renderer.drawMahjongTileFace(tx, ty, tileW, tileH, tile)
+    const imageUrl = getTileImageUrl(tile)
+    renderer.drawMahjongTileFace(tx, ty, tileW, tileH, tile, imageUrl)
   })
 
   // 左侧弃牌
@@ -736,7 +738,8 @@ function drawCenterDiscards(innerX, innerY, innerW, innerH) {
   leftDiscards.forEach((tile, i) => {
     const tx = cx - offset - tileW
     const ty = cy - (leftRows * (tileH + gap) - gap) / 2 + i * (tileH + gap)
-    renderer.drawMahjongTileFace(tx, ty, tileW, tileH, tile)
+    const imageUrl = getTileImageUrl(tile)
+    renderer.drawMahjongTileFace(tx, ty, tileW, tileH, tile, imageUrl)
   })
 
   // 右侧弃牌
@@ -745,7 +748,8 @@ function drawCenterDiscards(innerX, innerY, innerW, innerH) {
   rightDiscards.forEach((tile, i) => {
     const tx = cx + offset
     const ty = cy - (rightRows * (tileH + gap) - gap) / 2 + i * (tileH + gap)
-    renderer.drawMahjongTileFace(tx, ty, tileW, tileH, tile)
+    const imageUrl = getTileImageUrl(tile)
+    renderer.drawMahjongTileFace(tx, ty, tileW, tileH, tile, imageUrl)
   })
 }
 
@@ -769,6 +773,10 @@ onMounted(async () => {
     const w = canvasWrapRef.value.clientWidth || 800
     const h = canvasWrapRef.value.clientHeight || 300
     renderer = new CanvasRenderer(canvasRef.value, { width: w, height: h })
+    
+    // 预加载所有麻将牌图片
+    await preloadAllTiles()
+    
     drawTable()
   }
   if (typeof ResizeObserver !== 'undefined' && canvasWrapRef.value) {
@@ -778,6 +786,40 @@ onMounted(async () => {
     window.addEventListener('resize', scheduleRedraw)
   }
 })
+
+// 预加载所有麻将牌图片
+async function preloadAllTiles() {
+  if (!renderer) return
+  
+  // 生成所有可能的麻将牌
+  const allTiles = []
+  
+  // 万子 1-9
+  for (let i = 1; i <= 9; i++) {
+    allTiles.push({ suit: 'wan', rank: String(i) })
+  }
+  // 筒子 1-9
+  for (let i = 1; i <= 9; i++) {
+    allTiles.push({ suit: 'tong', rank: String(i) })
+  }
+  // 条子 1-9
+  for (let i = 1; i <= 9; i++) {
+    allTiles.push({ suit: 'tiao', rank: String(i) })
+  }
+  // 红中
+  allTiles.push({ suit: 'zhong', rank: '' })
+  
+  // 预加载所有图片
+  const loadPromises = allTiles.map(tile => {
+    const imageUrl = getTileImageUrl(tile)
+    return renderer.loadImage(imageUrl).catch(() => {})
+  })
+  
+  await Promise.all(loadPromises)
+  
+  // 图片加载完成后重新渲染
+  scheduleRedraw()
+}
 
 onBeforeUnmount(() => {
   if (rafId) cancelAnimationFrame(rafId)
