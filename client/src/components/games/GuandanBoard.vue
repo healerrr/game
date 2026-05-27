@@ -26,48 +26,66 @@
 
     <!-- 底部手牌+操作区 -->
     <div class="bottom-zone" v-if="gs.phase === 'play'">
-      <!-- 左侧我方信息 -->
       <div class="my-info">
         <div class="my-avatar" :style="avatarStyle(props.player?.id)">{{ playerInitial(props.player?.id) }}</div>
         <div class="my-meta">
           <strong>{{ getPlayerName(props.player?.id) || '我' }}</strong>
-          <span>{{ myHand.length }}张</span>
+          <span>剩余 {{ myHand.length }} 张</span>
         </div>
-        <div v-if="selectedPattern" class="pattern-label">{{ patternName(selectedPattern.type) }}</div>
       </div>
 
-      <!-- 中间分组手牌 -->
-      <div class="hand-groups" ref="handRef">
-        <div v-for="(group, gi) in groupedHand" :key="gi" class="card-group"
-             :style="handGroupStyle(group)">
-          <div v-for="(card, ci) in group" :key="cardKey(card) + '-' + ci"
-               class="card-slot"
-               :class="{ selected: isSelected(card), wild: isWildCard(card) }"
-               :style="handCardStyle(ci)"
-               @click="toggleSelect(card)">
-            <PlayingCard :card="card" small />
-            <span v-if="isWildCard(card)" class="wild-star">&#9733;</span>
+      <div class="hand-stage">
+        <div class="action-buttons">
+          <button class="btn-pass" :disabled="!canPass" @click="onPass">不出</button>
+          <div class="timer-rail">
+            <div class="timer-circle" :class="{ urgent: countdown <= 5 }">
+              <svg viewBox="0 0 60 60" width="50" height="50">
+                <circle cx="30" cy="30" r="26" fill="rgba(0,0,0,0.3)" stroke="rgba(255,255,255,0.2)" stroke-width="3"/>
+                <circle cx="30" cy="30" r="26" fill="none"
+                  stroke="#4FACFE" stroke-width="3" stroke-linecap="round"
+                  :stroke-dasharray="timerDash" transform="rotate(-90 30 30)"/>
+              </svg>
+              <span class="timer-num">{{ countdown }}</span>
+            </div>
           </div>
+          <button class="btn-hint" @click="nextHint">
+            提示
+            <span v-if="hints.length" class="badge">{{ hints.length }}</span>
+          </button>
+          <button class="btn-play" :disabled="!canPlay" @click="playCards">出牌</button>
         </div>
-        <div v-if="!myHand.length" class="hand-empty">暂无手牌</div>
-      </div>
 
-      <!-- 右侧操作按钮 -->
-      <div class="action-buttons">
-        <button class="btn-pass" :disabled="!canPass" @click="onPass">不出</button>
-        <button class="btn-hint" @click="nextHint">
-          提示
-          <span v-if="hints.length" class="badge">{{ hints.length }}</span>
-        </button>
-        <button class="btn-play" :disabled="!canPlay" @click="playCards">出牌</button>
-        <div class="timer-circle" :class="{ urgent: countdown <= 5 }">
-          <svg viewBox="0 0 60 60" width="50" height="50">
-            <circle cx="30" cy="30" r="26" fill="rgba(0,0,0,0.3)" stroke="rgba(255,255,255,0.2)" stroke-width="3"/>
-            <circle cx="30" cy="30" r="26" fill="none"
-              stroke="#4FACFE" stroke-width="3" stroke-linecap="round"
-              :stroke-dasharray="timerDash" transform="rotate(-90 30 30)"/>
-          </svg>
-          <span class="timer-num">{{ countdown }}</span>
+        <div
+          class="hand-groups"
+          :class="{ dragging: isDraggingHand }"
+          ref="handRef"
+          @pointerdown="onHandPointerDown"
+          @pointermove="onHandPointerMove"
+          @pointerup="finishHandDrag"
+          @pointercancel="finishHandDrag"
+          @lostpointercapture="finishHandDrag"
+        >
+          <div v-for="(group, gi) in groupedHand" :key="groupKey(group, gi)" class="card-group"
+               :style="handGroupStyle(group)">
+            <div v-for="(card, ci) in group" :key="cardKey(card) + '-' + ci"
+                 class="card-slot"
+                 :class="{ selected: isSelected(card), wild: isWildCard(card) }"
+                 :style="handCardStyle(ci)"
+                 :data-card-key="cardKey(card)"
+                 :data-group-index="gi"
+                 :data-card-index="ci">
+              <PlayingCard :card="card" small />
+              <span v-if="isWildCard(card)" class="wild-star">&#9733;</span>
+            </div>
+          </div>
+          <div v-if="!myHand.length" class="hand-empty">暂无手牌</div>
+        </div>
+
+        <div class="hand-utility">
+          <div class="pattern-label" :class="{ muted: !selectedPattern }">
+            {{ selectedPattern ? patternName(selectedPattern.type) : smartArrangeSummary }}
+          </div>
+          <button class="btn-arrange" :disabled="myHand.length < 5" @click="smartArrangeHand">一键理</button>
         </div>
       </div>
     </div>
@@ -105,6 +123,8 @@ const emit = defineEmits(['action', 'rematch', 'back'])
 
 // --- Refs ---
 const selectedCards = ref(new Set())
+const arrangedGroupKeys = ref([])
+const isDraggingHand = ref(false)
 const toast = ref('')
 const canvasRef = ref(null)
 const canvasWrapRef = ref(null)
@@ -117,12 +137,31 @@ let renderer = null
 let rafId = null
 let timerInterval = null
 let resizeObserver = null
+const handDrag = {
+  active: false,
+  pointerId: null,
+  mode: 'add',
+  start: null
+}
 
 // --- Constants ---
 const SEAT_ORDER = ['south', 'east', 'north', 'west']
 const RANK_VALUES = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14, 'SJ': 16, 'BJ': 17 }
-const HAND_CARD_BASE_H = 62
-const HAND_STACK_STEP = 18
+const HAND_CARD_BASE_H = 60
+const HAND_STACK_STEP = 14
+const SUIT_ORDER = { diamond: 0, club: 1, heart: 2, spade: 3, joker: 4 }
+const SMART_GROUP_WEIGHT = {
+  rocket: 900,
+  straight_flush: 820,
+  bomb: 760,
+  steel: 620,
+  pair_straight: 580,
+  straight: 540,
+  triple_pair: 500,
+  triple: 360,
+  pair: 240,
+  single: 100
+}
 
 function handGroupStyle(group) {
   return { height: `${HAND_CARD_BASE_H + (group.length - 1) * HAND_STACK_STEP}px` }
@@ -135,12 +174,14 @@ function handCardStyle(index) {
 // --- Computed ---
 const currentLevel = computed(() => props.gs.level || '2')
 
-const myHand = computed(() => {
-  const hand = props.gs.hands?.[props.player?.id] || []
-  return sortHand(hand, currentLevel.value)
-})
+const rawMyHand = computed(() => props.gs.hands?.[props.player?.id] || [])
+
+const myHand = computed(() => resolveArrangedGroups(rawMyHand.value)?.flat() || sortHand(rawMyHand.value, currentLevel.value))
 
 const groupedHand = computed(() => {
+  const arranged = resolveArrangedGroups(rawMyHand.value)
+  if (arranged) return arranged
+
   const hand = myHand.value
   const groups = []
   let currentGroup = []
@@ -157,6 +198,14 @@ const groupedHand = computed(() => {
 })
 
 const hints = computed(() => props.gs.currentHints || [])
+
+const smartArrangeSummary = computed(() => {
+  if (!arrangedGroupKeys.value.length) return '按住叠牌滑动多选'
+  const arranged = resolveArrangedGroups(rawMyHand.value)
+  if (!arranged) return '按住叠牌滑动多选'
+  const flushCount = arranged.filter(group => identifyPattern(group, currentLevel.value)?.type === 'straight_flush').length
+  return flushCount ? `同花顺 ${flushCount} 组` : '已整理'
+})
 
 const selectedPattern = computed(() => {
   const cards = getSelectedCards()
@@ -243,8 +292,45 @@ function sortHand(hand, level) {
     const pa = rankPower(a.rank, level)
     const pb = rankPower(b.rank, level)
     if (pa !== pb) return pb - pa // 从大到小
-    return a.suit.localeCompare(b.suit)
+    return suitPower(b.suit) - suitPower(a.suit)
   })
+}
+
+function suitPower(suit) {
+  return SUIT_ORDER[suit] ?? 0
+}
+
+function resolveArrangedGroups(hand) {
+  if (!arrangedGroupKeys.value.length || !hand.length) return null
+  const buckets = new Map()
+  hand.forEach(card => {
+    const key = cardKey(card)
+    if (!buckets.has(key)) buckets.set(key, [])
+    buckets.get(key).push(card)
+  })
+
+  const groups = []
+  let usedCount = 0
+  for (const keyGroup of arrangedGroupKeys.value) {
+    const group = []
+    for (const key of keyGroup) {
+      const bucket = buckets.get(key)
+      if (!bucket?.length) return null
+      group.push(bucket.shift())
+      usedCount += 1
+    }
+    if (group.length) groups.push(group)
+  }
+
+  if (usedCount !== hand.length) return null
+  for (const bucket of buckets.values()) {
+    if (bucket.length) return null
+  }
+  return groups
+}
+
+function groupKey(group, index) {
+  return `${index}-${group.map(cardKey).join('_')}`
 }
 
 function sameRankGroup(a, b) {
@@ -260,8 +346,12 @@ function cardUniqueKey(card) {
   return card.id || `${card.suit}-${card.rank}-${Math.random().toString(36).slice(2, 6)}`
 }
 
+function isWildForLevel(card, level) {
+  return card.suit === 'heart' && card.rank === level
+}
+
 function isWildCard(card) {
-  return card.suit === 'heart' && card.rank === currentLevel.value
+  return isWildForLevel(card, currentLevel.value)
 }
 
 function isSelected(card) {
@@ -274,6 +364,71 @@ function toggleSelect(card) {
   if (newSet.has(key)) newSet.delete(key)
   else newSet.add(key)
   selectedCards.value = newSet
+}
+
+function onHandPointerDown(event) {
+  const hit = getHandHit(event)
+  if (!hit) return
+
+  event.preventDefault()
+  handRef.value?.setPointerCapture?.(event.pointerId)
+  handDrag.active = true
+  handDrag.pointerId = event.pointerId
+  handDrag.mode = isSelected(hit.card) ? 'remove' : 'add'
+  handDrag.start = hit
+  isDraggingHand.value = true
+  applyDragSelection(hit)
+}
+
+function onHandPointerMove(event) {
+  if (!handDrag.active || handDrag.pointerId !== event.pointerId) return
+  const hit = getHandHit(event)
+  if (!hit) return
+
+  event.preventDefault()
+  applyDragSelection(hit)
+}
+
+function finishHandDrag(event) {
+  if (!handDrag.active) return
+  if (event?.pointerId != null && event.pointerId !== handDrag.pointerId) return
+  handRef.value?.releasePointerCapture?.(handDrag.pointerId)
+  handDrag.active = false
+  handDrag.pointerId = null
+  handDrag.start = null
+  isDraggingHand.value = false
+}
+
+function getHandHit(event) {
+  if (typeof document === 'undefined') return null
+  const elements = document.elementsFromPoint(event.clientX, event.clientY)
+  const slot = elements.find(el => el?.classList?.contains('card-slot') && handRef.value?.contains(el))
+  if (!slot) return null
+
+  const groupIndex = Number(slot.dataset.groupIndex)
+  const cardIndex = Number(slot.dataset.cardIndex)
+  const card = groupedHand.value[groupIndex]?.[cardIndex]
+  if (!card) return null
+  return { card, groupIndex, cardIndex }
+}
+
+function applyDragSelection(hit) {
+  const cards = cardsBetweenDragStart(hit)
+  const next = new Set(selectedCards.value)
+  cards.forEach(card => {
+    const key = cardKey(card)
+    if (handDrag.mode === 'remove') next.delete(key)
+    else next.add(key)
+  })
+  selectedCards.value = next
+}
+
+function cardsBetweenDragStart(hit) {
+  if (!handDrag.start || handDrag.start.groupIndex !== hit.groupIndex) return [hit.card]
+  const group = groupedHand.value[hit.groupIndex] || []
+  const from = Math.min(handDrag.start.cardIndex, hit.cardIndex)
+  const to = Math.max(handDrag.start.cardIndex, hit.cardIndex)
+  return group.slice(from, to + 1)
 }
 
 function getSelectedCards() {
@@ -337,6 +492,196 @@ function getCardCount(pid) {
   if (props.gs.handCounts?.[pid] != null) return props.gs.handCounts[pid]
   if (props.gs.hands?.[pid]) return props.gs.hands[pid].length
   return 9
+}
+
+function smartArrangeHand() {
+  if (rawMyHand.value.length < 5) return
+  const groups = buildSmartArrangeGroups(rawMyHand.value, currentLevel.value)
+  arrangedGroupKeys.value = groups.map(group => group.cards.map(cardKey))
+  selectedCards.value = new Set()
+
+  const flushCount = groups.filter(group => group.type === 'straight_flush').length
+  showToast(flushCount ? `已整理出 ${flushCount} 组同花顺` : '已按牌型整理')
+}
+
+function buildSmartArrangeGroups(hand, level) {
+  let remaining = sortHand(hand, level)
+  const groups = []
+
+  const takeGroup = (type, cards) => {
+    if (!cards?.length) return
+    groups.push({
+      type,
+      cards: sortCardsForSmartGroup(cards, type, level),
+      pattern: identifyPattern(cards, level)
+    })
+    remaining = removeCardObjects(remaining, cards)
+  }
+
+  takeGroup('rocket', findRocket(remaining, level))
+
+  let found = null
+  while ((found = findBestStraightFlush(remaining, level))) takeGroup('straight_flush', found)
+  while ((found = findPureBomb(remaining, level))) takeGroup('bomb', found)
+  while ((found = findWildBomb(remaining, level))) takeGroup('bomb', found)
+  while ((found = findRepeatedSequence(remaining, level, 3, 2))) takeGroup('steel', found)
+  while ((found = findRepeatedSequence(remaining, level, 2, 3))) takeGroup('pair_straight', found)
+  while ((found = findRepeatedSequence(remaining, level, 1, 5))) takeGroup('straight', found)
+  while ((found = findSamePowerCards(remaining, level, 3))) takeGroup('triple', found)
+  while ((found = findSamePowerCards(remaining, level, 2))) takeGroup('pair', found)
+
+  remaining.forEach(card => takeGroup('single', [card]))
+
+  return groups.sort((a, b) => smartGroupScore(b, level) - smartGroupScore(a, level))
+}
+
+function removeCardObjects(source, cardsToRemove) {
+  const removing = new Set(cardsToRemove)
+  return source.filter(card => !removing.has(card))
+}
+
+function sortCardsForSmartGroup(cards, type, level) {
+  const sorted = sortHand(cards, level)
+  if (['straight_flush', 'straight', 'pair_straight', 'steel'].includes(type)) {
+    return sorted.sort((a, b) => {
+      const pa = rankPower(a.rank, level)
+      const pb = rankPower(b.rank, level)
+      if (pa !== pb) return pb - pa
+      return suitPower(b.suit) - suitPower(a.suit)
+    })
+  }
+  return sorted
+}
+
+function smartGroupScore(group, level) {
+  const pattern = group.pattern || identifyPattern(group.cards, level) || {}
+  const type = pattern.type || group.type
+  const mainValue = pattern.mainValue ?? highestCardPower(group.cards, level)
+  const sizeBonus = type === 'bomb' ? (pattern.bombSize || group.cards.length) * 16 : group.cards.length * 0.08
+  return (SMART_GROUP_WEIGHT[type] || 0) + sizeBonus + mainValue / 100
+}
+
+function highestCardPower(cards, level) {
+  return Math.max(...cards.map(card => rankPower(card.rank, level)), 0)
+}
+
+function findRocket(cards, level) {
+  const jokers = cards.filter(card => card.suit === 'joker')
+  return jokers.length >= 4 ? sortHand(jokers, level).slice(0, 4) : null
+}
+
+function findBestStraightFlush(cards, level) {
+  const wilds = cards.filter(card => isWildForLevel(card, level))
+  const naturals = cards.filter(card => card.suit !== 'joker' && !isWildForLevel(card, level) && rankPower(card.rank, level) <= 14)
+  const sequences = straightSequences()
+  const suits = ['spade', 'heart', 'club', 'diamond']
+  const candidates = []
+
+  suits.forEach(suit => {
+    sequences.forEach(sequence => {
+      const used = []
+      let missing = 0
+      for (const value of sequence) {
+        const card = naturals.find(item => item.suit === suit && rankPower(item.rank, level) === value && !used.includes(item))
+        if (card) used.push(card)
+        else missing += 1
+      }
+      if (missing <= wilds.length) {
+        candidates.push({
+          cards: [...used, ...wilds.slice(0, missing)],
+          high: sequence[sequence.length - 1],
+          missing,
+          suit
+        })
+      }
+    })
+  })
+
+  candidates.sort((a, b) => {
+    if (a.high !== b.high) return b.high - a.high
+    if (a.missing !== b.missing) return a.missing - b.missing
+    return suitPower(b.suit) - suitPower(a.suit)
+  })
+
+  return candidates[0]?.cards || null
+}
+
+function straightSequences() {
+  const sequences = []
+  for (let start = 10; start >= 2; start -= 1) {
+    sequences.push([start, start + 1, start + 2, start + 3, start + 4])
+  }
+  return sequences
+}
+
+function findPureBomb(cards, level) {
+  const entries = rankGroupEntries(cards, level)
+    .filter(entry => entry.cards.length >= 4)
+    .sort((a, b) => {
+      if (a.cards.length !== b.cards.length) return b.cards.length - a.cards.length
+      return b.power - a.power
+    })
+  return entries[0]?.cards || null
+}
+
+function findWildBomb(cards, level) {
+  const wilds = cards.filter(card => isWildForLevel(card, level))
+  if (!wilds.length) return null
+  const entries = rankGroupEntries(cards, level)
+    .filter(entry => entry.cards.length < 4 && entry.cards.length + wilds.length >= 4)
+    .sort((a, b) => {
+      if (a.cards.length !== b.cards.length) return b.cards.length - a.cards.length
+      return b.power - a.power
+    })
+  const entry = entries[0]
+  if (!entry) return null
+  return [...entry.cards, ...wilds.slice(0, 4 - entry.cards.length)]
+}
+
+function findRepeatedSequence(cards, level, copies, minRun) {
+  const byPower = new Map(
+    rankGroupEntries(cards, level)
+      .filter(entry => entry.power <= 14 && entry.cards.length >= copies)
+      .map(entry => [entry.power, entry.cards.slice(0, copies)])
+  )
+  const powers = [...byPower.keys()].sort((a, b) => a - b)
+  const runs = []
+  let run = []
+
+  powers.forEach(power => {
+    if (!run.length || power === run[run.length - 1] + 1) run.push(power)
+    else {
+      if (run.length >= minRun) runs.push(run)
+      run = [power]
+    }
+  })
+  if (run.length >= minRun) runs.push(run)
+
+  if (!runs.length) return null
+  runs.sort((a, b) => {
+    if (a.length !== b.length) return b.length - a.length
+    return b[b.length - 1] - a[a.length - 1]
+  })
+  return runs[0].flatMap(power => byPower.get(power))
+}
+
+function findSamePowerCards(cards, level, copies) {
+  const entry = rankGroupEntries(cards, level)
+    .filter(item => item.cards.length >= copies)
+    .sort((a, b) => b.power - a.power)[0]
+  return entry ? entry.cards.slice(0, copies) : null
+}
+
+function rankGroupEntries(cards, level) {
+  const groups = new Map()
+  cards.forEach(card => {
+    if (card.suit === 'joker' || isWildForLevel(card, level)) return
+    const power = rankPower(card.rank, level)
+    const item = groups.get(power) || { power, cards: [] }
+    item.cards.push(card)
+    groups.set(power, item)
+  })
+  return [...groups.values()].sort((a, b) => b.power - a.power)
 }
 
 // --- Pattern Recognition (full frontend replica) ---
@@ -732,20 +1077,16 @@ function drawTable() {
   const lastPlay = props.gs.lastPlay
   const lastCards = (lastPlay?.cards || []).slice(0, 14)
   if (lastCards.length) {
-    const cardW = 32, gap = 3
-    const totalCardsW = lastCards.length * (cardW + gap) - gap
-    const panelW = Math.max(totalCardsW + 24, 130)
-    const panelX = W / 2 - panelW / 2
-    const panelY = H / 2 - 24
     const labelText = patternName(identifyPattern(lastCards, currentLevel.value)?.type) || ''
-    renderer.drawPlayedCards(panelX, panelY, lastCards, {
+    drawPlayedCardsStrip(W / 2, H * 0.58, lastCards, {
       title: `${getPlayerName(lastPlay.playerId)} 出牌`,
       label: labelText
     })
   } else {
     const txt = props.gs.phase === 'play' ? '等待出牌' : '本局结束'
-    renderer.drawRoundRect(W / 2 - 60, H / 2 - 18, 120, 36, 18, 'rgba(255,255,255,0.15)', 'rgba(255,255,255,0.3)', 1)
-    renderer.drawText(txt, W / 2, H / 2, {
+    const waitY = H * 0.58
+    renderer.drawRoundRect(W / 2 - 60, waitY - 18, 120, 36, 18, 'rgba(255,255,255,0.12)', 'rgba(255,255,255,0.24)', 1)
+    renderer.drawText(txt, W / 2, waitY, {
       font: 'bold 13px "Noto Serif SC", serif',
       color: '#fff8e6',
       align: 'center',
@@ -757,6 +1098,45 @@ function drawTable() {
   const lvlText = `级牌 ${currentLevel.value}`
   renderer.drawRoundRect(feltX + 8, feltY + 8, 74, 24, 12, 'rgba(255,185,36,0.96)')
   renderer.drawText(lvlText, feltX + 45, feltY + 20, { font: 'bold 12px sans-serif', color: '#3a2300', align: 'center', baseline: 'middle' })
+}
+
+function drawPlayedCardsStrip(centerX, centerY, cards, options = {}) {
+  const W = renderer._logicalWidth
+  const gap = Math.max(2, Math.min(5, W * 0.004))
+  const maxCardsW = W * 0.58 - 28
+  const cardW = Math.max(24, Math.min(38, (maxCardsW - gap * Math.max(cards.length - 1, 0)) / Math.max(cards.length, 1)))
+  const cardH = cardW * 1.42
+  const totalCardsW = cards.length * (cardW + gap) - gap
+  const panelW = Math.min(W * 0.58, Math.max(totalCardsW + 28, 150))
+  const panelH = cardH + 58
+  const panelX = centerX - panelW / 2
+  const panelY = centerY - panelH / 2
+  const startX = centerX - totalCardsW / 2
+  const cardY = panelY + 25
+
+  renderer.drawRoundRect(panelX, panelY, panelW, panelH, 18, 'rgba(4, 39, 24, 0.34)', 'rgba(255,255,255,0.2)', 1)
+  renderer.drawText(options.title || '出牌', centerX, panelY + 10, {
+    font: 'bold 12px sans-serif',
+    color: 'rgba(255,255,255,0.9)',
+    align: 'center',
+    baseline: 'middle'
+  })
+
+  cards.forEach((card, i) => {
+    renderer._drawCardFace(startX + i * (cardW + gap), cardY, cardW, cardH, card)
+  })
+
+  if (options.label) {
+    const labelW = Math.max(58, options.label.length * 13 + 22)
+    const labelY = cardY + cardH + 10
+    renderer.drawRoundRect(centerX - labelW / 2, labelY - 10, labelW, 22, 11, 'rgba(255, 190, 52, 0.92)')
+    renderer.drawText(options.label, centerX, labelY + 1, {
+      font: 'bold 12px sans-serif',
+      color: '#4a2900',
+      align: 'center',
+      baseline: 'middle'
+    })
+  }
 }
 
 function sizeCanvas() {
@@ -833,6 +1213,14 @@ watch(() => props.gs, () => {
   scheduleDraw()
   hintIndex.value = -1
 }, { deep: true })
+
+watch(() => rawMyHand.value.map(cardKey).sort().join('|'), () => {
+  if (arrangedGroupKeys.value.length && !resolveArrangedGroups(rawMyHand.value)) {
+    arrangedGroupKeys.value = []
+  }
+  const liveKeys = new Set(rawMyHand.value.map(cardKey))
+  selectedCards.value = new Set([...selectedCards.value].filter(key => liveKeys.has(key)))
+})
 
 watch(() => props.gs?.currentPlayer, () => {
   resetCountdown()
@@ -1530,6 +1918,419 @@ watch(() => props.gs?.currentPlayer, () => {
   .team-mine-label,
   .team-opp-label {
     max-width: 34%;
+  }
+}
+
+/* 操作区改成牌桌中央横向布局，手牌下方保留理牌入口 */
+.bottom-zone {
+  flex-basis: clamp(176px, 38vh, 218px);
+  min-height: 176px;
+  max-height: 218px;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 10px;
+}
+
+.my-info {
+  align-self: stretch;
+  gap: 7px;
+}
+
+.my-meta span {
+  display: block;
+  white-space: nowrap;
+}
+
+.hand-stage {
+  min-width: 0;
+  display: grid;
+  grid-template-rows: 54px minmax(78px, 1fr) 34px;
+  gap: 6px;
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: minmax(100px, 1fr) 58px minmax(108px, 1fr) minmax(94px, 0.8fr);
+  align-items: center;
+  justify-items: stretch;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.action-buttons button {
+  height: 44px;
+  min-height: 44px;
+  border-radius: 999px;
+  font-size: 18px;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, 0.28);
+}
+
+.btn-pass {
+  background: linear-gradient(180deg, #ffc26a, #e77b1a);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.35),
+    0 8px 16px rgba(193, 91, 10, 0.34);
+}
+
+.btn-hint {
+  background: linear-gradient(180deg, #54d4ff, #1788e8);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.35),
+    0 8px 16px rgba(23, 136, 232, 0.34);
+}
+
+.btn-play {
+  background: linear-gradient(180deg, #6fd98d, #18a750);
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.3),
+    0 8px 16px rgba(24, 167, 80, 0.3);
+}
+
+.btn-play:disabled {
+  background: linear-gradient(180deg, #9a9a9a, #666);
+}
+
+.timer-rail {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 54px;
+}
+
+.rail-arrow {
+  position: absolute;
+  top: -9px;
+  color: rgba(210, 239, 255, 0.82);
+  font-size: 28px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.rail-arrow-down {
+  top: auto;
+  bottom: -10px;
+}
+
+.timer-circle {
+  width: 48px;
+  height: 48px;
+}
+
+.hand-groups {
+  justify-content: flex-start;
+  overflow-x: auto;
+  overflow-y: visible;
+  touch-action: none;
+  cursor: grab;
+  overscroll-behavior: contain;
+  padding-top: 18px;
+}
+
+.hand-groups.dragging {
+  cursor: grabbing;
+}
+
+.hand-groups.dragging .card-slot.selected {
+  transform: translateY(-8px);
+}
+
+.card-slot {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.card-slot.selected::after {
+  pointer-events: none;
+}
+
+.hand-utility {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  align-items: center;
+  gap: 8px;
+}
+
+.hand-utility .pattern-label {
+  max-width: none;
+  width: 100%;
+  min-height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 4px 10px;
+  color: #ffe28a;
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid rgba(255, 226, 138, 0.22);
+}
+
+.hand-utility .pattern-label.muted {
+  color: rgba(255, 255, 255, 0.62);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.btn-arrange {
+  height: 34px;
+  border: 0;
+  border-radius: 999px;
+  color: #073719;
+  font-size: 15px;
+  font-weight: 900;
+  cursor: pointer;
+  background: linear-gradient(180deg, #72f296, #21c35d);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.34),
+    0 7px 13px rgba(33, 195, 93, 0.28);
+}
+
+.btn-arrange:disabled {
+  opacity: 0.42;
+  cursor: not-allowed;
+  filter: grayscale(0.25);
+}
+
+@media (min-width: 900px) {
+  .hand-groups {
+    justify-content: center;
+  }
+}
+
+@media (max-height: 600px) {
+  .bottom-zone {
+    flex-basis: clamp(138px, 36vh, 170px);
+    min-height: 138px;
+    max-height: 170px;
+    grid-template-columns: 72px minmax(0, 1fr);
+  }
+
+  .hand-stage {
+    grid-template-rows: 44px minmax(62px, 1fr) 30px;
+    gap: 4px;
+  }
+
+  .action-buttons {
+    grid-template-columns: minmax(82px, 1fr) 48px minmax(88px, 1fr) minmax(76px, 0.8fr);
+    gap: 6px;
+  }
+
+  .action-buttons button {
+    height: 36px;
+    min-height: 36px;
+    font-size: 15px;
+  }
+
+  .timer-rail {
+    height: 44px;
+  }
+
+  .rail-arrow {
+    font-size: 22px;
+    top: -8px;
+  }
+
+  .rail-arrow-down {
+    bottom: -9px;
+  }
+
+  .timer-circle {
+    width: 40px;
+    height: 40px;
+  }
+
+  .hand-utility {
+    grid-template-columns: minmax(0, 1fr) 94px;
+  }
+
+  .btn-arrange {
+    height: 30px;
+    font-size: 13px;
+  }
+}
+
+/* Expert compact table pass: keep controls useful without stealing hand space. */
+.gd-info-bar {
+  flex-basis: 40px;
+  min-height: 40px;
+}
+
+.canvas-area {
+  margin: 6px 8px 0;
+}
+
+.bottom-zone {
+  flex-basis: clamp(146px, 32vh, 162px);
+  min-height: 146px;
+  max-height: 162px;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 8px;
+  margin: 6px 8px 6px;
+  padding: 8px;
+  overflow: visible;
+}
+
+.my-info {
+  padding: 6px 4px;
+  border-radius: 14px;
+  justify-content: flex-end;
+}
+
+.my-avatar {
+  width: 34px;
+  height: 34px;
+  border-width: 2px;
+  font-size: 15px;
+}
+
+.my-meta strong {
+  max-width: 62px;
+  font-size: 12px;
+}
+
+.my-meta span {
+  font-size: 11px;
+}
+
+.hand-stage {
+  position: relative;
+  grid-template-rows: 38px minmax(70px, 1fr) 28px;
+  gap: 4px;
+  overflow: visible;
+}
+
+.action-buttons {
+  width: min(680px, 100%);
+  justify-self: center;
+  grid-template-columns: minmax(82px, 1fr) 42px minmax(108px, 1.25fr) minmax(80px, 0.9fr);
+  gap: 7px;
+}
+
+.action-buttons button {
+  height: 38px;
+  min-height: 38px;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.timer-rail {
+  height: 38px;
+}
+
+.timer-circle {
+  width: 38px;
+  height: 38px;
+}
+
+.timer-circle svg {
+  width: 38px;
+  height: 38px;
+}
+
+.timer-num {
+  font-size: 13px;
+}
+
+.hand-groups {
+  --hand-card-w: clamp(38px, 4.35vw, 48px);
+  --hand-card-h: calc(var(--hand-card-w) * 1.42);
+  min-height: 0;
+  padding: 10px 100px 2px 4px;
+  border-radius: 14px;
+  gap: 3px;
+}
+
+.card-slot.selected {
+  transform: translateY(-10px);
+}
+
+.card-slot.selected::after {
+  top: -8px;
+  width: 22px;
+  height: 5px;
+}
+
+.hand-utility {
+  grid-template-columns: minmax(0, 1fr) 92px;
+  gap: 6px;
+}
+
+.hand-utility .pattern-label {
+  min-height: 26px;
+  padding: 3px 9px;
+  font-size: 12px;
+}
+
+.btn-arrange {
+  height: 28px;
+  font-size: 13px;
+}
+
+@media (max-height: 500px) {
+  .gd-info-bar {
+    flex-basis: 36px;
+    min-height: 36px;
+  }
+
+  .canvas-area {
+    margin: 4px 6px 0;
+  }
+
+  .bottom-zone {
+    flex-basis: 136px;
+    min-height: 136px;
+    max-height: 136px;
+    grid-template-columns: 62px minmax(0, 1fr);
+    margin: 5px 6px 5px;
+    padding: 7px;
+  }
+
+  .my-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+
+  .hand-stage {
+    grid-template-rows: 34px minmax(66px, 1fr) 24px;
+    gap: 3px;
+  }
+
+  .action-buttons {
+    grid-template-columns: minmax(76px, 1fr) 36px minmax(96px, 1.22fr) minmax(72px, 0.86fr);
+    gap: 5px;
+  }
+
+  .action-buttons button {
+    height: 34px;
+    min-height: 34px;
+    font-size: 14px;
+  }
+
+  .timer-rail,
+  .timer-circle,
+  .timer-circle svg {
+    width: 34px;
+    height: 34px;
+  }
+
+  .hand-groups {
+    --hand-card-w: clamp(35px, 4vw, 42px);
+    padding-top: 7px;
+    padding-right: 88px;
+  }
+
+  .hand-utility {
+    grid-template-columns: minmax(0, 1fr) 82px;
+  }
+
+  .hand-utility .pattern-label {
+    min-height: 23px;
+    font-size: 11px;
+  }
+
+  .btn-arrange {
+    height: 24px;
+    font-size: 12px;
   }
 }
 </style>

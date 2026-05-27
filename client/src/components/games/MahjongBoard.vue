@@ -20,7 +20,7 @@
         <span class="info-item">剩余: <b>{{ gs.remainingTiles ?? 0 }}</b> 张</span>
         <span class="info-sep">|</span>
         <span class="info-item">积分: <b>{{ myScore }}</b></span>
-        <button class="rules-toggle-btn" @click="showRules = !showRules">📖 规则</button>
+        <button class="rules-toggle-btn" @click="showRules = !showRules">规则</button>
       </header>
 
       <!-- 中间Canvas牌桌区 -->
@@ -65,7 +65,16 @@
           </div>
 
           <!-- 手牌 -->
-          <div class="hand-row">
+          <div
+            class="hand-row"
+            :class="{ dragging: isDraggingHand }"
+            ref="handRowRef"
+            @pointerdown="onHandPointerDown"
+            @pointermove="onHandPointerMove"
+            @pointerup="finishHandDrag"
+            @pointercancel="finishHandDrag"
+            @lostpointercapture="finishHandDrag"
+          >
             <div
               v-for="(tile, index) in myHand"
               :key="tile.id || `${tile.suit}-${tile.rank}-${index}`"
@@ -76,7 +85,7 @@
                 disabled: !canDiscard,
                 'is-zhong': tile.suit === 'zhong'
               }"
-              @click="selectTile(index)"
+              :data-tile-index="index"
             >
               <img
                 :src="getTileImageUrl(tile)"
@@ -248,11 +257,18 @@ const seatOrder = ['south', 'west', 'north', 'east']
 const selectedIndex = ref(null)
 const showRules = ref(false)
 const isPortrait = ref(false)
+const isDraggingHand = ref(false)
 const canvasRef = ref(null)
 const canvasWrapRef = ref(null)
+const handRowRef = ref(null)
 let renderer = null
 let rafId = 0
 let resizeObserver = null
+const handDrag = {
+  active: false,
+  pointerId: null,
+  startIndex: null
+}
 
 // ============== 计算属性 ==============
 
@@ -488,6 +504,47 @@ function selectTile(index) {
   selectedIndex.value = selectedIndex.value === index ? null : index
 }
 
+function onHandPointerDown(event) {
+  const index = getTileIndexFromPoint(event)
+  if (index === null) return
+
+  event.preventDefault()
+  handRowRef.value?.setPointerCapture?.(event.pointerId)
+  handDrag.active = true
+  handDrag.pointerId = event.pointerId
+  handDrag.startIndex = index
+  isDraggingHand.value = true
+  selectTile(index)
+}
+
+function onHandPointerMove(event) {
+  if (!handDrag.active || handDrag.pointerId !== event.pointerId) return
+  const index = getTileIndexFromPoint(event)
+  if (index === null || index === selectedIndex.value) return
+
+  event.preventDefault()
+  selectedIndex.value = index
+}
+
+function finishHandDrag(event) {
+  if (!handDrag.active) return
+  if (event?.pointerId != null && event.pointerId !== handDrag.pointerId) return
+  handRowRef.value?.releasePointerCapture?.(handDrag.pointerId)
+  handDrag.active = false
+  handDrag.pointerId = null
+  handDrag.startIndex = null
+  isDraggingHand.value = false
+}
+
+function getTileIndexFromPoint(event) {
+  if (!canDiscard.value || typeof document === 'undefined') return null
+  const elements = document.elementsFromPoint(event.clientX, event.clientY)
+  const tileEl = elements.find((el) => el?.classList?.contains('hand-tile-wrap') && handRowRef.value?.contains(el))
+  if (!tileEl) return null
+  const index = Number(tileEl.dataset.tileIndex)
+  return Number.isInteger(index) && index >= 0 && index < myHand.value.length ? index : null
+}
+
 function draw() { emit('action', { type: 'draw' }) }
 
 function discard() {
@@ -602,22 +659,22 @@ function drawTable() {
   // 中央弃牌区
   drawCenterDiscards(innerX, innerY, innerW, innerH)
 
-  // 中心 "剩余牌数" 标签
-  const labelW = 130, labelH = 36
+  // 中心剩余牌数保持轻量，避免盖住弃牌区。
+  const labelW = 92, labelH = 30
   const labelX = innerX + innerW / 2 - labelW / 2
   const labelY = innerY + innerH / 2 - labelH / 2
-  renderer.drawRoundRect(labelX, labelY, labelW, labelH, 18, 'rgba(20, 90, 60, 0.85)', 'rgba(255, 220, 130, 0.9)', 2)
-  renderer.drawText('剩余牌数', labelX + labelW / 2, labelY + 7, {
+  renderer.drawRoundRect(labelX, labelY, labelW, labelH, 15, 'rgba(12, 55, 38, 0.55)', 'rgba(255, 220, 130, 0.45)', 1)
+  renderer.drawText('剩余', labelX + labelW / 2 - 13, labelY + 9, {
     font: 'bold 11px "PingFang SC", sans-serif',
     color: '#dff5e3',
-    align: 'center',
-    baseline: 'top'
+    align: 'right',
+    baseline: 'middle'
   })
-  renderer.drawText(String(props.gs.remainingTiles ?? 0), labelX + labelW / 2, labelY + 21, {
-    font: 'bold 14px "PingFang SC", sans-serif',
+  renderer.drawText(String(props.gs.remainingTiles ?? 0), labelX + labelW / 2 - 7, labelY + 9, {
+    font: 'bold 15px "PingFang SC", sans-serif',
     color: '#FFD54F',
-    align: 'center',
-    baseline: 'top'
+    align: 'left',
+    baseline: 'middle'
   })
 
   // 底部我方座位信息
@@ -645,8 +702,8 @@ function drawTable() {
 function drawCenterDiscards(innerX, innerY, innerW, innerH) {
   const cx = innerX + innerW / 2
   const cy = innerY + innerH / 2
-  const tileW = 22, tileH = 30, gap = 2
-  const cols = 7
+  const tileW = 20, tileH = 28, gap = 2
+  const cols = 8
 
   const playerByPos = {
     top: seatTop.value,
@@ -655,7 +712,7 @@ function drawCenterDiscards(innerX, innerY, innerW, innerH) {
     bottom: seatBottom.value
   }
 
-  const offset = 62
+  const offset = Math.max(48, Math.min(innerW, innerH) * 0.18)
 
   // 上方弃牌
   const topDiscards = (props.gs.discards?.[playerByPos.top?.id] || []).slice(-cols)
@@ -674,7 +731,7 @@ function drawCenterDiscards(innerX, innerY, innerW, innerH) {
   })
 
   // 左侧弃牌
-  const leftRows = 5
+  const leftRows = 6
   const leftDiscards = (props.gs.discards?.[playerByPos.left?.id] || []).slice(-leftRows)
   leftDiscards.forEach((tile, i) => {
     const tx = cx - offset - tileW
@@ -683,7 +740,7 @@ function drawCenterDiscards(innerX, innerY, innerW, innerH) {
   })
 
   // 右侧弃牌
-  const rightRows = 5
+  const rightRows = 6
   const rightDiscards = (props.gs.discards?.[playerByPos.right?.id] || []).slice(-rightRows)
   rightDiscards.forEach((tile, i) => {
     const tx = cx + offset
@@ -1277,6 +1334,317 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
     width: 48px;
     height: 38px;
     font-size: 11px;
+  }
+}
+
+/* Expert compact mahjong table pass */
+.mj-board {
+  background:
+    radial-gradient(circle at 50% 8%, rgba(46, 188, 119, 0.16), transparent 32%),
+    linear-gradient(180deg, #0b4a2c 0%, #061f14 100%);
+}
+
+.mj-info-bar {
+  flex-basis: 40px;
+  min-height: 40px;
+  background: linear-gradient(180deg, rgba(15, 91, 57, 0.98), rgba(8, 60, 38, 0.98));
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+}
+
+.rules-toggle-btn {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-weight: 800;
+}
+
+.canvas-area {
+  margin: 6px 8px 0;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 214, 114, 0.22);
+}
+
+.bottom-zone {
+  position: relative;
+  flex: 0 0 clamp(144px, 32vh, 164px);
+  min-height: 144px;
+  max-height: 164px;
+  display: grid;
+  grid-template-columns: 70px minmax(0, 1fr);
+  gap: 8px;
+  margin: 6px 8px 6px;
+  padding: 8px;
+  overflow: visible;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(16, 63, 43, 0.98), rgba(8, 38, 27, 0.98));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 12px 24px rgba(0, 0, 0, 0.2);
+}
+
+.my-info {
+  flex: none;
+  min-width: 0;
+  align-self: stretch;
+  justify-content: flex-end;
+  padding: 6px 4px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+
+.my-avatar {
+  width: 34px;
+  height: 34px;
+  border: 2px solid rgba(255, 255, 255, 0.78);
+  font-size: 15px;
+}
+
+.my-meta strong {
+  max-width: 62px;
+  color: #fff;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.my-meta span {
+  color: #8ee9b8;
+  font-size: 11px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.hand-area {
+  min-width: 0;
+  padding-top: 40px;
+  overflow: visible;
+}
+
+.melds-row {
+  min-height: 0;
+  max-height: 32px;
+  padding: 0 3px 2px;
+  gap: 6px;
+  scrollbar-width: none;
+}
+
+.melds-row::-webkit-scrollbar {
+  display: none;
+}
+
+.meld-tile-img {
+  height: 28px;
+  border-radius: 3px;
+}
+
+.meld-tag {
+  padding: 2px 5px;
+  border-radius: 999px;
+  font-size: 10px;
+}
+
+.hand-row {
+  min-height: 76px;
+  padding: 8px 8px 2px;
+  overflow-x: auto;
+  overflow-y: visible;
+  touch-action: pan-x;
+  scrollbar-width: none;
+}
+
+.hand-row::-webkit-scrollbar {
+  display: none;
+}
+
+.hand-row.dragging {
+  touch-action: none;
+}
+
+.hand-tile-wrap {
+  margin-left: -5px;
+  touch-action: pan-x;
+  user-select: none;
+  -webkit-user-select: none;
+  filter: drop-shadow(0 7px 8px rgba(0, 0, 0, 0.16));
+}
+
+.hand-tile-wrap:not(.disabled) {
+  touch-action: none;
+}
+
+.hand-tile-wrap:first-child {
+  margin-left: 0;
+}
+
+.hand-tile-wrap.last-draw {
+  margin-left: 10px;
+}
+
+.hand-tile-wrap.selected {
+  transform: translateY(-10px);
+}
+
+.hand-tile-img {
+  height: clamp(62px, 15.2vh, 74px);
+  padding: 1px;
+  border-radius: 5px;
+}
+
+.hand-tile-wrap.is-zhong {
+  border-width: 1px;
+  border-radius: 6px;
+}
+
+.hu-mark {
+  width: 11px;
+  height: 11px;
+}
+
+.action-buttons {
+  position: absolute;
+  top: 8px;
+  left: 86px;
+  right: 10px;
+  z-index: 12;
+  flex: none;
+  height: 36px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.action-buttons button {
+  flex: 0 1 88px;
+  width: auto;
+  min-width: 58px;
+  max-width: 98px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 999px;
+  font-size: 15px;
+  letter-spacing: 0;
+  line-height: 1;
+  pointer-events: auto;
+}
+
+.btn-draw,
+.btn-discard {
+  background: linear-gradient(180deg, #ffbd51, #ec8616);
+}
+
+.btn-peng {
+  background: linear-gradient(180deg, #5fdc89, #1f9e54);
+}
+
+.btn-gang {
+  background: linear-gradient(180deg, #53c9ff, #197ed6);
+}
+
+.btn-hu {
+  background: linear-gradient(180deg, #ff6d62, #d9342b);
+}
+
+.btn-pass {
+  background: linear-gradient(180deg, #a8b3b8, #69777e);
+}
+
+.status-label {
+  min-width: 108px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.76);
+  background: rgba(0, 0, 0, 0.24);
+  pointer-events: auto;
+}
+
+@media (min-width: 900px) {
+  .hand-row {
+    justify-content: center;
+  }
+}
+
+@media (max-height: 500px) {
+  .mj-info-bar {
+    flex-basis: 36px;
+    min-height: 36px;
+  }
+
+  .canvas-area {
+    margin: 4px 6px 0;
+  }
+
+  .bottom-zone {
+    flex-basis: 134px;
+    min-height: 134px;
+    max-height: 134px;
+    grid-template-columns: 62px minmax(0, 1fr);
+    gap: 7px;
+    margin: 5px 6px 5px;
+    padding: 7px;
+  }
+
+  .my-avatar {
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+
+  .my-meta strong {
+    max-width: 54px;
+    font-size: 11px;
+  }
+
+  .my-meta span {
+    font-size: 10px;
+  }
+
+  .hand-area {
+    padding-top: 36px;
+  }
+
+  .action-buttons {
+    top: 7px;
+    left: 76px;
+    right: 8px;
+    height: 32px;
+    gap: 6px;
+  }
+
+  .action-buttons button {
+    flex-basis: 76px;
+    max-width: 84px;
+    height: 32px;
+    min-height: 32px;
+    padding: 0 10px;
+    font-size: 13px;
+  }
+
+  .melds-row {
+    max-height: 28px;
+  }
+
+  .meld-tile-img {
+    height: 24px;
+  }
+
+  .hand-row {
+    min-height: 66px;
+    padding-top: 5px;
+  }
+
+  .hand-tile-img {
+    height: clamp(54px, 13.8vh, 64px);
+  }
+
+  .hand-tile-wrap.selected {
+    transform: translateY(-8px);
   }
 }
 </style>
