@@ -37,24 +37,24 @@
       <section class="board-card">
         <div class="board-head">
           <span class="mode-chip">{{ myPieceName }}</span>
-          <span class="mode-chip soft">{{ hintMove ? `提示 ${toCoord(hintMove.x, hintMove.y)}` : '15 x 15 标准棋盘' }}</span>
+          <span class="mode-chip soft">{{ boardAssistLabel }}</span>
         </div>
 
         <div class="board-shell">
           <div class="board-surface">
-            <div class="board-playarea">
+            <div class="board-playarea" @pointerdown="handleBoardPointer">
               <button
                 v-for="cell in cells"
                 :key="`${cell.x}-${cell.y}`"
                 type="button"
                 class="intersection"
-                :class="{ disabled: !canPlace(cell) }"
+                :class="{ disabled: !canPlace(cell), pending: isPendingCell(cell) }"
                 :style="pointStyle(cell)"
                 :disabled="!canPlace(cell)"
-                @click="placeAt(cell)"
               >
                 <span v-if="cell.value === 0 && isStarCell(cell)" class="star-dot"></span>
                 <span v-if="isHintCell(cell)" class="hint-ring"></span>
+                <span v-if="isPendingCell(cell)" class="pending-piece" :class="myPiece === 1 ? 'black' : 'white'"></span>
                 <span v-if="cell.value !== 0" class="piece" :class="cell.value === 1 ? 'black' : 'white'"></span>
                 <span v-if="isLastMoveCell(cell)" class="last-dot"></span>
               </button>
@@ -64,19 +64,19 @@
       </section>
 
       <section class="action-grid">
-        <button type="button" class="action-btn hint" @click="showSuggestedMove">
+        <button type="button" class="action-btn hint" @click="pendingCell ? confirmPendingMove() : showSuggestedMove()">
           <span class="action-btn__icon">◎</span>
           <span class="action-btn__copy">
-            <strong>落子提示</strong>
-            <small>推荐下一手</small>
+            <strong>{{ pendingCell ? '确认落子' : '落子提示' }}</strong>
+            <small>{{ pendingCell ? toCoord(pendingCell.x, pendingCell.y) : '推荐下一手' }}</small>
           </span>
         </button>
 
-        <button type="button" class="action-btn undo" @click="showToast('当前版本暂未开放悔棋')">
+        <button type="button" class="action-btn undo" :disabled="!canUndo" @click="requestUndo">
           <span class="action-btn__icon">↶</span>
           <span class="action-btn__copy">
             <strong>悔棋</strong>
-            <small>功能预留</small>
+            <small>{{ canUndo ? '撤回上一手' : '仅限己方上一手' }}</small>
           </span>
         </button>
 
@@ -121,7 +121,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 
 const props = defineProps({
   gs: { type: Object, default: () => ({}) },
@@ -135,6 +135,7 @@ const BOARD_SIZE = 15
 const STAR_POINTS = new Set(['3,3', '3,7', '3,11', '7,3', '7,7', '7,11', '11,3', '11,7', '11,11'])
 const toast = ref('')
 const hintMove = ref(null)
+const pendingCell = ref(null)
 
 let toastTimer = null
 
@@ -168,6 +169,8 @@ const isMyTurn = computed(() => props.gs?.phase === 'playing' && props.gs?.curre
 const gamePhase = computed(() => props.gs?.phase || 'waiting')
 const moveCount = computed(() => props.gs?.moveHistory?.length || 0)
 const lastMove = computed(() => props.gs?.lastMove || null)
+const lastHistoryMove = computed(() => props.gs?.moveHistory?.at?.(-1) || null)
+const canUndo = computed(() => gamePhase.value === 'playing' && lastHistoryMove.value?.player === myId.value)
 
 const turnText = computed(() => {
   return isMyTurn.value ? '轮到你落子' : `等待 ${opponentName.value}`
@@ -189,6 +192,12 @@ const resultDetail = computed(() => {
   if (!props.gs?.winner) return ''
   if (props.gs.winner === 'draw') return '棋盘已满，双方握手言和。'
   return props.gs.winner === myId.value ? '你率先连成五子，拿下本局。' : `${opponentName.value} 完成了五子连珠。`
+})
+
+const boardAssistLabel = computed(() => {
+  if (pendingCell.value) return `待落 ${toCoord(pendingCell.value.x, pendingCell.value.y)} · 再点确认`
+  if (hintMove.value) return `提示 ${toCoord(hintMove.value.x, hintMove.value.y)}`
+  return '轻点预览，再点确认'
 })
 
 const suggestedMove = computed(() => {
@@ -213,7 +222,7 @@ const cells = computed(() => {
       list.push({
         x,
         y,
-        value: board.value[x][y]
+        value: cellValue(x, y)
       })
     }
   }
@@ -226,6 +235,16 @@ onBeforeUnmount(() => {
   }
 })
 
+watch(
+  () => [props.gs?.currentPlayer, moveCount.value, props.gs?.phase],
+  () => {
+    if (!pendingCell.value) return
+    if (!isMyTurn.value || cellValue(pendingCell.value.x, pendingCell.value.y) !== 0) {
+      pendingCell.value = null
+    }
+  }
+)
+
 function toCoord(x, y) {
   return `${String.fromCharCode(65 + x)}${y + 1}`
 }
@@ -237,15 +256,70 @@ function pointStyle(cell) {
   }
 }
 
+function cellValue(x, y) {
+  return board.value?.[x]?.[y] ?? 0
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value))
+}
+
 function canPlace(cell) {
   if (!isMyTurn.value) return false
-  return board.value[cell.x][cell.y] === 0
+  return cellValue(cell.x, cell.y) === 0
 }
 
 function placeAt(cell) {
-  if (!canPlace(cell)) return
+  if (!canPlace(cell)) {
+    if (isMyTurn.value) showToast('这里已有棋子')
+    return
+  }
+
+  if (!pendingCell.value || pendingCell.value.x !== cell.x || pendingCell.value.y !== cell.y) {
+    pendingCell.value = { x: cell.x, y: cell.y }
+    hintMove.value = null
+    showToast(`已选 ${toCoord(cell.x, cell.y)}，再次点击确认`)
+    return
+  }
+
+  confirmPendingMove()
+}
+
+function confirmPendingMove() {
+  if (!pendingCell.value) return
+  const cell = { ...pendingCell.value }
+  if (!canPlace(cell)) {
+    pendingCell.value = null
+    return
+  }
+
   hintMove.value = null
+  pendingCell.value = null
   emit('action', { type: 'place', x: cell.x, y: cell.y })
+}
+
+function handleBoardPointer(event) {
+  if (event.pointerType === 'mouse' && event.button !== 0) return
+  if (!isMyTurn.value) {
+    showToast(`等待 ${opponentName.value} 落子`)
+    return
+  }
+
+  const rect = event.currentTarget.getBoundingClientRect()
+  const x = clamp(Math.round(((event.clientX - rect.left) / rect.width) * (BOARD_SIZE - 1)), 0, BOARD_SIZE - 1)
+  const y = clamp(Math.round(((event.clientY - rect.top) / rect.height) * (BOARD_SIZE - 1)), 0, BOARD_SIZE - 1)
+  placeAt({ x, y, value: cellValue(x, y) })
+}
+
+function requestUndo() {
+  if (!canUndo.value) {
+    showToast('只能撤回自己的上一手')
+    return
+  }
+
+  pendingCell.value = null
+  hintMove.value = null
+  emit('action', { type: 'undo' })
 }
 
 function isLastMoveCell(cell) {
@@ -256,6 +330,11 @@ function isLastMoveCell(cell) {
 function isHintCell(cell) {
   if (!hintMove.value) return false
   return hintMove.value.x === cell.x && hintMove.value.y === cell.y
+}
+
+function isPendingCell(cell) {
+  if (!pendingCell.value) return false
+  return pendingCell.value.x === cell.x && pendingCell.value.y === cell.y
 }
 
 function isStarCell(cell) {
@@ -496,6 +575,8 @@ function showSuggestedMove() {
     linear-gradient(to right, rgba(139, 103, 42, 0.72) 0 1px, transparent 1px) 0 0 / calc(100% / 14) 100% repeat-x,
     linear-gradient(to bottom, rgba(139, 103, 42, 0.72) 0 1px, transparent 1px) 0 0 / 100% calc(100% / 14) repeat-y;
   border: 1px solid rgba(139, 103, 42, 0.72);
+  cursor: pointer;
+  touch-action: manipulation;
 }
 
 .intersection {
@@ -506,6 +587,7 @@ function showSuggestedMove() {
   border: none;
   background: transparent;
   transform: translate(-50%, -50%);
+  pointer-events: none;
 }
 
 .intersection:not(.disabled) {
@@ -519,6 +601,7 @@ function showSuggestedMove() {
 .piece,
 .star-dot,
 .hint-ring,
+.pending-piece,
 .last-dot {
   position: absolute;
   top: 50%;
@@ -538,6 +621,25 @@ function showSuggestedMove() {
 }
 
 .piece.white {
+  background: radial-gradient(circle at 30% 30%, #ffffff, #dadada 72%);
+  border: 1px solid rgba(168, 168, 168, 0.9);
+}
+
+.pending-piece {
+  width: 62%;
+  height: 62%;
+  border-radius: 50%;
+  opacity: 0.48;
+  box-shadow:
+    0 0 0 3px rgba(31, 107, 255, 0.26),
+    0 4px 10px rgba(8, 58, 140, 0.2);
+}
+
+.pending-piece.black {
+  background: radial-gradient(circle at 30% 30%, #666, #1a1a1a 72%);
+}
+
+.pending-piece.white {
   background: radial-gradient(circle at 30% 30%, #ffffff, #dadada 72%);
   border: 1px solid rgba(168, 168, 168, 0.9);
 }
@@ -622,6 +724,12 @@ function showSuggestedMove() {
 
 .action-btn.back {
   background: linear-gradient(180deg, #a973ff, #7a4ce1);
+}
+
+.action-btn:disabled {
+  opacity: 0.54;
+  cursor: not-allowed;
+  filter: grayscale(0.15);
 }
 
 .toast {

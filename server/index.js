@@ -1,4 +1,6 @@
 // 团建大巴游戏平台 - 主服务器
+require('dotenv').config();
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -6,6 +8,7 @@ const cors = require('cors');
 const path = require('path');
 
 const store = require('./store');
+const redisStore = require('./persistence/redis');
 const { getEngine, getGameConfig, getAllGameConfigs } = require('./game-engine');
 const { tryMatch } = require('./matchmaker');
 const { BotManager, BotPlayer, BotStrategy } = require('./bots');
@@ -49,7 +52,7 @@ app.get('/api/leaderboard', (req, res) => {
 
 // 管理员API
 app.get('/api/admin/players', (req, res) => {
-  const players = Array.from(store.players.values()).map(p => ({
+  const players = Array.from(store.players.values()).filter(p => !p.isBot).map(p => ({
     id: p.id, nickname: p.nickname, busNumber: p.busNumber,
     points: p.points, online: p.online, totalGames: p.totalGames, wins: p.wins
   }));
@@ -67,7 +70,7 @@ app.post('/api/admin/give-points', express.json(), (req, res) => {
   const { playerId, amount, reason } = req.body;
   const player = store.getPlayer(playerId);
   if (!player) return res.status(404).json({ error: '玩家不存在' });
-  store.updatePoints(playerId, amount);
+  store.updatePoints(playerId, amount, 'admin_adjustment', { reason });
   io.to(`player:${playerId}`).emit('admin:points_given', { amount, reason, newPoints: player.points });
   broadcastUpdate();
   res.json({ success: true, player: { id: player.id, points: player.points } });
@@ -154,12 +157,19 @@ io.on('connection', (socket) => {
       return callback({ error: '玩家不存在，请重新注册' });
     }
     player.online = true;
+    store.savePlayer(player);
     currentPlayer = player;
     socket.playerId = player.id;
     socket.join(`player:${player.id}`);
     socket.join(`bus:${player.busNumber}`);
 
-    callback({ player });
+    const room = store.getPlayerRoom(player.id);
+    const currentRoom = room && room.status !== 'finished' ? serializeRoom(room) : null;
+    if (currentRoom) {
+      socket.join(`room:${room.id}`);
+    }
+
+    callback({ player, currentRoom });
     broadcastUpdate();
   });
 
@@ -250,11 +260,17 @@ io.on('connection', (socket) => {
   });
 
   // 游戏操作
-  socket.on('game:action', ({ action }) => {
+  socket.on('game:action', async ({ action }) => {
     if (!currentPlayer) return;
 
-    const room = store.getPlayerRoom(currentPlayer.id);
+    let room = store.getPlayerRoom(currentPlayer.id);
     if (!room) return;
+
+    const lock = await store.acquireLock(`room:${room.id}`, 3000);
+    if (!lock) return;
+
+    try {
+      room = store.getPlayerRoom(currentPlayer.id) || room;
 
     const engine = getEngine(room.gameType);
     if (!engine) return;
@@ -267,6 +283,7 @@ io.on('connection', (socket) => {
     } else if (room.status === 'playing') {
       room.gameState = engine.update(room.gameState, action, currentPlayer.id);
     }
+    store.saveRoom(room);
 
     // 广播游戏状态更新到房间
     io.to(`room:${room.id}`).emit('game:state', {
@@ -281,6 +298,9 @@ io.on('connection', (socket) => {
     if (room.gameState.phase === 'finished') {
       handleGameEnd(room);
     }
+    } finally {
+      await lock.release();
+    }
   });
 
   // 获取队列状态
@@ -293,6 +313,7 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     if (currentPlayer) {
       currentPlayer.online = false;
+      store.savePlayer(currentPlayer);
       // 从匹配队列移除
       store.dequeue(currentPlayer.id);
 
@@ -331,7 +352,7 @@ function handleGameEnd(room) {
 
   const config = getGameConfig(room.gameType);
   const winnerId = room.gameState.finalWinner ?? room.gameState.winner;
-  const winningPlayers = room.gameState.winningPlayers || (winnerId ? [winnerId] : []);
+  const winningPlayers = room.gameState.winningPlayers || (winnerId && winnerId !== 'draw' ? [winnerId] : []);
   const entryFee = config.entryFee;
 
   // 根据游戏类型采用不同的积分结算规则
@@ -352,8 +373,12 @@ function handleGameEnd(room) {
   room.status = 'finished';
   room.players.forEach(pid => {
     const p = store.getPlayer(pid);
-    if (p?.currentRoom === room.id) p.currentRoom = null;
+    if (p?.currentRoom === room.id) {
+      p.currentRoom = null;
+      store.savePlayer(p);
+    }
   });
+  store.saveRoom(room);
 
   // 广播结算
   io.to(`room:${room.id}`).emit('game:result', {
@@ -384,13 +409,18 @@ function settle1v1(room, winnerId) {
   const entryFee = config.entryFee;
 
   room.players.forEach(pid => {
+    if (!winnerId || winnerId === 'draw') {
+      store.recordGame(pid, null);
+      return;
+    }
+
     const isWinner = pid === winnerId;
     store.recordGame(pid, isWinner);
     
     if (isWinner) {
-      store.updatePoints(pid, entryFee); // 赢家净 +门票
+      store.updatePoints(pid, entryFee, 'game_settlement', { roomId: room.id, gameType: room.gameType, won: true }); // 赢家净 +门票
     } else {
-      store.updatePoints(pid, -entryFee); // 输家净 -门票
+      store.updatePoints(pid, -entryFee, 'game_settlement', { roomId: room.id, gameType: room.gameType, won: false }); // 输家净 -门票
     }
   });
 }
@@ -408,9 +438,9 @@ function settleMultiplayer(room, winningPlayers) {
     store.recordGame(pid, isWinner);
     
     if (isWinner) {
-      store.updatePoints(pid, winAmount - entryFee);
+      store.updatePoints(pid, winAmount - entryFee, 'game_settlement', { roomId: room.id, gameType: room.gameType, won: true });
     } else {
-      store.updatePoints(pid, -entryFee);
+      store.updatePoints(pid, -entryFee, 'game_settlement', { roomId: room.id, gameType: room.gameType, won: false });
     }
   });
 }
@@ -426,9 +456,9 @@ function settleGuandan(room, winningPlayers) {
     store.recordGame(pid, isWinner);
     
     if (isWinner) {
-      store.updatePoints(pid, winAmount - entryFee); // 净 +80
+      store.updatePoints(pid, winAmount - entryFee, 'game_settlement', { roomId: room.id, gameType: room.gameType, won: true }); // 净 +80
     } else {
-      store.updatePoints(pid, -entryFee); // 净 -80
+      store.updatePoints(pid, -entryFee, 'game_settlement', { roomId: room.id, gameType: room.gameType, won: false }); // 净 -80
     }
   });
 }
@@ -447,9 +477,9 @@ function settleGameWithPot(room, winningPlayers) {
       store.recordGame(pid, isWinner);
       
       if (isWinner) {
-        store.updatePoints(pid, totalPot - playerBet);
+        store.updatePoints(pid, totalPot - playerBet, 'game_settlement', { roomId: room.id, gameType: room.gameType, won: true });
       } else {
-        store.updatePoints(pid, -playerBet);
+        store.updatePoints(pid, -playerBet, 'game_settlement', { roomId: room.id, gameType: room.gameType, won: false });
       }
     });
   }
@@ -463,7 +493,7 @@ function settleGameWithPot(room, winningPlayers) {
       
       // 麻将的 scores 已经是净收益（包含门票和番数）
       const scoreDelta = scores[pid] || 0;
-      store.updatePoints(pid, scoreDelta);
+      store.updatePoints(pid, scoreDelta, 'game_settlement', { roomId: room.id, gameType: room.gameType, won: isWinner });
     });
   }
 }
@@ -475,6 +505,24 @@ function broadcastUpdate() {
     bus: store.getBusLeaderboard(),
     stats: store.getStats()
   });
+}
+
+function serializeRoom(room) {
+  if (!room) return null;
+
+  return {
+    roomId: room.id,
+    gameType: room.gameType,
+    gameName: getGameConfig(room.gameType)?.name || room.gameType,
+    players: room.players.map(pid => {
+      const p = store.getPlayer(pid);
+      return p
+        ? { id: p.id, nickname: p.nickname || p.name, busNumber: p.busNumber, isBot: p.isBot || false }
+        : null;
+    }).filter(Boolean),
+    status: room.status,
+    gameState: room.gameState
+  };
 }
 
 function cleanupPlayerBotRooms(playerId) {
@@ -496,8 +544,11 @@ function cleanupPlayerBotRooms(playerId) {
     room.players.forEach(pid => {
       const p = store.getPlayer(pid);
       if (!p) return;
-      if (p.currentRoom === room.id) p.currentRoom = null;
-      if (p.isBot) store.players.delete(pid);
+      if (p.currentRoom === room.id) {
+        p.currentRoom = null;
+        store.savePlayer(p);
+      }
+      if (p.isBot) store.removePlayer(pid);
     });
 
     store.removeRoom(room.id);
@@ -518,6 +569,7 @@ store.createRoom = function(gameType, players) {
     room.gameState = engine.init(room, pids);
   }
   room.status = 'playing';
+  store.saveRoom(room);
 
   // 创建 Socket.io 房间
   players.forEach(p => {
@@ -615,7 +667,7 @@ function startQuickPlayLoop(room, bots) {
       setTimeout(() => {
         quickPlayRooms.delete(room.id);
         store.removeRoom(room.id);
-        bots.forEach(b => store.players.delete(b.id));
+        bots.forEach(b => store.removePlayer(b.id));
       }, 10000);
       return;
     }
@@ -637,6 +689,7 @@ function startQuickPlayLoop(room, bots) {
     } else {
       room.gameState = engine.update(room.gameState, action, currentPlayer);
     }
+    store.saveRoom(room);
 
     // 广播状态更新
     const allPlayers = room.players.map(pid => {
@@ -650,7 +703,7 @@ function startQuickPlayLoop(room, bots) {
     if (room.gameState.phase === 'finished') {
       const config = getGameConfig(room.gameType);
       const winnerId = room.gameState.finalWinner ?? room.gameState.winner;
-      const winningPlayers = room.gameState.winningPlayers || (winnerId ? [winnerId] : []);
+      const winningPlayers = room.gameState.winningPlayers || (winnerId && winnerId !== 'draw' ? [winnerId] : []);
       const entryFee = config.entryFee;
 
       // 根据游戏类型采用不同的积分结算规则
@@ -667,8 +720,12 @@ function startQuickPlayLoop(room, bots) {
       room.status = 'finished';
       room.players.forEach(pid => {
         const p = store.getPlayer(pid);
-        if (p?.currentRoom === room.id) p.currentRoom = null;
+        if (p?.currentRoom === room.id) {
+          p.currentRoom = null;
+          store.savePlayer(p);
+        }
       });
+      store.saveRoom(room);
 
       io.to(`room:${room.id}`).emit('game:result', {
         winner: winnerId,
@@ -707,6 +764,7 @@ app.post('/api/bots/quick-play', express.json(), (req, res) => {
     if (!existingRoom || existingRoom.status === 'finished') {
       if (existingRoom) store.removeRoom(existingRoom.id);
       player.currentRoom = null;
+      store.savePlayer(player);
     } else {
       return res.status(400).json({ error: '你已在游戏中' });
     }
@@ -725,8 +783,8 @@ app.post('/api/bots/quick-play', express.json(), (req, res) => {
     bot.currentRoom = null;
     bot.createdAt = Date.now();
     bot.busNumber = 99;
-    bots.push(bot);
-    store.players.set(bot.id, bot);
+    const savedBot = store.addPlayer(bot);
+    bots.push(savedBot);
   }
 
   const allPlayers = [player, ...bots];
@@ -739,6 +797,7 @@ app.post('/api/bots/quick-play', express.json(), (req, res) => {
   const pids = allPlayers.map(p => p.id);
   if (engine) room.gameState = engine.init(room, pids);
   room.status = 'playing';
+  store.saveRoom(room);
 
   const matchPayload = {
     roomId: room.id,
@@ -762,17 +821,47 @@ app.post('/api/bots/quick-play', express.json(), (req, res) => {
 });
 
 // ========== 自动匹配循环（每2秒检查一次） ==========
-setInterval(() => {
-  const matches = tryMatch();
-  matches.forEach(({ gameType, players }) => {
-    store.createRoom(gameType, players);
-    broadcastUpdate();
-  });
-}, 2000);
+let matchingTickRunning = false;
+
+function startMatchmakingLoop() {
+  setInterval(async () => {
+    if (matchingTickRunning) return;
+    matchingTickRunning = true;
+
+    try {
+      const matches = await tryMatch();
+      matches.forEach(({ gameType, players }) => {
+        store.createRoom(gameType, players);
+        broadcastUpdate();
+      });
+    } catch (error) {
+      console.error(`[matchmaker] ${error.message}`);
+    } finally {
+      matchingTickRunning = false;
+    }
+  }, 2000);
+}
 
 // 启动
-const PORT = process.env.PORT || 3457;
-server.listen(PORT, () => {
-  console.log(`🚌 团建大巴游戏平台已启动: http://localhost:${PORT}`);
-  console.log(`   Socket.io 就绪`);
+async function startServer() {
+  await store.init();
+
+  const socketAdapter = redisStore.getSocketAdapter();
+  if (socketAdapter) {
+    io.adapter(socketAdapter);
+    console.log('[socket.io] Redis adapter enabled');
+  }
+
+  const PORT = process.env.PORT || 3457;
+  server.listen(PORT, () => {
+    console.log(`🚌 团建大巴游戏平台已启动: http://localhost:${PORT}`);
+    console.log(`   Socket.io 就绪`);
+  });
+
+  startMatchmakingLoop();
+}
+
+startServer().catch((error) => {
+  console.error(`[startup] ${error.stack || error.message}`);
+  process.exit(1);
 });

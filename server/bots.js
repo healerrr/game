@@ -5,6 +5,7 @@ const { getEngine, getGameConfig } = require('./game-engine');
 const cardBotStrategies = require('./bots/index.js');
 const { gomokuStrategy } = require('./bots/gomoku');
 const { chessStrategy } = require('./bots/chess');
+const { randomUUID } = require('crypto');
 
 const BOT_NAMES = [
   '小巴', '车车', '轮轮', '胎胎', '灯灯',
@@ -19,7 +20,8 @@ class BotPlayer {
   constructor(gameType) {
     this.gameType = gameType;
     this.name = BOT_NAMES[botCounter % BOT_NAMES.length];
-    this.id = `bot_${++botCounter}`;
+    botCounter++;
+    this.id = `bot_${randomUUID()}`;
     this.busNumber = 99; // 机器人统一 99 号车
   }
 }
@@ -136,14 +138,14 @@ class BotRoom {
       bot.online = true;
       bot.createdAt = Date.now();
       bot.isBot = true;
-      this.bots.push(bot);
-      this.store.players.set(bot.id, bot);
+      this.bots.push(this.store.addPlayer(bot));
     }
 
     // 创建房间
     this.room = this.store.createRoom(this.gameType, this.bots);
     this.room.gameState = this.engine.init(this.room, this.bots.map(b => b.id));
     this.room.status = 'playing';
+    this.store.saveRoom(this.room);
 
     // 广播匹配信息（供观战者接收）
     this.io.emit('bot:room_created', {
@@ -193,6 +195,7 @@ class BotRoom {
     } else {
       this.room.gameState = this.engine.update(this.room.gameState, action, currentPlayer);
     }
+    this.store.saveRoom(this.room);
 
     // 广播状态更新
     this.io.to(`room:${this.room.id}`).emit('game:state', {
@@ -275,6 +278,7 @@ class BotRoom {
     });
 
     // 10 秒后重新开始
+    this.store.saveRoom(this.room);
     setTimeout(() => this._restart(), 10000);
   }
 
@@ -287,7 +291,7 @@ class BotRoom {
     }
 
     // 清理旧机器人
-    this.bots.forEach(b => this.store.players.delete(b.id));
+    this.bots.forEach(b => this.store.removePlayer(b.id));
     this.bots = [];
 
     // 创建新房间
@@ -300,7 +304,7 @@ class BotRoom {
     if (this.room) {
       this.store.removeRoom(this.room.id);
     }
-    this.bots.forEach(b => this.store.players.delete(b.id));
+    this.bots.forEach(b => this.store.removePlayer(b.id));
     this.bots = [];
     console.log(`🗑️ 机器人房间已销毁: ${this.gameType}`);
   }

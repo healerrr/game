@@ -72,7 +72,7 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { socket, setPlayer } from '../socket'
+import { gameState, socket, setPlayer } from '../socket'
 
 const router = useRouter()
 const nickname = ref('')
@@ -82,7 +82,7 @@ const stats = ref({ onlinePlayers: 0, totalPlayers: 0 })
 const submitting = ref(false)
 const submitError = ref('')
 
-function toLobby(player) {
+function rememberPlayer(player) {
   setPlayer(player)
   localStorage.setItem(
     'bus_game_player',
@@ -92,18 +92,39 @@ function toLobby(player) {
       busNumber: player.busNumber
     })
   )
+}
+
+function toLobby(player) {
+  rememberPlayer(player)
   router.push('/lobby')
+}
+
+function resumeRoom(player, currentRoom) {
+  rememberPlayer(player)
+  gameState.currentRoom = currentRoom
+  gameState.currentGame = currentRoom.gameState
+  socket.emit('room:join', { roomId: currentRoom.roomId })
+  router.push(`/game/${currentRoom.roomId}`)
 }
 
 function restorePlayer() {
   const saved = localStorage.getItem('bus_game_player')
   if (!saved) return
 
-  const player = JSON.parse(saved)
+  let player
+  try {
+    player = JSON.parse(saved)
+  } catch {
+    localStorage.removeItem('bus_game_player')
+    return
+  }
+
   ensureSocketConnected()
     .then(() => {
       socket.emit('player:reconnect', { playerId: player.id }, (res) => {
-        if (res.player) {
+        if (res?.player && res?.currentRoom) {
+          resumeRoom(res.player, res.currentRoom)
+        } else if (res?.player) {
           toLobby(res.player)
         } else {
           localStorage.removeItem('bus_game_player')

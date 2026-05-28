@@ -1,6 +1,7 @@
 // 游戏引擎 - 每款游戏的核心逻辑
 // 每个引擎暴露: init(room, players) → update(action, playerId) → getState()
 
+const { randomInt } = require('crypto');
 const store = require('./store');
 const cardEngines = require('./game-engines');
 
@@ -20,6 +21,8 @@ class RockPaperScissors {
 
   update(state, action, playerId) {
     if (state.phase === 'choose' && action.type === 'choose') {
+      if (!['rock', 'paper', 'scissors'].includes(action.choice)) return state;
+      if (state.choices[playerId]) return state;
       state.choices[playerId] = action.choice; // rock | paper | scissors
       // 两人都选了 → 判定
       if (Object.keys(state.choices).length === 2) {
@@ -58,6 +61,13 @@ class RockPaperScissors {
     const pids = Object.keys(state.scores);
     // 一局定胜负
     if (state.round >= state.maxRounds) {
+      if (state.scores[pids[0]] === state.scores[pids[1]]) {
+        state.phase = 'choose';
+        state.choices = {};
+        state.result = null;
+        state.timerStarted = Date.now();
+        return state;
+      }
       state.phase = 'finished';
       state.finalWinner = state.scores[pids[0]] > state.scores[pids[1]] ? pids[0] : pids[1];
     } else {
@@ -74,14 +84,15 @@ class RockPaperScissors {
 // ========== 猜大小 ==========
 class GuessNumber {
   init(room, players) {
-    const secret = Math.floor(Math.random() * 100) + 1;
+    const secret = randomInt(1, 101);
     return {
       phase: 'guess',
       secret,
       range: { low: 1, high: 100 },
-      currentPlayer: players[Math.floor(Math.random() * 2)],
+      currentPlayer: players[randomInt(0, players.length)],
       players,
       guesses: [],
+      maxGuesses: 10,
       timer: 15,
       timerStarted: Date.now()
     };
@@ -90,20 +101,32 @@ class GuessNumber {
   update(state, action, playerId) {
     if (state.phase !== 'guess') return state;
     if (playerId !== state.currentPlayer) return state;
+    if (action.type !== 'guess') return state;
 
-    state.guesses.push({ playerId, guess: action.guess });
+    const guess = Number(action.guess);
+    if (!Number.isInteger(guess) || guess < state.range.low || guess > state.range.high) {
+      return state;
+    }
 
-    if (action.guess === state.secret) {
+    state.guesses.push({ playerId, guess });
+
+    if (guess === state.secret) {
       state.phase = 'finished';
       state.winner = playerId;
-    } else if (action.guess < state.secret) {
-      state.range.low = Math.max(state.range.low, action.guess + 1);
+    } else if (guess < state.secret) {
+      state.range.low = Math.max(state.range.low, guess + 1);
       state.currentPlayer = state.players.find(p => p !== playerId);
       state.timerStarted = Date.now();
     } else {
-      state.range.high = Math.min(state.range.high, action.guess - 1);
+      state.range.high = Math.min(state.range.high, guess - 1);
       state.currentPlayer = state.players.find(p => p !== playerId);
       state.timerStarted = Date.now();
+    }
+
+    if (state.phase === 'guess' && state.guesses.length >= (state.maxGuesses || 10)) {
+      state.phase = 'finished';
+      state.winner = null;
+      state.finalWinner = null;
     }
     return state;
   }

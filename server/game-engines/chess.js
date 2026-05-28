@@ -201,9 +201,24 @@ function findKing(board, color) {
   return null;
 }
 
+function kingsFace(board) {
+  const redKing = findKing(board, COLORS.RED);
+  const blackKing = findKing(board, COLORS.BLACK);
+  if (!redKing || !blackKing) return false;
+  if (redKing.col !== blackKing.col) return false;
+
+  const start = Math.min(redKing.row, blackKing.row) + 1;
+  const end = Math.max(redKing.row, blackKing.row);
+  for (let row = start; row < end; row++) {
+    if (board[row][redKing.col]) return false;
+  }
+  return true;
+}
+
 function isKingInCheck(board, color) {
   const king = findKing(board, color);
   if (!king) return true;
+  if (kingsFace(board)) return true;
   
   const opponent = color === COLORS.RED ? COLORS.BLACK : COLORS.RED;
   
@@ -285,7 +300,28 @@ class ChessEngine {
     
     // Determine if player is red or black
     const playerIndex = state.players.indexOf(playerId);
+    if (playerIndex === -1) return state;
     const playerColor = playerIndex === 0 ? COLORS.RED : COLORS.BLACK;
+
+    if (action.type === 'undo') {
+      const lastMove = state.moveHistory[state.moveHistory.length - 1];
+      if (!lastMove || lastMove.player !== playerId) return state;
+
+      state.moveHistory.pop();
+      state.board[lastMove.from.row][lastMove.from.col] = state.board[lastMove.to.row][lastMove.to.col];
+      state.board[lastMove.to.row][lastMove.to.col] = lastMove.captured;
+      if (lastMove.captured) {
+        const moverColor = lastMove.color || state.board[lastMove.from.row][lastMove.from.col]?.color;
+        if (moverColor) state.capturedPieces[moverColor]?.pop();
+      }
+      state.currentPlayer = lastMove.color || playerColor;
+      state.selectedPiece = null;
+      state.lastMove = state.moveHistory.length > 0 
+        ? state.moveHistory[state.moveHistory.length - 1] 
+        : null;
+      state.timerStarted = Date.now();
+      return state;
+    }
     
     // Only allow current player's color to move
     if (state.currentPlayer !== playerColor) return state;
@@ -330,7 +366,13 @@ class ChessEngine {
       state.board[toRow][toCol] = state.board[fromRow][fromCol];
       state.board[fromRow][fromCol] = null;
       state.lastMove = { from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol } };
-      state.moveHistory.push({ from: { row: fromRow, col: fromCol }, to: { row: toRow, col: toCol }, captured });
+      state.moveHistory.push({
+        from: { row: fromRow, col: fromCol },
+        to: { row: toRow, col: toCol },
+        captured,
+        player: playerId,
+        color: playerColor
+      });
       state.selectedPiece = null;
       
       if (state.phase === 'playing') {
@@ -342,22 +384,6 @@ class ChessEngine {
         }
       }
       
-      state.timerStarted = Date.now();
-    }
-
-    if (action.type === 'undo' && state.moveHistory.length > 0) {
-      const lastMove = state.moveHistory.pop();
-      state.board[lastMove.from.row][lastMove.from.col] = state.board[lastMove.to.row][lastMove.to.col];
-      state.board[lastMove.to.row][lastMove.to.col] = lastMove.captured;
-      if (lastMove.captured) {
-        const color = state.board[lastMove.from.row][lastMove.from.col].color;
-        state.capturedPieces[color].pop();
-      }
-      state.currentPlayer = playerColor;
-      state.selectedPiece = null;
-      state.lastMove = state.moveHistory.length > 0 
-        ? state.moveHistory[state.moveHistory.length - 1] 
-        : null;
       state.timerStarted = Date.now();
     }
 
@@ -380,6 +406,7 @@ module.exports = {
   getValidMoves,
   getLegalMoves,
   isKingInCheck,
+  kingsFace,
   evaluateBoard,
   hasAnyLegalMove
 };

@@ -66,7 +66,8 @@
               v-for="move in moves"
               :key="move.key"
               class="move-btn"
-              :class="{ selected: selectedMove === move.key }"
+              :class="{ selected: submittedMove === move.key, muted: hasSelectedMove && submittedMove !== move.key }"
+              :disabled="hasSelectedMove"
               @click="selectMove(move.key)"
             >
               <span class="emoji">{{ move.icon }}</span>
@@ -89,7 +90,9 @@
           </div>
           <div class="round-result" :class="roundResult">{{ roundResultText }}</div>
           <div class="dual-btns">
-            <button class="primary-btn" @click="rematch">再来一局</button>
+            <button class="primary-btn" @click="nextRound">
+              {{ roundResult === 'draw' ? '继续加赛' : '查看结算' }}
+            </button>
             <button class="secondary-btn" @click="backToLobby">返回大厅</button>
           </div>
         </template>
@@ -142,17 +145,17 @@
       <div class="dual-btns">
         <button
           class="primary-btn"
-          :disabled="!guessNum || gs.phase !== 'guess' || gs.currentPlayer !== player?.id"
+          :disabled="!guessNum || guessSubmitting || gs.phase !== 'guess' || gs.currentPlayer !== player?.id"
           @click="makeGuess"
         >
-          提交答案
+          {{ guessSubmitting ? '提交中...' : '提交答案' }}
         </button>
-        <button class="secondary-btn" @click="guessNum = ''">重新输入</button>
+        <button class="secondary-btn" :disabled="guessSubmitting" @click="guessNum = ''">重新输入</button>
       </div>
 
       <div v-if="gs.phase === 'finished'" class="final-box">
         <p>正确答案：<strong>{{ gs.secret }}</strong></p>
-        <p>{{ gs.winner === player?.id ? '你猜中了，太厉害了！' : `${opponentName} 先一步猜中` }}</p>
+        <p>{{ !gs.winner ? '次数用完，本局无人猜中。' : (gs.winner === player?.id ? '你猜中了，太厉害了！' : `${opponentName} 先一步猜中`) }}</p>
         <div class="dual-btns">
           <button class="primary-btn" @click="rematch">再来一局</button>
           <button class="secondary-btn" @click="backToLobby">返回大厅</button>
@@ -331,6 +334,7 @@ const gs = ref({})
 const opponentDisconnected = ref(false)
 const selectedMove = ref(null)
 const guessNum = ref('')
+const guessSubmitting = ref(false)
 const timeLeft = ref(5)
 const quizAnswer = ref(null)
 const quizTimeLeft = ref(15)
@@ -392,6 +396,8 @@ const opponentChoice = computed(() => {
   const opponentId = roomPlayers.value.find((item) => item.id !== player.value?.id)?.id
   return gs.value?.result?.choices?.[opponentId]
 })
+const submittedMove = computed(() => selectedMove.value || gs.value?.choices?.[player.value?.id] || '')
+const hasSelectedMove = computed(() => Boolean(submittedMove.value))
 
 const roundResult = computed(() => {
   if (!gs.value?.result) return ''
@@ -444,6 +450,7 @@ function moveIcon(key) {
 }
 
 function selectMove(move) {
+  if (hasSelectedMove.value) return
   selectedMove.value = move
   socket.emit('game:action', { action: { type: 'choose', choice: move } })
 }
@@ -461,6 +468,9 @@ function removeDigit() {
 }
 
 function makeGuess() {
+  if (guessSubmitting.value) return
+  if (gs.value?.phase !== 'guess' || gs.value?.currentPlayer !== player.value?.id) return
+
   const value = Number.parseInt(guessNum.value, 10)
   if (!Number.isFinite(value)) return
 
@@ -471,8 +481,12 @@ function makeGuess() {
     return
   }
 
+  guessSubmitting.value = true
   socket.emit('game:action', { action: { type: 'guess', guess: value } })
   guessNum.value = ''
+  window.setTimeout(() => {
+    guessSubmitting.value = false
+  }, 3000)
 }
 
 function nextRound() {
@@ -537,12 +551,17 @@ onMounted(() => {
 
   stateHandler = (event) => {
     gs.value = event.detail.gameState
+    guessSubmitting.value = false
+    if (gameType.value === 'rock_paper_scissors' && gs.value?.phase === 'choose' && !gs.value?.choices?.[player.value?.id]) {
+      selectedMove.value = null
+    }
   }
   window.addEventListener('game:state', stateHandler)
 
   resultHandler = (event) => {
     const { players: resultPlayers, ...result } = event.detail
     gs.value = { ...gs.value, ...result, resultPlayers }
+    guessSubmitting.value = false
   }
   window.addEventListener('game:result', resultHandler)
 
@@ -582,7 +601,7 @@ watch(() => gs.value?.timerStarted, (started) => {
     timeLeft.value -= 1
     if (timeLeft.value <= 0) {
       clearInterval(timerInterval)
-      if (gs.value.phase === 'choose' && !selectedMove.value) {
+      if (gs.value.phase === 'choose' && !hasSelectedMove.value) {
         const randomMove = ['rock', 'scissors', 'paper'][Math.floor(Math.random() * 3)]
         selectMove(randomMove)
       }
@@ -967,6 +986,15 @@ watch(() => roomId.value, () => {
   box-shadow: 0 10px 18px rgba(9, 89, 208, 0.2);
 }
 
+.move-btn:disabled {
+  cursor: default;
+}
+
+.move-btn.muted {
+  opacity: 0.58;
+  filter: grayscale(0.25);
+}
+
 .reveal-row {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
@@ -1180,6 +1208,8 @@ watch(() => roomId.value, () => {
   text-align: left;
   font-size: 16px;
   font-weight: 700;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .quiz-options button.selected {
@@ -1196,6 +1226,12 @@ watch(() => roomId.value, () => {
   display: grid;
   place-items: center;
   flex: 0 0 34px;
+}
+
+.quiz-options button span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .final-box {
@@ -1569,7 +1605,10 @@ watch(() => roomId.value, () => {
 
 .game-room.quiz-layout .quiz-mode .quiz-options button span:last-child {
   flex: 1 1 auto;
+  min-width: 0;
   line-height: 1.24;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .game-room.quiz-layout .quiz-mode .quiz-options .letter {
@@ -2148,6 +2187,16 @@ watch(() => roomId.value, () => {
   .game-room.rps-layout .secondary-btn {
     height: 42px;
     font-size: 15px;
+  }
+}
+
+@media (max-width: 360px) {
+  .game-room.quiz-layout .quiz-mode .quiz-options {
+    grid-template-columns: 1fr;
+  }
+
+  .game-room.quiz-layout .quiz-mode .quiz-options button {
+    min-height: 56px;
   }
 }
 </style>
