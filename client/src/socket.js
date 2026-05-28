@@ -15,12 +15,14 @@ export const socket = io(SOCKET_URL, {
 // 全局游戏状态
 export const gameState = reactive({
   player: null,
+  playMode: localStorage.getItem('bus_game_play_mode') || 'normal',
   personalRank: [],
   busRank: [],
   stats: { totalPlayers: 0, onlinePlayers: 0, activeRooms: 0 },
   currentRoom: null,
   currentGame: null,
-  broadcastMessage: null
+  broadcastMessage: null,
+  invitations: []
 })
 
 // 监听服务器推送
@@ -38,12 +40,34 @@ socket.on('game:matched', (data) => {
   window.dispatchEvent(new CustomEvent('game:matched', { detail: data }))
 })
 
+socket.on('room:update', (data) => {
+  if (!gameState.currentRoom || gameState.currentRoom.roomId === data.roomId || gameState.currentRoom.id === data.roomId) {
+    gameState.currentRoom = data
+    gameState.currentGame = data.gameState
+  }
+  window.dispatchEvent(new CustomEvent('room:update', { detail: data }))
+})
+
+socket.on('room:started', (data) => {
+  gameState.currentRoom = data
+  gameState.currentGame = data.gameState
+  window.dispatchEvent(new CustomEvent('room:started', { detail: data }))
+  window.dispatchEvent(new CustomEvent('game:state', { detail: { gameState: data.gameState, players: data.players, room: data } }))
+})
+
 socket.on('game:state', (data) => {
   gameState.currentGame = data.gameState
+  if (data.room) {
+    gameState.currentRoom = data.room
+  }
   window.dispatchEvent(new CustomEvent('game:state', { detail: data }))
 })
 
 socket.on('game:result', (data) => {
+  if (data.room) {
+    gameState.currentRoom = data.room
+    gameState.currentGame = data.room.gameState
+  }
   // 更新当前玩家积分
   if (gameState.player && data.players) {
     const playerResult = data.players.find(p => p.id === gameState.player.id)
@@ -56,6 +80,34 @@ socket.on('game:result', (data) => {
 
 socket.on('game:opponent_disconnected', (data) => {
   window.dispatchEvent(new CustomEvent('game:opponent_disconnected', { detail: data }))
+})
+
+socket.on('room:kicked', (data) => {
+  gameState.currentRoom = null
+  gameState.currentGame = null
+  window.dispatchEvent(new CustomEvent('room:kicked', { detail: data }))
+})
+
+socket.on('room:left', (data) => {
+  gameState.currentRoom = null
+  gameState.currentGame = null
+  window.dispatchEvent(new CustomEvent('room:left', { detail: data }))
+})
+
+socket.on('match:requeued', (data) => {
+  gameState.currentRoom = null
+  gameState.currentGame = null
+  window.dispatchEvent(new CustomEvent('match:requeued', { detail: data }))
+})
+
+socket.on('room:abandoned', (data) => {
+  window.dispatchEvent(new CustomEvent('room:abandoned', { detail: data }))
+})
+
+socket.on('room:invited', (data) => {
+  gameState.invitations.unshift(data)
+  gameState.invitations = gameState.invitations.slice(0, 3)
+  window.dispatchEvent(new CustomEvent('room:invited', { detail: data }))
 })
 
 // 全服广播
@@ -80,4 +132,13 @@ export function getPlayer() {
 
 export function setPlayer(player) {
   gameState.player = player
+}
+
+export function getPlayMode() {
+  return gameState.playMode
+}
+
+export function setPlayMode(mode) {
+  gameState.playMode = mode
+  localStorage.setItem('bus_game_play_mode', mode)
 }

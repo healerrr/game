@@ -15,7 +15,61 @@
       <div class="point-pill"><span class="coin-dot"></span>积分 {{ player?.points ?? 0 }}</div>
     </header>
 
-    <section v-if="gameType === 'rock_paper_scissors'" class="mode-card rps-mode">
+    <section v-if="isReadyRoom" class="mode-card ready-room">
+      <div class="ready-head">
+        <div>
+          <span>候场房间</span>
+          <h2>{{ gameLabel }}</h2>
+        </div>
+        <strong v-if="readyDeadlineLeft > 0">{{ readyDeadlineLeft }}s</strong>
+      </div>
+
+      <div class="ready-list">
+        <div v-for="item in roomPlayers" :key="item.id" class="ready-player">
+          <div class="avatar-circle">{{ (item.nickname || '玩').slice(0, 1) }}</div>
+          <div>
+            <strong>{{ item.nickname }}</strong>
+            <p>{{ item.busNumber }}号车 · {{ item.connection === 'offline' ? '离线' : '在线' }}</p>
+          </div>
+          <span :class="{ on: item.ready }">{{ item.ready ? '已准备' : '未准备' }}</span>
+        </div>
+
+        <div v-for="n in emptySeatCount" :key="`empty-${n}`" class="ready-player empty">
+          <div class="avatar-circle">+</div>
+          <div>
+            <strong>等待玩家</strong>
+            <p>可邀请在线玩家加入</p>
+          </div>
+          <span>空位</span>
+        </div>
+      </div>
+
+      <div class="ready-actions">
+        <button class="primary-btn" :class="{ ready: myReady }" @click="toggleReady">
+          {{ myReady ? '取消准备' : '准备' }}
+        </button>
+        <button v-if="canInvitePlayers" class="secondary-btn" @click="toggleInvitePanel">
+          邀请玩家
+        </button>
+        <button class="secondary-btn" @click="backToLobby">返回大厅</button>
+      </div>
+
+      <div v-if="showInvitePanel" class="invite-panel">
+        <button
+          v-for="candidate in inviteCandidates"
+          :key="candidate.id"
+          type="button"
+          :disabled="candidate.busy || !candidate.online"
+          @click="invitePlayer(candidate)"
+        >
+          <span>{{ candidate.nickname }} · {{ candidate.busNumber }}号车</span>
+          <strong>{{ candidate.busy ? '忙碌' : (candidate.online ? '邀请' : '离线') }}</strong>
+        </button>
+        <p v-if="!inviteCandidates.length">{{ inviteLoading ? '正在加载...' : '暂无可邀请玩家' }}</p>
+      </div>
+    </section>
+
+    <section v-else-if="gameType === 'rock_paper_scissors'" class="mode-card rps-mode">
       <section class="battle-card">
         <div class="player-mini">
           <div class="avatar">{{ myName.slice(0, 1) }}</div>
@@ -317,7 +371,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { gameState, getPlayer, socket } from '../socket'
+import { gameState, getPlayer, getPlayMode, socket } from '../socket'
 import UndercoverGame from '../components/UndercoverGame.vue'
 import ZhaJinHuaBoard from '../components/games/ZhaJinHuaBoard.vue'
 import GuandanBoard from '../components/games/GuandanBoard.vue'
@@ -338,15 +392,31 @@ const guessSubmitting = ref(false)
 const timeLeft = ref(5)
 const quizAnswer = ref(null)
 const quizTimeLeft = ref(15)
+const readyDeadlineLeft = ref(0)
+const showInvitePanel = ref(false)
+const inviteCandidates = ref([])
+const inviteLoading = ref(false)
 
 let timerInterval = null
+let readyInterval = null
 let stateHandler = null
 let resultHandler = null
 let dcHandler = null
+let roomUpdateHandler = null
+let roomStartedHandler = null
+let kickedHandler = null
+let requeuedHandler = null
+let abandonedHandler = null
+let matchedHandler = null
 
 const gameType = computed(() => gameState.currentRoom?.gameType)
 const roomPlayers = computed(() => gameState.currentRoom?.players || [])
+const currentRoom = computed(() => gameState.currentRoom || {})
 const isFullscreenGame = computed(() => ['guandan', 'mahjong'].includes(gameType.value))
+const isReadyRoom = computed(() => currentRoom.value?.status === 'readying' || (!gs.value?.phase && currentRoom.value?.status !== 'playing'))
+const myReady = computed(() => Boolean(currentRoom.value?.ready?.[player.value?.id] || roomPlayers.value.find(item => item.id === player.value?.id)?.ready))
+const emptySeatCount = computed(() => Math.max(0, Number(currentRoom.value?.maxPlayers || roomPlayers.value.length) - roomPlayers.value.length))
+const canInvitePlayers = computed(() => isReadyRoom.value && currentRoom.value?.visibility === 'private' && currentRoom.value?.ownerId === player.value?.id && emptySeatCount.value > 0)
 
 const gameLabel = computed(() => {
   const labels = {
@@ -508,6 +578,48 @@ function emitGameAction(action) {
   socket.emit('game:action', { action })
 }
 
+function updateReadyDeadline() {
+  const deadline = Number(currentRoom.value?.readyDeadline || 0)
+  readyDeadlineLeft.value = deadline ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : 0
+}
+
+function toggleReady() {
+  socket.emit('room:ready', { ready: !myReady.value }, (res) => {
+    if (res?.error) {
+      alert(res.error)
+    }
+  })
+}
+
+function toggleInvitePanel() {
+  showInvitePanel.value = !showInvitePanel.value
+  if (showInvitePanel.value) {
+    loadInvitePlayers()
+  }
+}
+
+function loadInvitePlayers() {
+  inviteLoading.value = true
+  socket.emit('players:list', (res) => {
+    inviteLoading.value = false
+    if (res?.error) {
+      alert(res.error)
+      return
+    }
+    inviteCandidates.value = (res.players || []).filter(item => !roomPlayers.value.some(playerItem => playerItem.id === item.id))
+  })
+}
+
+function invitePlayer(candidate) {
+  socket.emit('room:invite', { roomId: currentRoom.value?.roomId, playerId: candidate.id }, (res) => {
+    if (res?.error) {
+      alert(res.error)
+      return
+    }
+    candidate.busy = true
+  })
+}
+
 function enterQuickPlayRoom(data) {
   gameState.currentRoom = {
     roomId: data.roomId,
@@ -523,6 +635,18 @@ function enterQuickPlayRoom(data) {
 
 async function rematch() {
   if (!player.value || !gameType.value) return
+  if (getPlayMode() !== 'test') {
+    const nextGame = gameType.value
+    gameState.currentRoom = null
+    gameState.currentGame = null
+    socket.emit('match:join', { gameType: nextGame }, (res) => {
+      if (res?.error) {
+        alert(res.error)
+      }
+    })
+    router.push({ path: '/lobby', query: { matching: nextGame } })
+    return
+  }
   try {
     const response = await fetch('/api/bots/quick-play', {
       method: 'POST',
@@ -538,7 +662,35 @@ async function rematch() {
 }
 
 function backToLobby() {
-  router.push('/lobby')
+  const room = currentRoom.value
+  if (!room?.roomId) {
+    router.push('/lobby')
+    return
+  }
+
+  if (room.status === 'playing' && room.mode !== 'quick') {
+    const message = room.players?.length === 2
+      ? '当前对局未结束，返回大厅将视为认输，是否继续？'
+      : '当前对局未结束，返回后本局结束前不能参与其他游戏，是否继续？'
+    if (!window.confirm(message)) return
+  }
+
+  socket.emit('room:leave_current', { confirmForfeit: true }, (res) => {
+    if (res?.error && !res.requiresConfirmation) {
+      alert(res.error)
+      return
+    }
+    if (res?.requiresConfirmation && !window.confirm('返回大厅将视为认输，是否继续？')) {
+      return
+    }
+    if (res?.requiresConfirmation) {
+      socket.emit('room:leave_current', { confirmForfeit: true }, () => {
+        router.push('/lobby')
+      })
+      return
+    }
+    router.push('/lobby')
+  })
 }
 
 onMounted(() => {
@@ -551,6 +703,9 @@ onMounted(() => {
 
   stateHandler = (event) => {
     gs.value = event.detail.gameState
+    if (event.detail.room) {
+      gameState.currentRoom = event.detail.room
+    }
     guessSubmitting.value = false
     if (gameType.value === 'rock_paper_scissors' && gs.value?.phase === 'choose' && !gs.value?.choices?.[player.value?.id]) {
       selectedMove.value = null
@@ -558,8 +713,28 @@ onMounted(() => {
   }
   window.addEventListener('game:state', stateHandler)
 
+  roomUpdateHandler = (event) => {
+    gameState.currentRoom = event.detail
+    gameState.currentGame = event.detail.gameState
+    gs.value = event.detail.gameState || {}
+    updateReadyDeadline()
+  }
+  window.addEventListener('room:update', roomUpdateHandler)
+
+  roomStartedHandler = (event) => {
+    gameState.currentRoom = event.detail
+    gameState.currentGame = event.detail.gameState
+    gs.value = event.detail.gameState || {}
+    showInvitePanel.value = false
+  }
+  window.addEventListener('room:started', roomStartedHandler)
+
   resultHandler = (event) => {
-    const { players: resultPlayers, ...result } = event.detail
+    if (event.detail.room) {
+      gameState.currentRoom = event.detail.room
+      gameState.currentGame = event.detail.room.gameState
+    }
+    const { players: resultPlayers, room: resultRoom, ...result } = event.detail
     gs.value = { ...gs.value, ...result, resultPlayers }
     guessSubmitting.value = false
   }
@@ -568,17 +743,53 @@ onMounted(() => {
   dcHandler = () => {
     opponentDisconnected.value = true
     setTimeout(() => {
-      if (opponentDisconnected.value) router.push('/lobby')
-    }, 5000)
+      opponentDisconnected.value = false
+    }, 10000)
   }
   window.addEventListener('game:opponent_disconnected', dcHandler)
+
+  kickedHandler = (event) => {
+    alert(event.detail?.message || '已返回大厅')
+    router.push('/lobby')
+  }
+  window.addEventListener('room:kicked', kickedHandler)
+
+  requeuedHandler = (event) => {
+    alert(event.detail?.message || '已重新匹配')
+    router.push({ path: '/lobby', query: { matching: event.detail?.gameType || gameType.value } })
+  }
+  window.addEventListener('match:requeued', requeuedHandler)
+
+  abandonedHandler = (event) => {
+    alert(event.detail?.message || '本局结束前不能参与其他游戏')
+  }
+  window.addEventListener('room:abandoned', abandonedHandler)
+
+  matchedHandler = (event) => {
+    const room = event.detail
+    gameState.currentRoom = room
+    gameState.currentGame = room.gameState
+    gs.value = room.gameState || {}
+    router.push(`/game/${room.roomId}`)
+  }
+  window.addEventListener('game:matched', matchedHandler)
+
+  readyInterval = setInterval(updateReadyDeadline, 500)
+  updateReadyDeadline()
 })
 
 onUnmounted(() => {
   if (timerInterval) clearInterval(timerInterval)
+  if (readyInterval) clearInterval(readyInterval)
   if (stateHandler) window.removeEventListener('game:state', stateHandler)
   if (resultHandler) window.removeEventListener('game:result', resultHandler)
   if (dcHandler) window.removeEventListener('game:opponent_disconnected', dcHandler)
+  if (roomUpdateHandler) window.removeEventListener('room:update', roomUpdateHandler)
+  if (roomStartedHandler) window.removeEventListener('room:started', roomStartedHandler)
+  if (kickedHandler) window.removeEventListener('room:kicked', kickedHandler)
+  if (requeuedHandler) window.removeEventListener('match:requeued', requeuedHandler)
+  if (abandonedHandler) window.removeEventListener('room:abandoned', abandonedHandler)
+  if (matchedHandler) window.removeEventListener('game:matched', matchedHandler)
 })
 
 watch(() => gs.value?.timerStarted, (started) => {
@@ -1277,6 +1488,141 @@ watch(() => roomId.value, () => {
 
 .score-item strong {
   color: #135ee4;
+}
+
+.ready-room {
+  width: min(100%, 520px);
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.ready-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.ready-head span {
+  color: #6b82ac;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.ready-head h2 {
+  margin: 4px 0 0;
+  color: #17315d;
+  font-size: 24px;
+}
+
+.ready-head strong {
+  width: 54px;
+  height: 54px;
+  border-radius: 18px;
+  background: #eaf4ff;
+  color: #0f5de8;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+}
+
+.ready-list {
+  margin-top: 16px;
+  display: grid;
+  gap: 10px;
+}
+
+.ready-player {
+  min-height: 72px;
+  padding: 10px;
+  border-radius: 18px;
+  border: 1px solid #d9e8fb;
+  background: #fff;
+  display: grid;
+  grid-template-columns: 52px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.ready-player.empty {
+  background: #f7fbff;
+  border-style: dashed;
+}
+
+.ready-player strong,
+.ready-player p {
+  margin: 0;
+}
+
+.ready-player p {
+  margin-top: 3px;
+  color: #6b82ac;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.ready-player > span {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #eef5ff;
+  color: #6b82ac;
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.ready-player > span.on {
+  background: #e8fbf1;
+  color: #168a4c;
+}
+
+.ready-actions {
+  margin-top: 16px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ready-actions .primary-btn.ready {
+  background: linear-gradient(180deg, #2eb87f, #148f5d);
+}
+
+.invite-panel {
+  margin-top: 14px;
+  border-radius: 18px;
+  border: 1px solid #d9e8fb;
+  background: #f7fbff;
+  padding: 10px;
+  display: grid;
+  gap: 8px;
+  max-height: 230px;
+  overflow: auto;
+}
+
+.invite-panel button {
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: #fff;
+  color: #17315d;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-weight: 900;
+}
+
+.invite-panel button:disabled {
+  opacity: 0.55;
+}
+
+.invite-panel p {
+  margin: 0;
+  color: #6b82ac;
+  text-align: center;
+  font-weight: 800;
 }
 
 .fallback {

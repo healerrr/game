@@ -35,7 +35,7 @@
 
           <div class="score-side">
             <span>8款游戏</span>
-            <span>即点即玩</span>
+            <span>{{ modeLabel }}</span>
           </div>
         </div>
       </section>
@@ -101,6 +101,26 @@
       </transition>
 
       <transition name="fade">
+        <div v-if="showCreateRoom" class="overlay" @click="showCreateRoom = false">
+          <div class="dialog dialog--left" @click.stop>
+            <h3>创建房间</h3>
+            <p>选择游戏后进入候场房，可在房间内邀请在线玩家。</p>
+            <div class="create-game-list">
+              <button
+                v-for="game in gameCards"
+                :key="`create-${game.key}`"
+                type="button"
+                @click="createRoom(game.key)"
+              >
+                <span>{{ game.name }}</span>
+                <strong>{{ game.entryFee }}分</strong>
+              </button>
+            </div>
+          </div>
+        </div>
+      </transition>
+
+      <transition name="fade">
         <div v-if="showReward" class="overlay" @click="showReward = false">
           <div class="dialog" @click.stop>
             <h3>奖励中心</h3>
@@ -129,8 +149,8 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { gameState, getPlayer, socket } from '../socket'
+import { useRoute, useRouter } from 'vue-router'
+import { gameState, getPlayer, getPlayMode, socket } from '../socket'
 
 import cardChineseChess from '../../img/card_chinese_chess_transparent.png'
 import cardEggSmash from '../../img/card_egg_smash.png'
@@ -142,14 +162,19 @@ import cardQuickQa from '../../img/card_quick_qa_transparent.png'
 import cardScissorsRockPaper from '../../img/card_scissors_rock_paper.png'
 
 const router = useRouter()
+const route = useRoute()
 const player = computed(() => getPlayer())
 const matching = ref(false)
 const selectedGameKey = ref('')
 const showReward = ref(false)
 const showRules = ref(false)
+const showCreateRoom = ref(false)
 const toastMessage = ref('')
 
 let toastTimer = null
+let matchedHandler = null
+let kickedHandler = null
+let requeuedHandler = null
 
 const gameCards = [
   { key: 'rock_paper_scissors', name: '剪刀石头布', image: cardScissorsRockPaper, tag: '双人对战', entryFee: 10 },
@@ -163,11 +188,14 @@ const gameCards = [
 ]
 
 const utilities = [
-  { key: 'record', label: '积分记录', desc: '明细查询', icon: '/assets/lobby/feature-record.png' },
+  { key: 'create', label: '创建房间', desc: '邀请好友', icon: '/assets/lobby/feature-record.png' },
   { key: 'results', label: '我的战绩', desc: '历史成绩', icon: '/assets/lobby/feature-achievement.png' },
   { key: 'leaderboard', label: '排行榜', desc: '实时排名', icon: '/assets/lobby/feature-ranking.png' },
   { key: 'reward', label: '兑奖区', desc: '兑换好礼', icon: '/assets/lobby/feature-reward.png' }
 ]
+
+const isTestMode = computed(() => getPlayMode() === 'test')
+const modeLabel = computed(() => isTestMode.value ? '测试平台' : '真人匹配')
 
 const selectedGameName = computed(() => {
   return gameCards.find((item) => item.key === selectedGameKey.value)?.name || '游戏对局'
@@ -181,6 +209,32 @@ const playerInitial = computed(() => {
 onMounted(() => {
   if (!player.value) {
     router.push('/')
+    return
+  }
+
+  matchedHandler = (event) => {
+    const room = event.detail
+    matching.value = false
+    gameState.currentRoom = room
+    gameState.currentGame = room.gameState
+    router.push(`/game/${room.roomId}`)
+  }
+  kickedHandler = (event) => {
+    matching.value = false
+    showToast(event.detail?.message || '已返回大厅')
+  }
+  requeuedHandler = (event) => {
+    selectedGameKey.value = event.detail?.gameType || selectedGameKey.value
+    matching.value = true
+    showToast(event.detail?.message || '已重新匹配')
+  }
+  window.addEventListener('game:matched', matchedHandler)
+  window.addEventListener('room:kicked', kickedHandler)
+  window.addEventListener('match:requeued', requeuedHandler)
+
+  if (route.query.matching) {
+    selectedGameKey.value = String(route.query.matching)
+    matching.value = true
   }
 })
 
@@ -188,6 +242,9 @@ onBeforeUnmount(() => {
   if (toastTimer) {
     clearTimeout(toastTimer)
   }
+  if (matchedHandler) window.removeEventListener('game:matched', matchedHandler)
+  if (kickedHandler) window.removeEventListener('room:kicked', kickedHandler)
+  if (requeuedHandler) window.removeEventListener('match:requeued', requeuedHandler)
 })
 
 function showToast(message) {
@@ -218,6 +275,22 @@ function joinGame(gameType) {
   selectedGameKey.value = gameType
   matching.value = true
 
+  if (!isTestMode.value) {
+    socket.emit('match:join', { gameType }, (res) => {
+      if (res?.error) {
+        matching.value = false
+        if (res.currentRoom?.roomId) {
+          gameState.currentRoom = res.currentRoom
+          gameState.currentGame = res.currentRoom.gameState
+          router.push(`/game/${res.currentRoom.roomId}`)
+          return
+        }
+        showToast(res.error)
+      }
+    })
+    return
+  }
+
   fetch('/api/bots/quick-play', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -238,6 +311,23 @@ function joinGame(gameType) {
     })
 }
 
+function createRoom(gameType) {
+  showCreateRoom.value = false
+  selectedGameKey.value = gameType
+  socket.emit('room:create', { gameType }, (res) => {
+    if (res?.error) {
+      showToast(res.error)
+      return
+    }
+    if (res?.room) {
+      gameState.currentRoom = res.room
+      gameState.currentGame = res.room.gameState
+      socket.emit('room:join', { roomId: res.room.roomId })
+      router.push(`/game/${res.room.roomId}`)
+    }
+  })
+}
+
 function cancelMatch() {
   socket.emit('match:cancel', { gameType: selectedGameKey.value || 'rock_paper_scissors' }, () => {
     matching.value = false
@@ -247,6 +337,11 @@ function cancelMatch() {
 function handleUtility(item) {
   if (item.key === 'leaderboard') {
     router.push('/leaderboard')
+    return
+  }
+
+  if (item.key === 'create') {
+    showCreateRoom.value = true
     return
   }
 
@@ -666,6 +761,40 @@ function handleUtility(item) {
   margin-top: 6px;
   font-size: 24px;
   color: #0f5de8;
+}
+
+.create-game-list {
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-height: 280px;
+  overflow: auto;
+}
+
+.create-game-list button {
+  min-height: 52px;
+  padding: 8px 10px;
+  border-radius: 14px;
+  border: 1px solid #d9e8fb;
+  background: #fff;
+  color: #17315d;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-weight: 900;
+}
+
+.create-game-list button span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  text-align: left;
+}
+
+.create-game-list button strong {
+  color: #0f5de8;
+  white-space: nowrap;
 }
 
 .toast {

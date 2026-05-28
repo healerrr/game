@@ -258,15 +258,32 @@ class Store {
     this.savePlayer(p);
   }
 
-  createRoom(gameType, players) {
+  createRoom(gameType, players, options = {}) {
     const id = this.makeId('r');
+    const playerIds = players.map(p => p.id);
+    const now = Date.now();
     const room = {
       id,
       gameType,
-      players: players.map(p => p.id),
-      status: 'waiting',
+      players: playerIds,
+      status: options.status || 'waiting',
+      mode: options.mode || 'normal',
+      visibility: options.visibility || 'public',
+      ownerId: options.ownerId || null,
+      invites: Array.isArray(options.invites) ? options.invites : [],
+      ready: options.ready || Object.fromEntries(playerIds.map(pid => [pid, false])),
+      readyDeadline: options.readyDeadline || null,
+      seatStates: options.seatStates || Object.fromEntries(playerIds.map(pid => [
+        pid,
+        {
+          ready: Boolean(options.ready?.[pid]),
+          connection: 'online',
+          intent: 'active'
+        }
+      ])),
       gameState: null,
-      createdAt: Date.now()
+      createdAt: now,
+      updatedAt: now
     };
 
     this.rooms.set(id, room);
@@ -274,6 +291,48 @@ class Store {
       p.currentRoom = id;
       this.savePlayer(p);
     });
+    this.saveRoom(room);
+    return room;
+  }
+
+  addPlayerToRoom(roomId, player) {
+    const room = this.rooms.get(roomId);
+    if (!room || !player) return null;
+
+    if (!room.players.includes(player.id)) {
+      room.players.push(player.id);
+    }
+    room.ready = room.ready || {};
+    room.ready[player.id] = false;
+    room.seatStates = room.seatStates || {};
+    room.seatStates[player.id] = {
+      ready: false,
+      connection: 'online',
+      intent: 'active'
+    };
+    room.updatedAt = Date.now();
+
+    player.currentRoom = room.id;
+    this.savePlayer(player);
+    this.saveRoom(room);
+    return room;
+  }
+
+  removePlayerFromRoom(roomId, playerId) {
+    const room = this.rooms.get(roomId);
+    const player = this.players.get(playerId);
+    if (!room) return null;
+
+    room.players = room.players.filter(pid => pid !== playerId);
+    if (room.ready) delete room.ready[playerId];
+    if (room.seatStates) delete room.seatStates[playerId];
+    room.updatedAt = Date.now();
+
+    if (player && player.currentRoom === room.id) {
+      player.currentRoom = null;
+      this.savePlayer(player);
+    }
+
     this.saveRoom(room);
     return room;
   }

@@ -79,6 +79,10 @@ app.post('/api/admin/give-points', express.json(), (req, res) => {
 // ========== 机器人管理 API ==========
 const botManager = new BotManager(io);
 
+const READY_TIMEOUT_MS = 20000;
+const DISCONNECT_GRACE_MS = 10000;
+const ACTION_TIMEOUT_FALLBACK_MS = 30000;
+
 app.post('/api/bots/start', express.json(), (req, res) => {
   const { gameType } = req.body;
   if (!gameType) return res.status(400).json({ error: '游戏类型不能为空' });
@@ -166,7 +170,10 @@ io.on('connection', (socket) => {
     const room = store.getPlayerRoom(player.id);
     const currentRoom = room && room.status !== 'finished' ? serializeRoom(room) : null;
     if (currentRoom) {
+      markSeatConnection(room, player.id, 'online', { intent: 'active' });
+      store.saveRoom(room);
       socket.join(`room:${room.id}`);
+      emitRoomUpdate(room);
     }
 
     callback({ player, currentRoom });
@@ -180,8 +187,14 @@ io.on('connection', (socket) => {
     const config = getGameConfig(gameType);
     if (!config) return callback({ error: '游戏不存在' });
 
-    if (currentPlayer.currentRoom) {
-      return callback({ error: '你已在游戏中' });
+    const blockingRoom = getBlockingRoom(currentPlayer.id);
+    if (blockingRoom) {
+      return callback({
+        error: blockingRoom.status === 'playing'
+          ? '你仍在未结束对局中，暂时不能加入其他游戏'
+          : '你已在房间中',
+        currentRoom: serializeRoom(blockingRoom)
+      });
     }
 
     store.enqueue(currentPlayer.id, gameType);
@@ -197,6 +210,143 @@ io.on('connection', (socket) => {
     }
     socket.join(`room:${roomId}`);
     if (typeof callback === 'function') callback({ success: true });
+  });
+
+  socket.on('room:create', ({ gameType }, callback) => {
+    if (!currentPlayer) return callback({ error: '请先注册' });
+
+    const config = getGameConfig(gameType);
+    if (!config) return callback({ error: '游戏不存在' });
+
+    const blockingRoom = getBlockingRoom(currentPlayer.id);
+    if (blockingRoom) {
+      return callback({ error: '你仍在未结束房间中，暂时不能创建新房间', currentRoom: serializeRoom(blockingRoom) });
+    }
+
+    store.dequeue(currentPlayer.id);
+    const room = store.createRoom(gameType, [currentPlayer], {
+      mode: 'normal',
+      visibility: 'private',
+      ownerId: currentPlayer.id
+    });
+    socket.join(`room:${room.id}`);
+    callback({ success: true, room: serializeRoom(room) });
+    broadcastUpdate();
+  });
+
+  socket.on('room:ready', ({ ready = true }, callback) => {
+    if (!currentPlayer) return callback({ error: '请先注册' });
+
+    const room = store.getPlayerRoom(currentPlayer.id);
+    if (!room) return callback({ error: '你不在房间中' });
+    if (room.status !== 'readying') return callback({ error: '当前房间不能准备' });
+
+    room.ready = room.ready || {};
+    room.seatStates = room.seatStates || {};
+    room.ready[currentPlayer.id] = Boolean(ready);
+    room.seatStates[currentPlayer.id] = {
+      ...(room.seatStates[currentPlayer.id] || {}),
+      ready: Boolean(ready),
+      connection: 'online',
+      intent: 'active'
+    };
+    room.updatedAt = Date.now();
+    ensureReadyDeadline(room);
+    store.saveRoom(room);
+    emitRoomUpdate(room);
+    maybeStartReadyRoom(room);
+    callback({ success: true, room: serializeRoom(room) });
+  });
+
+  socket.on('room:leave_current', ({ confirmForfeit = false } = {}, callback) => {
+    if (!currentPlayer) return callback?.({ error: '请先注册' });
+    const room = store.getPlayerRoom(currentPlayer.id);
+    if (!room) return callback?.({ success: true });
+
+    const result = handlePlayerLeaveRoom(room, currentPlayer.id, {
+      confirmForfeit,
+      reason: 'leave_lobby'
+    });
+    callback?.(result);
+  });
+
+  socket.on('game:forfeit', (payload = {}, callback) => {
+    if (!currentPlayer) return callback?.({ error: '请先注册' });
+    const room = store.getPlayerRoom(currentPlayer.id);
+    if (!room) return callback?.({ error: '你不在对局中' });
+    if (room.status !== 'playing') return callback?.({ error: '当前对局尚未开始' });
+
+    forfeitPlayer(room, currentPlayer.id, payload.reason || 'forfeit');
+    callback?.({ success: true });
+  });
+
+  socket.on('players:list', (callback) => {
+    if (!currentPlayer) return callback({ error: '请先注册' });
+    const players = Array.from(store.players.values())
+      .filter(p => !p.isBot && p.id !== currentPlayer.id)
+      .map(p => ({
+        id: p.id,
+        nickname: p.nickname,
+        busNumber: p.busNumber,
+        online: Boolean(p.online),
+        busy: Boolean(getBlockingRoom(p.id))
+      }));
+    callback({ players });
+  });
+
+  socket.on('room:invite', ({ roomId, playerId }, callback) => {
+    if (!currentPlayer) return callback({ error: '请先注册' });
+    const room = store.getRoom(roomId);
+    if (!room) return callback({ error: '房间不存在' });
+    if (room.ownerId !== currentPlayer.id) return callback({ error: '只有房主可以邀请玩家' });
+    if (room.status !== 'readying') return callback({ error: '房间已开始' });
+
+    const target = store.getPlayer(playerId);
+    if (!target || target.isBot) return callback({ error: '玩家不存在' });
+    if (!target.online) return callback({ error: '对方当前不在线' });
+    if (getBlockingRoom(target.id)) return callback({ error: '对方正在其他房间中' });
+
+    const config = getGameConfig(room.gameType);
+    if (room.players.length >= config.maxPlayers) return callback({ error: '房间已满' });
+
+    room.invites = room.invites || [];
+    if (!room.invites.includes(target.id)) room.invites.push(target.id);
+    room.updatedAt = Date.now();
+    store.saveRoom(room);
+
+    io.to(`player:${target.id}`).emit('room:invited', {
+      room: serializeRoom(room),
+      from: {
+        id: currentPlayer.id,
+        nickname: currentPlayer.nickname,
+        busNumber: currentPlayer.busNumber
+      }
+    });
+    callback({ success: true });
+  });
+
+  socket.on('room:invite:accept', ({ roomId }, callback) => {
+    if (!currentPlayer) return callback({ error: '请先注册' });
+    const room = store.getRoom(roomId);
+    if (!room) return callback({ error: '房间不存在' });
+    if (room.status !== 'readying') return callback({ error: '房间已开始' });
+    if (!room.invites?.includes(currentPlayer.id)) return callback({ error: '邀请已失效' });
+    if (getBlockingRoom(currentPlayer.id)) return callback({ error: '你仍在未结束房间中' });
+
+    const config = getGameConfig(room.gameType);
+    if (room.players.length >= config.maxPlayers) return callback({ error: '房间已满' });
+
+    store.addPlayerToRoom(room.id, currentPlayer);
+    const updatedRoom = store.getRoom(room.id);
+    updatedRoom.invites = (updatedRoom.invites || []).filter(pid => pid !== currentPlayer.id);
+    ensureReadyDeadline(updatedRoom);
+    store.saveRoom(updatedRoom);
+    socket.join(`room:${updatedRoom.id}`);
+
+    const payload = serializeRoom(updatedRoom);
+    io.to(`player:${currentPlayer.id}`).emit('game:matched', payload);
+    emitRoomUpdate(updatedRoom);
+    callback({ success: true, room: payload });
   });
 
   // 观战：加入房间并标记为观战者
@@ -274,6 +424,9 @@ io.on('connection', (socket) => {
 
     const engine = getEngine(room.gameType);
     if (!engine) return;
+    if (room.status !== 'playing') return;
+
+    markSeatConnection(room, currentPlayer.id, 'online', { intent: 'active' });
 
     // 处理 'next_round' 操作
     if (action.type === 'next_round') {
@@ -283,16 +436,11 @@ io.on('connection', (socket) => {
     } else if (room.status === 'playing') {
       room.gameState = engine.update(room.gameState, action, currentPlayer.id);
     }
+    skipUnavailableTurns(room);
     store.saveRoom(room);
 
     // 广播游戏状态更新到房间
-    io.to(`room:${room.id}`).emit('game:state', {
-      gameState: room.gameState,
-      players: room.players.map(pid => {
-        const p = store.getPlayer(pid);
-        return p ? { id: p.id, nickname: p.nickname, busNumber: p.busNumber } : null;
-      }).filter(Boolean)
-    });
+    emitGameState(room);
 
     // 游戏结束
     if (room.gameState.phase === 'finished') {
@@ -320,31 +468,407 @@ io.on('connection', (socket) => {
       // 如果在房间中，通知其余玩家
       const room = store.getPlayerRoom(currentPlayer.id);
       if (room) {
+        markSeatConnection(room, currentPlayer.id, 'offline');
+        store.saveRoom(room);
+        emitRoomUpdate(room);
+
         const otherPlayers = room.players.filter(pid => pid !== currentPlayer.id);
         otherPlayers.forEach((pid) => {
           io.to(`player:${pid}`).emit('game:opponent_disconnected', {
-            nickname: currentPlayer.nickname
+            nickname: currentPlayer.nickname,
+            graceMs: DISCONNECT_GRACE_MS
           });
         });
-        // 30秒后仍未重连，直接结束当前房间
-        setTimeout(() => {
-          const p = store.getPlayer(currentPlayer.id);
-          if (p && !p.online && store.getPlayerRoom(currentPlayer.id)) {
+
+        if (room.status === 'playing' && room.players.length === 2) {
+          setTimeout(() => {
+            const p = store.getPlayer(currentPlayer.id);
             const r = store.getPlayerRoom(currentPlayer.id);
-            if (r) {
-              r.gameState.phase = 'finished';
-              r.gameState.finalWinner = otherPlayers[0] || null;
-              r.gameState.winningPlayers = otherPlayers;
-              handleGameEnd(r);
+            if (p && !p.online && r?.status === 'playing') {
+              forfeitPlayer(r, currentPlayer.id, 'disconnect_timeout');
             }
-          }
-        }, 30000);
+          }, DISCONNECT_GRACE_MS);
+        } else if (room.status === 'playing' && isTwoVsTwoRoom(room)) {
+          skipUnavailableTurns(room);
+          store.saveRoom(room);
+          emitGameState(room);
+        }
       }
 
       broadcastUpdate();
     }
   });
 });
+
+function getBlockingRoom(playerId) {
+  const room = store.getPlayerRoom(playerId);
+  if (!room || room.status === 'finished') return null;
+  return room;
+}
+
+function getRoomPlayerSummaries(room) {
+  if (!room) return [];
+
+  return room.players.map(pid => {
+    const p = store.getPlayer(pid);
+    const seat = room.seatStates?.[pid] || {};
+    return p ? {
+      id: p.id,
+      nickname: p.nickname || p.name,
+      busNumber: p.busNumber,
+      isBot: p.isBot || false,
+      ready: Boolean(room.ready?.[pid] || seat.ready),
+      connection: seat.connection || (p.online ? 'online' : 'offline'),
+      intent: seat.intent || 'active'
+    } : null;
+  }).filter(Boolean);
+}
+
+function emitRoomUpdate(room) {
+  if (!room) return;
+  io.to(`room:${room.id}`).emit('room:update', serializeRoom(room));
+}
+
+function emitGameState(room) {
+  if (!room) return;
+  io.to(`room:${room.id}`).emit('game:state', {
+    gameState: room.gameState,
+    players: getRoomPlayerSummaries(room),
+    room: serializeRoom(room)
+  });
+}
+
+function notifyRoomPlayers(room, eventName = 'game:matched') {
+  const payload = serializeRoom(room);
+  room.players.forEach(pid => {
+    io.to(`player:${pid}`).emit(eventName, payload);
+  });
+}
+
+function isRoomFull(room) {
+  const config = getGameConfig(room.gameType);
+  return Boolean(config && room.players.length >= config.maxPlayers);
+}
+
+function ensureReadyDeadline(room) {
+  if (!room || room.status !== 'readying') return;
+  if (isRoomFull(room)) {
+    room.readyDeadline = room.readyDeadline || (Date.now() + READY_TIMEOUT_MS);
+  } else {
+    room.readyDeadline = null;
+  }
+}
+
+function areAllRoomPlayersReady(room) {
+  return isRoomFull(room) && room.players.every(pid => room.ready?.[pid]);
+}
+
+function maybeStartReadyRoom(room) {
+  if (!room || room.status !== 'readying' || !areAllRoomPlayersReady(room)) return false;
+
+  const engine = getEngine(room.gameType);
+  if (!engine) return false;
+
+  room.status = 'playing';
+  room.readyDeadline = null;
+  room.gameState = engine.init(room, room.players);
+  room.ready = Object.fromEntries(room.players.map(pid => [pid, true]));
+  room.seatStates = room.seatStates || {};
+  room.players.forEach(pid => {
+    const p = store.getPlayer(pid);
+    room.seatStates[pid] = {
+      ...(room.seatStates[pid] || {}),
+      ready: true,
+      connection: p?.online === false ? 'offline' : 'online',
+      intent: 'active'
+    };
+  });
+  room.updatedAt = Date.now();
+  store.saveRoom(room);
+
+  io.to(`room:${room.id}`).emit('room:started', serializeRoom(room));
+  emitGameState(room);
+  broadcastUpdate();
+  return true;
+}
+
+function handleReadyTimeout(room) {
+  if (!room || room.status !== 'readying' || !room.readyDeadline) return;
+  if (Date.now() < room.readyDeadline) return;
+  if (areAllRoomPlayersReady(room)) {
+    maybeStartReadyRoom(room);
+    return;
+  }
+
+  const unreadyIds = room.players.filter(pid => !room.ready?.[pid]);
+  const readyIds = room.players.filter(pid => room.ready?.[pid]);
+
+  unreadyIds.forEach(pid => {
+    io.to(`player:${pid}`).emit('room:kicked', {
+      roomId: room.id,
+      reason: 'ready_timeout',
+      message: '20秒内未准备，已返回大厅'
+    });
+  });
+
+  if (room.visibility === 'public') {
+    const gameType = room.gameType;
+    store.removeRoom(room.id);
+    readyIds.forEach(pid => {
+      const player = store.getPlayer(pid);
+      if (!player || !player.online) return;
+      store.enqueue(pid, gameType);
+      io.to(`player:${pid}`).emit('match:requeued', {
+        gameType,
+        message: '有人未准备，已为你重新匹配'
+      });
+    });
+    broadcastUpdate();
+    return;
+  }
+
+  unreadyIds.forEach(pid => store.removePlayerFromRoom(room.id, pid));
+  const updatedRoom = store.getRoom(room.id);
+  if (!updatedRoom || updatedRoom.players.length === 0) {
+    store.removeRoom(room.id);
+    broadcastUpdate();
+    return;
+  }
+
+  ensureReadyDeadline(updatedRoom);
+  store.saveRoom(updatedRoom);
+  emitRoomUpdate(updatedRoom);
+  broadcastUpdate();
+}
+
+function markSeatConnection(room, playerId, connection, extra = {}) {
+  if (!room) return;
+  room.seatStates = room.seatStates || {};
+  room.seatStates[playerId] = {
+    ...(room.seatStates[playerId] || {}),
+    connection,
+    ...extra
+  };
+  if (extra.ready !== undefined) {
+    room.ready = room.ready || {};
+    room.ready[playerId] = Boolean(extra.ready);
+  }
+  room.updatedAt = Date.now();
+}
+
+function isTwoVsTwoRoom(room) {
+  return room?.gameType === 'guandan' && room.players.length === 4;
+}
+
+function getUnavailablePlayerIds(room) {
+  const result = new Set();
+  for (const pid of room.players) {
+    const seat = room.seatStates?.[pid];
+    if (seat?.connection === 'offline' || seat?.intent === 'abandoned') {
+      result.add(pid);
+    }
+  }
+  return result;
+}
+
+function getNextAvailablePlayer(players, currentPlayer, unavailable, finishedOrder = []) {
+  const finished = new Set(finishedOrder);
+  const active = players.filter(pid => !finished.has(pid) && !unavailable.has(pid));
+  if (active.length === 0) return null;
+
+  const currentIndex = players.indexOf(currentPlayer);
+  for (let offset = 1; offset <= players.length; offset++) {
+    const candidate = players[(currentIndex + offset + players.length) % players.length];
+    if (active.includes(candidate)) return candidate;
+  }
+  return active[0];
+}
+
+function skipUnavailableTurns(room) {
+  if (!isTwoVsTwoRoom(room) || room.status !== 'playing' || !room.gameState) return false;
+
+  const state = room.gameState;
+  const unavailable = getUnavailablePlayerIds(room);
+  if (unavailable.size === 0) return false;
+
+  let changed = false;
+  for (let i = 0; i < room.players.length; i++) {
+    const current = state.currentPlayer;
+    if (!current || !unavailable.has(current)) break;
+
+    if (room.gameType === 'guandan') {
+      state.passedPlayers = state.passedPlayers || [];
+      if (state.lastPattern && state.lastLeadPlayer !== current && !state.passedPlayers.includes(current)) {
+        state.passedPlayers.push(current);
+      }
+
+      const finishedOrder = state.finishedOrder || [];
+      const nextPlayer = getNextAvailablePlayer(state.players || room.players, current, unavailable, finishedOrder);
+      if (!nextPlayer) break;
+
+      const finished = new Set(finishedOrder);
+      const activeOthers = (state.players || room.players).filter(pid => (
+        !finished.has(pid) &&
+        !unavailable.has(pid) &&
+        pid !== state.lastLeadPlayer
+      ));
+
+      if (state.lastPattern && state.lastLeadPlayer && !unavailable.has(state.lastLeadPlayer) &&
+          activeOthers.every(pid => state.passedPlayers.includes(pid))) {
+        state.currentPlayer = state.lastLeadPlayer;
+        state.lastPlay = null;
+        state.lastPattern = null;
+        state.passedPlayers = [];
+      } else {
+        state.currentPlayer = nextPlayer;
+      }
+    } else {
+      const nextPlayer = getNextAvailablePlayer(state.players || room.players, current, unavailable);
+      if (!nextPlayer) break;
+      state.currentPlayer = nextPlayer;
+    }
+
+    state.timerStarted = Date.now();
+    changed = true;
+  }
+
+  return changed;
+}
+
+function resolveCurrentActorId(room) {
+  const state = room.gameState || {};
+  if (room.players.includes(state.currentPlayer)) return state.currentPlayer;
+
+  if (room.gameType === 'chess') {
+    if (state.currentPlayer === 'red') return state.players?.[0] || room.players[0];
+    if (state.currentPlayer === 'black') return state.players?.[1] || room.players[1];
+  }
+
+  if (room.gameType === 'rock_paper_scissors' && state.phase === 'choose') {
+    const pending = room.players.filter(pid => !state.choices?.[pid]);
+    return pending[0] || null;
+  }
+
+  if (room.gameType === 'quiz' && state.phase === 'question') {
+    const pending = room.players.filter(pid => !state.answeredPlayers?.includes(pid));
+    return pending[0] || null;
+  }
+
+  return null;
+}
+
+function handleActionTimeout(room) {
+  if (!room || room.mode === 'quick' || room.status !== 'playing' || room.players.length !== 2) return;
+  const state = room.gameState;
+  if (!state || state.phase === 'finished' || !state.timerStarted) return;
+
+  const timeoutMs = Number(state.timer || 0) > 0
+    ? Number(state.timer) * 1000
+    : ACTION_TIMEOUT_FALLBACK_MS;
+  if (Date.now() - Number(state.timerStarted) < timeoutMs) return;
+
+  const loserId = resolveCurrentActorId(room);
+  if (!loserId) return;
+  forfeitPlayer(room, loserId, 'action_timeout');
+}
+
+function forfeitPlayer(room, loserId, reason) {
+  if (!room || room.status === 'finished') return;
+  const winnerId = room.players.find(pid => pid !== loserId) || null;
+  room.gameState = room.gameState || {};
+  room.gameState.phase = 'finished';
+  room.gameState.finalWinner = winnerId;
+  room.gameState.winner = winnerId;
+  room.gameState.forfeit = { playerId: loserId, reason };
+  room.gameState.winningPlayers = winnerId ? [winnerId] : [];
+  handleGameEnd(room);
+}
+
+function handlePlayerLeaveRoom(room, playerId, { confirmForfeit = false, reason = 'leave' } = {}) {
+  if (!room || room.status === 'finished') return { success: true };
+
+  if (room.status === 'readying') {
+    const remainingIds = room.players.filter(pid => pid !== playerId);
+    io.to(`player:${playerId}`).emit('room:left', { roomId: room.id });
+
+    if (room.visibility === 'public') {
+      const gameType = room.gameType;
+      store.removeRoom(room.id);
+      remainingIds.forEach(pid => {
+        const p = store.getPlayer(pid);
+        if (!p?.online) return;
+        store.enqueue(pid, gameType);
+        io.to(`player:${pid}`).emit('match:requeued', {
+          gameType,
+          message: '有玩家离开，已为你重新匹配'
+        });
+      });
+      broadcastUpdate();
+      return { success: true, left: true };
+    }
+
+    const updatedRoom = store.removePlayerFromRoom(room.id, playerId);
+    if (!updatedRoom || updatedRoom.players.length === 0) {
+      store.removeRoom(room.id);
+    } else {
+      ensureReadyDeadline(updatedRoom);
+      store.saveRoom(updatedRoom);
+      emitRoomUpdate(updatedRoom);
+    }
+    broadcastUpdate();
+    return { success: true, left: true };
+  }
+
+  if (room.status === 'playing' && room.players.length === 2) {
+    if (!confirmForfeit) {
+      return {
+        error: '返回大厅将视为认输',
+        requiresConfirmation: true
+      };
+    }
+    forfeitPlayer(room, playerId, reason);
+    return { success: true, forfeited: true };
+  }
+
+  if (room.status === 'playing' && isTwoVsTwoRoom(room)) {
+    markSeatConnection(room, playerId, 'online', { intent: 'abandoned' });
+    skipUnavailableTurns(room);
+    store.saveRoom(room);
+    emitRoomUpdate(room);
+    emitGameState(room);
+    io.to(`player:${playerId}`).emit('room:abandoned', {
+      roomId: room.id,
+      message: '本局结束前不能参与其他游戏'
+    });
+    return { success: true, abandoned: true };
+  }
+
+  markSeatConnection(room, playerId, 'online', { intent: 'abandoned' });
+  store.saveRoom(room);
+  emitRoomUpdate(room);
+  return { success: true, abandoned: true };
+}
+
+function monitorRooms() {
+  for (const room of Array.from(store.rooms.values())) {
+    if (room.status === 'readying') {
+      handleReadyTimeout(room);
+      continue;
+    }
+
+    if (room.status !== 'playing') continue;
+    handleActionTimeout(room);
+    const latest = store.getRoom(room.id);
+    if (latest?.status === 'playing' && skipUnavailableTurns(latest)) {
+      store.saveRoom(latest);
+      emitGameState(latest);
+    }
+  }
+}
+
+function startRoomMonitor() {
+  setInterval(monitorRooms, 1000);
+}
 
 // ========== 游戏结束处理 ==========
 function handleGameEnd(room) {
@@ -384,6 +908,7 @@ function handleGameEnd(room) {
   io.to(`room:${room.id}`).emit('game:result', {
     winner: winnerId,
     winningPlayers: winningPlayers,
+    room: serializeRoom(room),
     players: room.players.map(pid => {
       const p = store.getPlayer(pid);
       const isWinner = winningPlayers.includes(pid);
@@ -512,15 +1037,19 @@ function serializeRoom(room) {
 
   return {
     roomId: room.id,
+    id: room.id,
     gameType: room.gameType,
     gameName: getGameConfig(room.gameType)?.name || room.gameType,
-    players: room.players.map(pid => {
-      const p = store.getPlayer(pid);
-      return p
-        ? { id: p.id, nickname: p.nickname || p.name, busNumber: p.busNumber, isBot: p.isBot || false }
-        : null;
-    }).filter(Boolean),
+    minPlayers: getGameConfig(room.gameType)?.minPlayers || room.players.length,
+    maxPlayers: getGameConfig(room.gameType)?.maxPlayers || room.players.length,
+    players: getRoomPlayerSummaries(room),
     status: room.status,
+    mode: room.mode || 'normal',
+    visibility: room.visibility || 'public',
+    ownerId: room.ownerId || null,
+    ready: room.ready || {},
+    readyDeadline: room.readyDeadline || null,
+    seatStates: room.seatStates || {},
     gameState: room.gameState
   };
 }
@@ -560,32 +1089,17 @@ function cleanupPlayerBotRooms(playerId) {
 // ========== 房间状态推送 ==========
 // 当匹配成功后，通知房间玩家
 const originalCreateRoom = store.createRoom.bind(store);
-store.createRoom = function(gameType, players) {
-  const room = originalCreateRoom(gameType, players);
-  const engine = getEngine(gameType);
-  const pids = players.map(p => p.id);
-
-  if (engine) {
-    room.gameState = engine.init(room, pids);
-  }
-  room.status = 'playing';
-  store.saveRoom(room);
-
-  // 创建 Socket.io 房间
-  players.forEach(p => {
-    const sockets = io.sockets.adapter.rooms;
-    // 通过emit给特定玩家
-    io.to(`player:${p.id}`).emit('game:matched', {
-      roomId: room.id,
-      gameType,
-      players: pids.map(pid => {
-        const pl = store.getPlayer(pid);
-        return pl ? { id: pl.id, nickname: pl.nickname, busNumber: pl.busNumber } : null;
-      }).filter(Boolean),
-      gameState: room.gameState
-    });
+store.createRoom = function(gameType, players, options = {}) {
+  const room = originalCreateRoom(gameType, players, {
+    ...options,
+    status: options.status || 'readying',
+    mode: options.mode || 'normal',
+    visibility: options.visibility || 'public'
   });
 
+  ensureReadyDeadline(room);
+  store.saveRoom(room);
+  notifyRoomPlayers(room, 'game:matched');
   return room;
 };
 
@@ -730,6 +1244,7 @@ function startQuickPlayLoop(room, bots) {
       io.to(`room:${room.id}`).emit('game:result', {
         winner: winnerId,
         winningPlayers,
+        room: serializeRoom(room),
         players: room.players.map(pid => {
           const p = store.getPlayer(pid);
           const isWinner = winningPlayers.includes(pid);
@@ -790,7 +1305,16 @@ app.post('/api/bots/quick-play', express.json(), (req, res) => {
   const allPlayers = [player, ...bots];
 
   // 使用原始 createRoom（不广播 game:matched）
-  const room = originalCreateRoom(gameType, allPlayers);
+  const room = originalCreateRoom(gameType, allPlayers, {
+    mode: 'quick',
+    status: 'playing',
+    visibility: 'quick',
+    ready: Object.fromEntries(allPlayers.map(p => [p.id, true])),
+    seatStates: Object.fromEntries(allPlayers.map(p => [
+      p.id,
+      { ready: true, connection: 'online', intent: 'active' }
+    ]))
+  });
 
   // 初始化游戏状态
   const engine = getEngine(gameType);
@@ -799,15 +1323,7 @@ app.post('/api/bots/quick-play', express.json(), (req, res) => {
   room.status = 'playing';
   store.saveRoom(room);
 
-  const matchPayload = {
-    roomId: room.id,
-    gameType,
-    players: allPlayers.map(p => ({
-      id: p.id, nickname: p.nickname || p.name,
-      busNumber: p.busNumber, isBot: p.isBot || false
-    })),
-    gameState: room.gameState
-  };
+  const matchPayload = serializeRoom(room);
 
   // 只给真人玩家发送 game:matched
   io.to(`player:${playerId}`).emit('game:matched', matchPayload);
@@ -859,6 +1375,7 @@ async function startServer() {
   });
 
   startMatchmakingLoop();
+  startRoomMonitor();
 }
 
 startServer().catch((error) => {

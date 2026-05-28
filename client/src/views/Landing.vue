@@ -58,6 +58,14 @@
           <i>›</i>
         </button>
 
+        <button
+          class="test-enter-btn"
+          :disabled="!nickname.trim() || !busNumber || submitting"
+          @click="handleTestSubmit"
+        >
+          进入游戏测试平台
+        </button>
+
         <p v-if="submitError" class="submit-error">{{ submitError }}</p>
 
         <p class="reward-note">
@@ -72,7 +80,7 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { gameState, socket, setPlayer } from '../socket'
+import { gameState, socket, setPlayer, setPlayMode } from '../socket'
 
 const router = useRouter()
 const nickname = ref('')
@@ -94,7 +102,8 @@ function rememberPlayer(player) {
   )
 }
 
-function toLobby(player) {
+function toLobby(player, mode = 'normal') {
+  setPlayMode(mode)
   rememberPlayer(player)
   router.push('/lobby')
 }
@@ -125,7 +134,7 @@ function restorePlayer() {
         if (res?.player && res?.currentRoom) {
           resumeRoom(res.player, res.currentRoom)
         } else if (res?.player) {
-          toLobby(res.player)
+          toLobby(res.player, localStorage.getItem('bus_game_play_mode') || 'normal')
         } else {
           localStorage.removeItem('bus_game_player')
         }
@@ -170,6 +179,14 @@ function ensureSocketConnected() {
 }
 
 async function handleSubmit() {
+  await handleSubmitWithMode('normal')
+}
+
+async function handleTestSubmit() {
+  await handleSubmitWithMode('test')
+}
+
+async function handleSubmitWithMode(mode) {
   if (!nickname.value.trim() || !busNumber.value) return
   if (submitting.value) return
 
@@ -197,7 +214,7 @@ async function handleSubmit() {
         return
       }
       if (res?.player) {
-        toLobby(res.player)
+        toLobby(res.player, mode)
         return
       }
       submitError.value = '进入失败，请稍后重试'
@@ -221,7 +238,7 @@ onUnmounted(() => {
   padding: 0 14px 30px;
   position: relative;
   overflow: hidden;
-  background: linear-gradient(180deg, #0a64ef 0%, #47b4ff 46%, #eef9ff 88%);
+  /* background: linear-gradient(180deg, #0a64ef 0%, #47b4ff 46%, #eef9ff 88%); */
 }
 
 .landing-page::before,
@@ -234,21 +251,15 @@ onUnmounted(() => {
   z-index: 0;
 }
 
-.landing-page::before {
+/* .landing-page::before {
   top: 0;
   height: 430px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.04)),
-    url('/assets/ui-ref/landing.png') center top / 100% auto no-repeat;
 }
 
 .landing-page::after {
   bottom: 0;
   height: 220px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(238, 249, 255, 0.1)),
-    url('/assets/ui-ref/landing.png') center bottom / 100% auto no-repeat;
-}
+} */
 
 .landing-shell {
   width: min(100%, 460px);
@@ -434,6 +445,23 @@ onUnmounted(() => {
   cursor: not-allowed;
   box-shadow: none;
   filter: grayscale(0.2);
+}
+
+.test-enter-btn {
+  margin-top: 12px;
+  width: 100%;
+  min-height: 48px;
+  border-radius: 18px;
+  border: 1px solid #bcd5fb;
+  background: linear-gradient(180deg, #ffffff, #eef6ff);
+  color: #1764df;
+  font-size: 16px;
+  font-weight: 900;
+}
+
+.test-enter-btn:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
 }
 
 .reward-note {

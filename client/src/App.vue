@@ -6,15 +6,50 @@
       <span class="broadcast-icon">📣</span>
       <span class="broadcast-text">{{ gameState.broadcastMessage.message }}</span>
     </div>
+
+    <div v-if="activeInvite" class="invite-banner">
+      <div>
+        <strong>{{ activeInvite.from?.nickname || '玩家' }} 邀请你加入房间</strong>
+        <span>{{ activeInvite.room?.gameName || '游戏对局' }}</span>
+      </div>
+      <button type="button" @click="acceptInvite(activeInvite)">加入</button>
+      <button type="button" class="ghost" @click="dismissInvite(activeInvite)">忽略</button>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { gameState } from './socket'
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
+import { gameState, socket } from './socket'
+
+const router = useRouter()
+const activeInvite = computed(() => gameState.invitations[0] || null)
 
 window.addEventListener('error', (e) => {
   console.error('App Error:', e.error?.message || e.message)
 })
+
+function dismissInvite(invite) {
+  gameState.invitations = gameState.invitations.filter(item => item !== invite)
+}
+
+function acceptInvite(invite) {
+  socket.emit('room:invite:accept', { roomId: invite.room?.roomId }, (res) => {
+    if (res?.error) {
+      window.alert(res.error)
+      dismissInvite(invite)
+      return
+    }
+    if (res?.room) {
+      gameState.currentRoom = res.room
+      gameState.currentGame = res.room.gameState
+      socket.emit('room:join', { roomId: res.room.roomId })
+      dismissInvite(invite)
+      router.push(`/game/${res.room.roomId}`)
+    }
+  })
+}
 </script>
 
 <style>
@@ -75,46 +110,8 @@ body {
   position: relative;
   overflow-x: hidden;
   min-height: 100vh;
-  background:
-    radial-gradient(circle at 18% 2%, rgba(255, 255, 255, 0.48), transparent 25%),
-    radial-gradient(circle at 82% 12%, rgba(255, 223, 92, 0.3), transparent 18%),
-    linear-gradient(180deg, #0063f0 0%, #108cff 37%, #91dcff 74%, #eaf9ff 100%);
 }
 
-.app-container::before,
-.app-container::after {
-  content: '';
-  position: fixed;
-  left: 0;
-  right: 0;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.app-container::before {
-  top: 0;
-  height: 48vh;
-  background:
-    radial-gradient(circle at 9% 20%, rgba(255, 255, 255, 0.78) 0 28px, transparent 30px),
-    radial-gradient(circle at 17% 23%, rgba(255, 255, 255, 0.44) 0 50px, transparent 52px),
-    radial-gradient(circle at 89% 16%, rgba(255, 255, 255, 0.68) 0 34px, transparent 36px),
-    radial-gradient(circle at 80% 19%, rgba(255, 255, 255, 0.38) 0 56px, transparent 58px),
-    radial-gradient(circle at 62% 10%, rgba(255, 227, 95, 0.26) 0 8px, transparent 9px),
-    radial-gradient(circle at 28% 12%, rgba(255, 123, 111, 0.26) 0 6px, transparent 7px),
-    linear-gradient(180deg, rgba(255, 255, 255, 0) 58%, rgba(136, 205, 255, 0.28) 100%);
-  opacity: 0.76;
-}
-
-.app-container::after {
-  bottom: -1px;
-  height: 170px;
-  background:
-    radial-gradient(circle at 8% 100%, #18a978 0 58px, transparent 60px),
-    radial-gradient(circle at 18% 105%, #51c97b 0 78px, transparent 80px),
-    radial-gradient(circle at 82% 105%, #4fbd73 0 76px, transparent 78px),
-    radial-gradient(circle at 93% 100%, #13996f 0 62px, transparent 64px),
-    linear-gradient(180deg, rgba(255, 255, 255, 0), rgba(226, 255, 239, 0.9) 70%, #ecfff4);
-}
 
 .app-container > * {
   position: relative;
@@ -164,6 +161,54 @@ input {
 
 .broadcast-icon {
   font-size: 20px;
+}
+
+.invite-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 18px;
+  z-index: 10000;
+  width: min(92vw, 420px);
+  transform: translateX(-50%);
+  padding: 12px;
+  border-radius: 18px;
+  background: #fff;
+  border: 1px solid #cfe2fb;
+  box-shadow: var(--shadow-strong);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.invite-banner strong,
+.invite-banner span {
+  display: block;
+}
+
+.invite-banner strong {
+  color: #17315d;
+  font-size: 14px;
+}
+
+.invite-banner span {
+  margin-top: 2px;
+  color: #6b82ac;
+  font-size: 12px;
+}
+
+.invite-banner button {
+  min-height: 36px;
+  padding: 0 14px;
+  border-radius: 12px;
+  background: #1764df;
+  color: #fff;
+  font-weight: 900;
+}
+
+.invite-banner .ghost {
+  background: #eef5ff;
+  color: #1764df;
 }
 
 @keyframes slideDown {

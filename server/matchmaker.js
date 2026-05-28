@@ -18,40 +18,30 @@ async function tryMatch() {
         return p && p.online && !p.currentRoom;
       });
 
-      if (validPlayers.length < config.minPlayers) continue;
-
-      validPlayers.sort((a, b) => {
-        const pa = store.getPlayer(a);
-        const pb = store.getPlayer(b);
-        return (pa ? pa.points : 0) - (pb ? pb.points : 0);
-      });
-
-      const matched = [];
-      const players = validPlayers.map(id => store.getPlayer(id)).filter(Boolean);
-
-      for (let i = 0; i < players.length && matched.length < config.maxPlayers; i++) {
-        if (matched.length === 0) {
-          matched.push(players[i]);
-        } else {
-          const lastPoints = matched[matched.length - 1].points;
-          if (Math.abs(players[i].points - lastPoints) <= 200) {
-            matched.push(players[i]);
-          }
+      const roomSize = config.maxPlayers || config.minPlayers;
+      if (validPlayers.length < roomSize) {
+        const staleIds = queue.filter(pid => !validPlayers.includes(pid));
+        if (staleIds.length > 0) {
+          staleIds.forEach(pid => {
+            const idx = queue.indexOf(pid);
+            if (idx !== -1) queue.splice(idx, 1);
+          });
+          store.saveQueue(gameType);
         }
-        if (matched.length >= config.minPlayers && matched.length <= config.maxPlayers) {
-          break;
-        }
+        continue;
       }
 
-      if (matched.length >= config.minPlayers) {
+      const players = validPlayers.map(id => store.getPlayer(id)).filter(Boolean);
+      while (players.length >= roomSize) {
+        const matched = players.splice(0, roomSize);
         matched.forEach(p => {
           const idx = queue.indexOf(p.id);
           if (idx !== -1) queue.splice(idx, 1);
         });
-        store.saveQueue(gameType);
-
         results.push({ gameType, players: matched });
       }
+
+      store.saveQueue(gameType);
     }
 
     return results;
