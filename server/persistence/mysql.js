@@ -102,6 +102,30 @@ async function ensureSchema() {
         ON DELETE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `);
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS game_records (
+      id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      player_id VARCHAR(80) NOT NULL,
+      room_id VARCHAR(80) NOT NULL,
+      game_type VARCHAR(80) NOT NULL,
+      game_name VARCHAR(120) NOT NULL,
+      result VARCHAR(16) NOT NULL,
+      score_delta INT NOT NULL DEFAULT 0,
+      points_before INT NOT NULL DEFAULT 0,
+      points_after INT NOT NULL DEFAULT 0,
+      opponents JSON NULL,
+      teammates JSON NULL,
+      metadata JSON NULL,
+      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_game_records_player (player_id),
+      INDEX idx_game_records_room (room_id),
+      INDEX idx_game_records_created_at (created_at),
+      CONSTRAINT fk_game_records_player
+        FOREIGN KEY (player_id) REFERENCES players(id)
+        ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `);
 }
 
 function isEnabled() {
@@ -190,6 +214,89 @@ async function recordPointTransaction(playerId, delta, reason = 'game', metadata
   );
 }
 
+async function recordGameRecord(record) {
+  if (!pool || !record?.playerId || String(record.playerId).startsWith('bot_')) return;
+
+  await pool.execute(
+    `
+      INSERT INTO game_records (
+        player_id, room_id, game_type, game_name, result, score_delta,
+        points_before, points_after, opponents, teammates, metadata
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `,
+    [
+      String(record.playerId),
+      String(record.roomId || ''),
+      String(record.gameType || ''),
+      String(record.gameName || record.gameType || ''),
+      String(record.result || 'draw'),
+      Number(record.scoreDelta || 0),
+      Number(record.pointsBefore || 0),
+      Number(record.pointsAfter || 0),
+      record.opponents ? JSON.stringify(record.opponents) : null,
+      record.teammates ? JSON.stringify(record.teammates) : null,
+      record.metadata ? JSON.stringify(record.metadata) : null
+    ]
+  );
+}
+
+function safeParseJson(value, fallback) {
+  if (!value) return fallback;
+  if (typeof value === 'object') return value;
+
+  try {
+    return JSON.parse(value);
+  } catch (error) {
+    return fallback;
+  }
+}
+
+async function getPlayerGameRecords(playerId, limit = 30) {
+  if (!pool || !playerId) return [];
+
+  const numericLimit = Math.max(1, Math.min(Number(limit) || 30, 100));
+  const [rows] = await pool.execute(
+    `
+      SELECT
+        id,
+        player_id,
+        room_id,
+        game_type,
+        game_name,
+        result,
+        score_delta,
+        points_before,
+        points_after,
+        opponents,
+        teammates,
+        metadata,
+        created_at
+      FROM game_records
+      WHERE player_id = ?
+      ORDER BY id DESC
+      LIMIT ?
+    `,
+    [String(playerId), numericLimit]
+  );
+
+  return rows.map((row) => ({
+    id: Number(row.id),
+    playerId: row.player_id,
+    roomId: row.room_id,
+    gameType: row.game_type,
+    gameName: row.game_name,
+    result: row.result,
+    scoreDelta: Number(row.score_delta || 0),
+    pointsBefore: Number(row.points_before || 0),
+    pointsAfter: Number(row.points_after || 0),
+    opponents: safeParseJson(row.opponents, []),
+    teammates: safeParseJson(row.teammates, []),
+    metadata: safeParseJson(row.metadata, null),
+    createdAt: new Date(row.created_at).getTime()
+  }));
+}
+
 async function closeMysql() {
   if (!pool) return;
   await pool.end();
@@ -202,5 +309,7 @@ module.exports = {
   loadPlayers,
   upsertPlayer,
   recordPointTransaction,
+  recordGameRecord,
+  getPlayerGameRecords,
   closeMysql
 };

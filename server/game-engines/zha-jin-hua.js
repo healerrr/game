@@ -191,7 +191,7 @@ class ZhaJinHuaEngine {
   init(room, players) {
     const hands = createHands(players);
     return {
-      phase: 'look',
+      phase: 'bet',
       players,
       seats: buildSeats(players),
       round: 1,
@@ -233,15 +233,6 @@ class ZhaJinHuaEngine {
 
   handleLookPhase(state, action, playerId) {
     if (!state.activePlayers.includes(playerId)) return state;
-
-    if (action.type === 'peek') {
-      if (!isLooked(state, playerId)) {
-        state.lookedPlayers.push(playerId);
-        recordAction(state, { type: 'peek', playerId });
-        state.timerStarted = Date.now();
-      }
-      return state;
-    }
 
     if (action.type !== 'ready' || state.actedThisRound.includes(playerId)) {
       return state;

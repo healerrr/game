@@ -45,8 +45,8 @@
       </div>
 
       <div class="ready-actions">
-        <button class="primary-btn" :class="{ ready: myReady }" @click="toggleReady">
-          {{ myReady ? '取消准备' : '准备' }}
+        <button class="primary-btn" :class="{ ready: myReady }" :disabled="readySubmitting" @click="toggleReady">
+          {{ readyButtonText }}
         </button>
         <button v-if="canInvitePlayers" class="secondary-btn" @click="toggleInvitePanel">
           邀请玩家
@@ -59,11 +59,11 @@
           v-for="candidate in inviteCandidates"
           :key="candidate.id"
           type="button"
-          :disabled="candidate.busy || !candidate.online"
+          :disabled="candidate.busy || candidate.invited"
           @click="invitePlayer(candidate)"
         >
           <span>{{ candidate.nickname }} · {{ candidate.busNumber }}号车</span>
-          <strong>{{ candidate.busy ? '忙碌' : (candidate.online ? '邀请' : '离线') }}</strong>
+          <strong>{{ inviteCandidateStatus(candidate) }}</strong>
         </button>
         <p v-if="!inviteCandidates.length">{{ inviteLoading ? '正在加载...' : '暂无可邀请玩家' }}</p>
       </div>
@@ -332,7 +332,7 @@
       :player="player"
       :room-players="roomPlayers"
       @action="emitGameAction"
-      @rematch="rematch"
+      @forfeit="forfeitGame"
       @back="backToLobby"
     />
 
@@ -342,7 +342,7 @@
       :player="player"
       :room-players="roomPlayers"
       @action="emitGameAction"
-      @rematch="rematch"
+      @forfeit="forfeitGame"
       @back="backToLobby"
     />
 
@@ -393,6 +393,7 @@ const timeLeft = ref(5)
 const quizAnswer = ref(null)
 const quizTimeLeft = ref(15)
 const readyDeadlineLeft = ref(0)
+const readySubmitting = ref(false)
 const showInvitePanel = ref(false)
 const inviteCandidates = ref([])
 const inviteLoading = ref(false)
@@ -415,6 +416,10 @@ const currentRoom = computed(() => gameState.currentRoom || {})
 const isFullscreenGame = computed(() => ['guandan', 'mahjong'].includes(gameType.value))
 const isReadyRoom = computed(() => currentRoom.value?.status === 'readying' || (!gs.value?.phase && currentRoom.value?.status !== 'playing'))
 const myReady = computed(() => Boolean(currentRoom.value?.ready?.[player.value?.id] || roomPlayers.value.find(item => item.id === player.value?.id)?.ready))
+const readyButtonText = computed(() => {
+  if (readySubmitting.value) return myReady.value ? '已准备' : '取消中...'
+  return myReady.value ? '取消准备' : '准备'
+})
 const emptySeatCount = computed(() => Math.max(0, Number(currentRoom.value?.maxPlayers || roomPlayers.value.length) - roomPlayers.value.length))
 const canInvitePlayers = computed(() => isReadyRoom.value && currentRoom.value?.visibility === 'private' && currentRoom.value?.ownerId === player.value?.id && emptySeatCount.value > 0)
 
@@ -578,17 +583,63 @@ function emitGameAction(action) {
   socket.emit('game:action', { action })
 }
 
+function forfeitGame() {
+  if (!window.confirm('确认认输吗？')) return
+  socket.emit('game:forfeit', { reason: 'forfeit' }, (res) => {
+    if (res?.error) {
+      alert(res.error)
+    }
+  })
+}
+
 function updateReadyDeadline() {
   const deadline = Number(currentRoom.value?.readyDeadline || 0)
   readyDeadlineLeft.value = deadline ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : 0
 }
 
 function toggleReady() {
-  socket.emit('room:ready', { ready: !myReady.value }, (res) => {
+  if (readySubmitting.value) return
+  const previousReady = myReady.value
+  const nextReady = !previousReady
+  readySubmitting.value = true
+  applyLocalReady(nextReady)
+
+  socket.emit('room:ready', { ready: nextReady }, (res) => {
+    readySubmitting.value = false
     if (res?.error) {
+      applyLocalReady(previousReady)
       alert(res.error)
+      return
+    }
+
+    if (res?.room) {
+      gameState.currentRoom = res.room
+      gameState.currentGame = res.room.gameState
+      gs.value = res.room.gameState || {}
+      updateReadyDeadline()
     }
   })
+}
+
+function applyLocalReady(ready) {
+  const current = gameState.currentRoom
+  const pid = player.value?.id
+  if (!current || !pid) return
+
+  const nextReady = {
+    ...(current.ready || {}),
+    [pid]: Boolean(ready)
+  }
+
+  const nextPlayers = (current.players || []).map((item) => (
+    item.id === pid ? { ...item, ready: Boolean(ready) } : item
+  ))
+
+  gameState.currentRoom = {
+    ...current,
+    ready: nextReady,
+    players: nextPlayers
+  }
 }
 
 function toggleInvitePanel() {
@@ -600,7 +651,7 @@ function toggleInvitePanel() {
 
 function loadInvitePlayers() {
   inviteLoading.value = true
-  socket.emit('players:list', (res) => {
+  socket.emit('players:list', { roomId: currentRoom.value?.roomId }, (res) => {
     inviteLoading.value = false
     if (res?.error) {
       alert(res.error)
@@ -610,13 +661,19 @@ function loadInvitePlayers() {
   })
 }
 
+function inviteCandidateStatus(candidate) {
+  if (candidate.busy) return '忙碌'
+  if (candidate.invited) return '已邀请'
+  return candidate.online ? '邀请' : '离线通知'
+}
+
 function invitePlayer(candidate) {
   socket.emit('room:invite', { roomId: currentRoom.value?.roomId, playerId: candidate.id }, (res) => {
     if (res?.error) {
       alert(res.error)
       return
     }
-    candidate.busy = true
+    candidate.invited = true
   })
 }
 
@@ -717,6 +774,7 @@ onMounted(() => {
     gameState.currentRoom = event.detail
     gameState.currentGame = event.detail.gameState
     gs.value = event.detail.gameState || {}
+    readySubmitting.value = false
     updateReadyDeadline()
   }
   window.addEventListener('room:update', roomUpdateHandler)
@@ -725,6 +783,7 @@ onMounted(() => {
     gameState.currentRoom = event.detail
     gameState.currentGame = event.detail.gameState
     gs.value = event.detail.gameState || {}
+    readySubmitting.value = false
     showInvitePanel.value = false
   }
   window.addEventListener('room:started', roomStartedHandler)
@@ -740,11 +799,11 @@ onMounted(() => {
   }
   window.addEventListener('game:result', resultHandler)
 
-  dcHandler = () => {
+  dcHandler = (event) => {
     opponentDisconnected.value = true
     setTimeout(() => {
       opponentDisconnected.value = false
-    }, 10000)
+    }, event.detail?.graceMs || 10000)
   }
   window.addEventListener('game:opponent_disconnected', dcHandler)
 
@@ -770,6 +829,7 @@ onMounted(() => {
     gameState.currentRoom = room
     gameState.currentGame = room.gameState
     gs.value = room.gameState || {}
+    readySubmitting.value = false
     router.push(`/game/${room.roomId}`)
   }
   window.addEventListener('game:matched', matchedHandler)

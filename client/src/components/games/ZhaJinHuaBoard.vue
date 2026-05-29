@@ -80,7 +80,7 @@
         </div>
 
         <div class="turn-indicator zjh-turn">
-          {{ gs.phase === 'bet' && gs.currentPlayer === player?.id ? '轮到你操作' : (gs.phase === 'look' ? '准备阶段' : `等待 ${getPlayerName(gs.currentPlayer)} 操作`) }}
+          {{ phaseText }}
         </div>
 
         <div class="my-area zjh-my">
@@ -89,9 +89,9 @@
               v-for="(card, index) in displayHand"
               :key="index"
               class="my-card"
-              :class="{ revealed: myLooked }"
+              :class="{ revealed: cardsRevealed }"
             >
-              <div v-if="myLooked" class="card-front">
+              <div v-if="cardsRevealed" class="card-front">
                 <div class="card-corner top-left">
                   <span class="card-rank">{{ getRankLabel(card.value) }}</span>
                   <span class="card-suit" :class="getSuitColor(card.suit)">{{ getSuitSymbol(card.suit) }}</span>
@@ -108,7 +108,7 @@
             </div>
           </div>
 
-          <div v-if="myLooked" class="hand-type">{{ handTypeLabel }}</div>
+          <div v-if="cardsRevealed" class="hand-type">{{ handTypeLabel }}</div>
           <div v-else class="hand-type blind">暗牌中</div>
         </div>
       </section>
@@ -122,12 +122,7 @@
 
       <!-- 操作按钮区域 -->
       <div v-if="gs.phase === 'look'" class="action-bar">
-        <button v-if="!myLooked" class="btn btn-peek" @click="$emit('action', { type: 'peek' })">
-          看牌
-        </button>
-        <button class="btn btn-ready" @click="$emit('action', { type: 'ready' })">
-          准备好了
-        </button>
+        <div class="waiting-text">正在进入下注阶段...</div>
       </div>
 
       <div v-else-if="gs.phase === 'bet'" class="action-bar">
@@ -138,8 +133,8 @@
         </div>
         
         <div v-if="gs.currentPlayer === player?.id && !gs.foldedPlayers?.includes(player?.id)" class="action-buttons">
-          <button v-if="!myLooked" class="btn btn-peek" @click="$emit('action', { type: 'peek' })">
-            看牌
+          <button v-if="canPeekNow" class="btn btn-peek" :disabled="peekPending" @click="peekMyCards">
+            {{ peekPending ? '看牌中' : '看牌' }}
           </button>
           <button class="btn btn-fold" @click="$emit('action', { type: 'fold' })">
             弃牌
@@ -197,7 +192,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 
 const props = defineProps({
   gs: { type: Object, default: () => ({}) },
@@ -208,6 +203,7 @@ const props = defineProps({
 const emit = defineEmits(['action', 'rematch', 'back'])
 
 const showCompare = ref(false)
+const peekPending = ref(false)
 
 const isReady = computed(() => {
   return props.gs && props.gs.hands && props.gs.players
@@ -215,6 +211,14 @@ const isReady = computed(() => {
 
 const myId = computed(() => props.player?.id || '')
 const myLooked = computed(() => !!props.player?.id && !!props.gs.lookedPlayers?.includes(props.player.id))
+const cardsRevealed = computed(() => myLooked.value || peekPending.value)
+const hasFolded = computed(() => !!props.player?.id && !!props.gs.foldedPlayers?.includes(props.player.id))
+const canPeekNow = computed(() =>
+  props.gs?.phase === 'bet' &&
+  props.gs?.currentPlayer === props.player?.id &&
+  !hasFolded.value &&
+  !cardsRevealed.value
+)
 const displayHand = computed(() => {
   if (!props.player?.id) return []
   return props.gs.hands?.[props.player.id] || []
@@ -231,6 +235,13 @@ const activeOpponents = computed(() => {
 const callCost = computed(() => (props.gs.currentBet || 0) * (myLooked.value ? 1 : 2))
 const raiseCost = computed(() => ((props.gs.currentBet || 0) + (props.gs.raiseStep || 10)) * (myLooked.value ? 1 : 2))
 const compareCost = computed(() => callCost.value * 2)
+
+const phaseText = computed(() => {
+  if (props.gs?.phase === 'finished') return '本局已结束'
+  if (props.gs?.phase !== 'bet') return '正在发牌'
+  if (props.gs.currentPlayer === props.player?.id) return '轮到你操作'
+  return `等待 ${getPlayerName(props.gs.currentPlayer)} 操作`
+})
 
 const winnerClass = computed(() => {
   if (props.gs.finalWinner === myId.value) return 'winner'
@@ -258,6 +269,21 @@ function compareWith(pid) {
   showCompare.value = false
   emit('action', { type: 'compare', targetId: pid })
 }
+
+function peekMyCards() {
+  if (!canPeekNow.value) return
+  peekPending.value = true
+  emit('action', { type: 'peek' })
+}
+
+watch(
+  () => [myLooked.value, props.gs?.phase, props.gs?.currentPlayer, props.player?.id],
+  () => {
+    if (myLooked.value || props.gs?.phase !== 'bet' || props.gs?.currentPlayer !== props.player?.id) {
+      peekPending.value = false
+    }
+  }
+)
 
 function initials(item) {
   return (item?.nickname || '玩').slice(0, 1)
@@ -1137,11 +1163,6 @@ const handTypeLabel = computed(() => {
   box-shadow: 0 4px 12px rgba(6, 182, 212, 0.3);
 }
 
-.btn-ready {
-  background: linear-gradient(135deg, #3b82f6, #2563eb);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-}
-
 .btn-fold {
   background: linear-gradient(135deg, #ef4444, #dc2626);
   box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
@@ -1616,7 +1637,6 @@ const handTypeLabel = computed(() => {
     0 14px 20px rgba(7, 72, 166, 0.14);
 }
 
-.btn-ready,
 .btn-primary,
 .btn-call {
   background: linear-gradient(180deg, #2f92ff, #0758ef);
@@ -2912,7 +2932,13 @@ const handTypeLabel = computed(() => {
   background: linear-gradient(180deg, #43dac7, #12ad92);
 }
 
-.zjh-layout .btn-ready,
+.zjh-layout .btn:disabled {
+  opacity: 0.62;
+  cursor: not-allowed;
+  filter: grayscale(0.18);
+  transform: none;
+}
+
 .zjh-layout .btn-call,
 .zjh-layout .btn-primary {
   background: linear-gradient(180deg, #3298ff, #075be7);

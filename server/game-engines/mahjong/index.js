@@ -214,6 +214,33 @@ function buildSelfOptions(state, playerId) {
   return options;
 }
 
+function enterDrawTurn(state, playerId, meta = {}) {
+  state.currentPlayer = playerId;
+
+  if (checkLiuju(state)) return state;
+
+  const shan = hydrateShan(state);
+  const drawn = drawForPlayer(state, shan, playerId, meta);
+  if (!drawn) return state;
+
+  if (checkSiZhong(state, playerId)) return state;
+
+  const selfOptions = buildSelfOptions(state, playerId);
+  if (selfOptions.length > 0) {
+    state.phase = 'response';
+    state.pendingAction = {
+      type: 'self',
+      playerId,
+      options: selfOptions
+    };
+  } else {
+    state.phase = 'discard';
+    state.pendingAction = null;
+  }
+  state.timerStarted = Date.now();
+  return state;
+}
+
 class MahjongEngine {
   init(room, players) {
     const shan = new Shan();
@@ -261,7 +288,7 @@ class MahjongEngine {
     };
 
     updateTingInfo(state);
-    return state;
+    return enterDrawTurn(state, players[0]);
   }
 
   update(state, action, playerId) {
@@ -283,30 +310,7 @@ class MahjongEngine {
     if (playerId !== state.currentPlayer) return state;
     if (!['draw', 'draw_done'].includes(action.type)) return state;
 
-    // 检查流局
-    if (checkLiuju(state)) return state;
-
-    const shan = hydrateShan(state);
-    const drawn = drawForPlayer(state, shan, playerId);
-    if (!drawn) return state;
-
-    // 检查四红中
-    if (checkSiZhong(state, playerId)) return state;
-
-    const selfOptions = buildSelfOptions(state, playerId);
-    if (selfOptions.length > 0) {
-      state.phase = 'response';
-      state.pendingAction = {
-        type: 'self',
-        playerId,
-        options: selfOptions
-      };
-    } else {
-      state.phase = 'discard';
-      state.pendingAction = null;
-    }
-    state.timerStarted = Date.now();
-    return state;
+    return enterDrawTurn(state, playerId);
   }
 
   handleDiscard(state, action, playerId) {
@@ -334,11 +338,7 @@ class MahjongEngine {
       return state;
     }
 
-    state.currentPlayer = nextPlayer(state.players, playerId);
-    state.phase = 'draw';
-    state.pendingAction = null;
-    state.timerStarted = Date.now();
-    return state;
+    return enterDrawTurn(state, nextPlayer(state.players, playerId));
   }
 
   handleResponse(state, action, playerId) {
@@ -529,9 +529,7 @@ class MahjongEngine {
 
       pending.queue.shift();
       if (pending.queue.length === 0) {
-        state.currentPlayer = nextPlayer(state.players, pending.sourcePlayerId);
-        state.phase = 'draw';
-        state.pendingAction = null;
+        return enterDrawTurn(state, nextPlayer(state.players, pending.sourcePlayerId));
       }
       state.timerStarted = Date.now();
       return state;

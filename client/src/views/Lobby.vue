@@ -34,13 +34,15 @@
           </div>
 
           <div class="score-side">
-            <span>8款游戏</span>
-            <span>{{ modeLabel }}</span>
+            <button type="button" class="create-room-hero-btn" @click="openCreateRoom">
+              <span>创建房间</span>
+            </button>
           </div>
         </div>
       </section>
 
       <section class="games-panel">
+        <h2 class="games-heading">快速开始</h2>
         <div class="games-grid">
           <button
             v-for="game in gameCards"
@@ -188,14 +190,11 @@ const gameCards = [
 ]
 
 const utilities = [
-  { key: 'create', label: '创建房间', desc: '邀请好友', icon: '/assets/lobby/feature-record.png' },
-  { key: 'results', label: '我的战绩', desc: '历史成绩', icon: '/assets/lobby/feature-achievement.png' },
   { key: 'leaderboard', label: '排行榜', desc: '实时排名', icon: '/assets/lobby/feature-ranking.png' },
-  { key: 'reward', label: '兑奖区', desc: '兑换好礼', icon: '/assets/lobby/feature-reward.png' }
+  { key: 'results', label: '我的战绩', desc: '历史成绩', icon: '/assets/lobby/feature-achievement.png' }
 ]
 
 const isTestMode = computed(() => getPlayMode() === 'test')
-const modeLabel = computed(() => isTestMode.value ? '测试平台' : '真人匹配')
 
 const selectedGameName = computed(() => {
   return gameCards.find((item) => item.key === selectedGameKey.value)?.name || '游戏对局'
@@ -328,6 +327,10 @@ function createRoom(gameType) {
   })
 }
 
+function openCreateRoom() {
+  showCreateRoom.value = true
+}
+
 function cancelMatch() {
   socket.emit('match:cancel', { gameType: selectedGameKey.value || 'rock_paper_scissors' }, () => {
     matching.value = false
@@ -340,8 +343,13 @@ function handleUtility(item) {
     return
   }
 
+  if (item.key === 'results') {
+    router.push('/results')
+    return
+  }
+
   if (item.key === 'create') {
-    showCreateRoom.value = true
+    openCreateRoom()
     return
   }
 
@@ -549,21 +557,30 @@ function handleUtility(item) {
 }
 
 .score-side {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  align-items: flex-end;
-  font-size: 12px;
-  font-weight: 800;
+  flex: 0 0 auto;
 }
 
-.score-side span {
-  min-height: 28px;
-  padding: 0 10px;
+.create-room-hero-btn {
+  min-width: 112px;
+  min-height: 48px;
+  padding: 0 18px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
+  background: linear-gradient(180deg, #ffffff, #dff0ff);
+  color: #1162e8;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.9),
+    0 8px 0 rgba(6, 84, 198, 0.22),
+    0 14px 22px rgba(0, 61, 153, 0.18);
+}
+
+.create-room-hero-btn span {
+  font-size: 16px;
+  line-height: 1.1;
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .games-panel {
@@ -572,6 +589,14 @@ function handleUtility(item) {
   border-radius: 26px;
   background: rgba(255, 255, 255, 0.96);
   box-shadow: 0 14px 34px rgba(8, 72, 167, 0.12);
+}
+
+.games-heading {
+  margin: 0 0 10px;
+  color: #153260;
+  font-size: 18px;
+  line-height: 1.2;
+  font-weight: 900;
 }
 
 .games-grid {

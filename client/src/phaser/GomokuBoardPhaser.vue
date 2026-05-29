@@ -2,12 +2,12 @@
   <div class="gomoku-phaser-wrapper">
     <div ref="gameContainer" class="game-container"></div>
     <div class="action-buttons" v-if="gamePhase === 'playing'">
-      <button class="btn rematch" @click="$emit('rematch')">
-        <span class="btn-icon">🔄</span>
-        <span>再来一局</span>
+      <button class="btn surrender" @click="$emit('forfeit')">
+        <span class="btn-icon">认</span>
+        <span>认输</span>
       </button>
       <button class="btn back" @click="$emit('back')">
-        <span class="btn-icon">🏠</span>
+        <span class="btn-icon">返</span>
         <span>返回大厅</span>
       </button>
     </div>
@@ -25,7 +25,7 @@ const props = defineProps({
   roomPlayers: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['action', 'rematch', 'back'])
+const emit = defineEmits(['action', 'back', 'forfeit'])
 
 const gameContainer = ref(null)
 let phaserGame = null
@@ -120,10 +120,10 @@ defineExpose({
   font-size: 18px;
 }
 
-.btn.rematch {
-  background: linear-gradient(135deg, #667eea, #764ba2);
+.btn.surrender {
+  background: linear-gradient(135deg, #ff6f61, #de3d37);
   color: #fff;
-  box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+  box-shadow: 0 4px 15px rgba(222, 61, 55, 0.34);
 }
 
 .btn.back {

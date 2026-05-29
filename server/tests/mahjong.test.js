@@ -137,26 +137,26 @@ test('红中推倒胡 - 四红中', () => {
 test('红中推倒胡 - 引擎初始化正确', () => {
   const engine = new MahjongEngine();
   const state = engine.init(null, ['p1', 'p2', 'p3', 'p4']);
-  assert.equal(state.phase, 'draw');
+  assert.equal(['discard', 'response', 'finished'].includes(state.phase), true);
   assert.equal(state.players.length, 4);
-  assert.equal(state.hands['p1'].length, 13);
+  assert.equal(state.hands['p1'].length, 14);
   assert.equal(state.hands['p2'].length, 13);
-  assert.equal(state.remainingTiles, 60);
+  assert.equal(state.remainingTiles, 59);
   assert.equal(state.currentPlayer, 'p1');
 });
 
-test('红中推倒胡 - 摸牌后手牌增加', () => {
+test('红中推倒胡 - 轮到玩家时自动摸牌', () => {
   const engine = new MahjongEngine();
   let state = engine.init(null, ['p1', 'p2', 'p3', 'p4']);
+  const remaining = state.remainingTiles;
   state = engine.update(state, { type: 'draw' }, 'p1');
   assert.equal(state.hands['p1'].length, 14);
-  assert.equal(state.remainingTiles, 59);
+  assert.equal(state.remainingTiles, remaining);
 });
 
 test('红中推倒胡 - 出牌后手牌减少', () => {
   const engine = new MahjongEngine();
   let state = engine.init(null, ['p1', 'p2', 'p3', 'p4']);
-  state = engine.update(state, { type: 'draw' }, 'p1');
   if (state.phase === 'response' && state.pendingAction?.type === 'self') {
     state = engine.update(state, { type: 'pass' }, 'p1');
   }

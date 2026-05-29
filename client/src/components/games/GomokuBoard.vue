@@ -53,7 +53,6 @@
                 :disabled="!canPlace(cell)"
               >
                 <span v-if="cell.value === 0 && isStarCell(cell)" class="star-dot"></span>
-                <span v-if="isHintCell(cell)" class="hint-ring"></span>
                 <span v-if="isPendingCell(cell)" class="pending-piece" :class="myPiece === 1 ? 'black' : 'white'"></span>
                 <span v-if="cell.value !== 0" class="piece" :class="cell.value === 1 ? 'black' : 'white'"></span>
                 <span v-if="isLastMoveCell(cell)" class="last-dot"></span>
@@ -64,32 +63,16 @@
       </section>
 
       <section class="action-grid">
-        <button type="button" class="action-btn hint" @click="pendingCell ? confirmPendingMove() : showSuggestedMove()">
-          <span class="action-btn__icon">◎</span>
+        <button type="button" class="action-btn surrender" :disabled="gamePhase === 'finished'" @click="$emit('forfeit')">
+          <span class="action-btn__icon">认</span>
           <span class="action-btn__copy">
-            <strong>{{ pendingCell ? '确认落子' : '落子提示' }}</strong>
-            <small>{{ pendingCell ? toCoord(pendingCell.x, pendingCell.y) : '推荐下一手' }}</small>
-          </span>
-        </button>
-
-        <button type="button" class="action-btn undo" :disabled="!canUndo" @click="requestUndo">
-          <span class="action-btn__icon">↶</span>
-          <span class="action-btn__copy">
-            <strong>悔棋</strong>
-            <small>{{ canUndo ? '撤回上一手' : '仅限己方上一手' }}</small>
-          </span>
-        </button>
-
-        <button type="button" class="action-btn restart" @click="$emit('rematch')">
-          <span class="action-btn__icon">↻</span>
-          <span class="action-btn__copy">
-            <strong>再来一局</strong>
-            <small>快速重开</small>
+            <strong>认输</strong>
+            <small>结束本局</small>
           </span>
         </button>
 
         <button type="button" class="action-btn back" @click="$emit('back')">
-          <span class="action-btn__icon">←</span>
+          <span class="action-btn__icon">返</span>
           <span class="action-btn__copy">
             <strong>返回大厅</strong>
             <small>离开对局</small>
@@ -111,7 +94,6 @@
           <h2>{{ resultText }}</h2>
           <p>{{ resultDetail }}</p>
           <div class="result-actions">
-            <button type="button" class="primary-btn" @click="$emit('rematch')">再来一局</button>
             <button type="button" class="secondary-btn" @click="$emit('back')">返回大厅</button>
           </div>
         </div>
@@ -129,12 +111,11 @@ const props = defineProps({
   roomPlayers: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['action', 'rematch', 'back'])
+const emit = defineEmits(['action', 'back', 'forfeit'])
 
 const BOARD_SIZE = 15
 const STAR_POINTS = new Set(['3,3', '3,7', '3,11', '7,3', '7,7', '7,11', '11,3', '11,7', '11,11'])
 const toast = ref('')
-const hintMove = ref(null)
 const pendingCell = ref(null)
 
 let toastTimer = null
@@ -169,8 +150,6 @@ const isMyTurn = computed(() => props.gs?.phase === 'playing' && props.gs?.curre
 const gamePhase = computed(() => props.gs?.phase || 'waiting')
 const moveCount = computed(() => props.gs?.moveHistory?.length || 0)
 const lastMove = computed(() => props.gs?.lastMove || null)
-const lastHistoryMove = computed(() => props.gs?.moveHistory?.at?.(-1) || null)
-const canUndo = computed(() => gamePhase.value === 'playing' && lastHistoryMove.value?.player === myId.value)
 
 const turnText = computed(() => {
   return isMyTurn.value ? '轮到你落子' : `等待 ${opponentName.value}`
@@ -196,23 +175,7 @@ const resultDetail = computed(() => {
 
 const boardAssistLabel = computed(() => {
   if (pendingCell.value) return `待落 ${toCoord(pendingCell.value.x, pendingCell.value.y)} · 再点确认`
-  if (hintMove.value) return `提示 ${toCoord(hintMove.value.x, hintMove.value.y)}`
   return '轻点预览，再点确认'
-})
-
-const suggestedMove = computed(() => {
-  const center = Math.floor(BOARD_SIZE / 2)
-  if (board.value[center][center] === 0) return { x: center, y: center }
-
-  for (let radius = 1; radius < BOARD_SIZE; radius += 1) {
-    for (let y = Math.max(0, center - radius); y <= Math.min(BOARD_SIZE - 1, center + radius); y += 1) {
-      for (let x = Math.max(0, center - radius); x <= Math.min(BOARD_SIZE - 1, center + radius); x += 1) {
-        if (board.value[y][x] === 0) return { x, y }
-      }
-    }
-  }
-
-  return null
 })
 
 const cells = computed(() => {
@@ -277,7 +240,6 @@ function placeAt(cell) {
 
   if (!pendingCell.value || pendingCell.value.x !== cell.x || pendingCell.value.y !== cell.y) {
     pendingCell.value = { x: cell.x, y: cell.y }
-    hintMove.value = null
     showToast(`已选 ${toCoord(cell.x, cell.y)}，再次点击确认`)
     return
   }
@@ -293,7 +255,6 @@ function confirmPendingMove() {
     return
   }
 
-  hintMove.value = null
   pendingCell.value = null
   emit('action', { type: 'place', x: cell.x, y: cell.y })
 }
@@ -311,25 +272,9 @@ function handleBoardPointer(event) {
   placeAt({ x, y, value: cellValue(x, y) })
 }
 
-function requestUndo() {
-  if (!canUndo.value) {
-    showToast('只能撤回自己的上一手')
-    return
-  }
-
-  pendingCell.value = null
-  hintMove.value = null
-  emit('action', { type: 'undo' })
-}
-
 function isLastMoveCell(cell) {
   if (!lastMove.value) return false
   return lastMove.value.x === cell.x && lastMove.value.y === cell.y
-}
-
-function isHintCell(cell) {
-  if (!hintMove.value) return false
-  return hintMove.value.x === cell.x && hintMove.value.y === cell.y
 }
 
 function isPendingCell(cell) {
@@ -339,14 +284,6 @@ function isPendingCell(cell) {
 
 function isStarCell(cell) {
   return STAR_POINTS.has(`${cell.x},${cell.y}`)
-}
-
-function cellClasses(cell) {
-  return {
-    occupied: cell.value !== 0,
-    star: STAR_POINTS.has(`${cell.x},${cell.y}`),
-    disabled: !canPlace(cell)
-  }
 }
 
 function showToast(text) {
@@ -361,14 +298,6 @@ function showToast(text) {
   }, 1800)
 }
 
-function showSuggestedMove() {
-  if (!suggestedMove.value) {
-    showToast('暂无可用落点')
-    return
-  }
-  hintMove.value = suggestedMove.value
-  showToast(`推荐 ${toCoord(suggestedMove.value.x, suggestedMove.value.y)}`)
-}
 </script>
 
 <style scoped>
@@ -600,7 +529,6 @@ function showSuggestedMove() {
 
 .piece,
 .star-dot,
-.hint-ring,
 .pending-piece,
 .last-dot {
   position: absolute;
@@ -642,13 +570,6 @@ function showSuggestedMove() {
 .pending-piece.white {
   background: radial-gradient(circle at 30% 30%, #ffffff, #dadada 72%);
   border: 1px solid rgba(168, 168, 168, 0.9);
-}
-
-.hint-ring {
-  width: 66%;
-  height: 66%;
-  border-radius: 50%;
-  border: 2px dashed #1fb26d;
 }
 
 .star-dot {
@@ -710,16 +631,8 @@ function showSuggestedMove() {
   opacity: 0.88;
 }
 
-.action-btn.hint {
-  background: linear-gradient(180deg, #42d0bf, #17a893);
-}
-
-.action-btn.undo {
-  background: linear-gradient(180deg, #4189ff, #1957de);
-}
-
-.action-btn.restart {
-  background: linear-gradient(180deg, #ffc954, #f29b0b);
+.action-btn.surrender {
+  background: linear-gradient(180deg, #ff6f61, #de3d37);
 }
 
 .action-btn.back {
@@ -804,21 +717,15 @@ function showSuggestedMove() {
 .result-actions {
   margin-top: 16px;
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 10px;
 }
 
-.primary-btn,
 .secondary-btn {
   min-height: 46px;
   border-radius: 999px;
   font-size: 15px;
   font-weight: 800;
-}
-
-.primary-btn {
-  background: linear-gradient(180deg, #2e8dff, #0c59ef);
-  color: #fff;
 }
 
 .secondary-btn {

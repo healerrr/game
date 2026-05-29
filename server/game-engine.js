@@ -1019,14 +1019,28 @@ class QuizGame {
   }
 
   init(room, players) {
-    // 随机选5道题
-    const shuffled = [...this.questionBank].sort(() => Math.random() - 0.5);
-    const questions = shuffled.slice(0, 5);
+    const roundCount = 3;
+    const hardQuestions = [
+      { q: '如果所有“甲类”都是“乙类”，且部分“乙类”是“丙类”，必然成立的是？', options: ['所有甲类是丙类', '部分甲类是丙类', '部分乙类可能不是甲类', '所有丙类是乙类'], answer: 2 },
+      { q: '二进制数 101101 转换为十进制是多少？', options: ['41', '43', '45', '47'], answer: 2 },
+      { q: '“纳什均衡”最常用于描述哪一类问题？', options: ['热力学平衡', '博弈策略稳定状态', '天体轨道共振', '统计抽样误差'], answer: 1 },
+      { q: '成语“曲高和寡”原本更接近表达什么含义？', options: ['作品越高明，能理解的人越少', '音乐越响亮，观众越少', '曲调越快，唱和越难', '身份越高，朋友越少'], answer: 0 },
+      { q: '在 Excel 中，若 A1=8、A2=3，公式 =MOD(A1,A2) 的结果是？', options: ['1', '2', '2.67', '5'], answer: 1 },
+      { q: '太阳光到达地球大约需要多久？', options: ['8秒20毫秒', '8分20秒', '80分钟', '1天'], answer: 1 },
+      { q: '下列哪一项最接近“幸存者偏差”的含义？', options: ['只分析留下来的样本导致判断偏差', '样本数量过大导致误差变小', '随机抽样时每个样本概率相同', '重复实验导致结果趋同'], answer: 0 },
+      { q: '如果一个项目的关键路径延误 2 天，且没有备用缓冲，通常会怎样？', options: ['总工期大概率延误', '只影响非关键任务', '资源成本必然下降', '风险自动消除'], answer: 0 },
+      { q: '“边际成本”指的是？', options: ['已经投入且无法收回的成本', '额外生产一单位带来的新增成本', '全部固定成本总和', '平均到每件产品的总成本'], answer: 1 },
+      { q: 'HTTP 状态码 409 通常表示？', options: ['未授权', '资源冲突', '服务不可用', '永久重定向'], answer: 1 },
+      { q: '若三个事件彼此独立，且概率均为 1/2，它们同时发生的概率是？', options: ['1/2', '1/4', '1/8', '3/8'], answer: 2 },
+      { q: '下列哪种排序算法的平均时间复杂度通常为 O(n log n)？', options: ['冒泡排序', '插入排序', '快速排序', '线性查找'], answer: 2 }
+    ];
+    const shuffled = [...hardQuestions].sort(() => Math.random() - 0.5);
+    const questions = shuffled.slice(0, roundCount);
 
     return {
       phase: 'question',       // question | answer | finished
       round: 1,
-      maxRounds: 5,
+      maxRounds: roundCount,
       players,
       questions,
       currentQuestion: questions[0],

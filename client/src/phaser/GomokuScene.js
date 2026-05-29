@@ -12,8 +12,6 @@ export class GomokuScene extends PhaserGameScene {
     this.hoverPiece = null
     this.topPlayerInfo = null
     this.bottomPlayerInfo = null
-    this.menuBtn = null
-    this.undoBtn = null
   }
 
   create() {
@@ -34,7 +32,6 @@ export class GomokuScene extends PhaserGameScene {
     
     this.createTopPlayerInfo()
     this.createBottomPlayerInfo()
-    this.createBottomButtons()
     
     this.pieces = Array(this.boardSize).fill(null).map(() => Array(this.boardSize).fill(null))
     
@@ -147,47 +144,6 @@ export class GomokuScene extends PhaserGameScene {
     const colorText = this.add.text(195, 20, myLabel, { fontSize: '10px', color: '#666666' }).setOrigin(0.5)
     
     this.bottomPlayerInfo.add([nameText, pieceIcon, avatarBg, avatarIcon, colorBadge, colorText])
-  }
-
-  createBottomButtons() {
-    const btnY = 680
-    
-    this.menuBtn = this.add.container(60, btnY)
-    this.menuBtn.setDepth(100)
-    this.menuBtn.setInteractive(new Phaser.Geom.Circle(0, 0, 30), Phaser.Geom.Circle.Contains)
-    
-    const menuBg = this.add.circle(0, 0, 30, 0xffffff)
-    menuBg.setStrokeStyle(2, 0xe0e0e0)
-    
-    const menuIcon = this.add.text(0, 0, '📋', { fontSize: '20px' }).setOrigin(0.5)
-    
-    const menuLabel = this.add.text(0, 35, '菜单', { fontSize: '12px', color: '#666666' }).setOrigin(0.5)
-    
-    this.menuBtn.add([menuBg, menuIcon, menuLabel])
-    
-    this.menuBtn.on('pointerdown', () => {
-      this.emitAction({ type: 'menu' })
-    })
-    
-    this.undoBtn = this.add.container(140, btnY)
-    this.undoBtn.setDepth(100)
-    this.undoBtn.setInteractive(new Phaser.Geom.Circle(0, 0, 30), Phaser.Geom.Circle.Contains)
-    
-    const undoBg = this.add.circle(0, 0, 30, 0xffffff)
-    undoBg.setStrokeStyle(2, 0xe0e0e0)
-    
-    const undoIcon = this.add.text(0, 0, '️', { fontSize: '20px' }).setOrigin(0.5)
-    
-    const undoBadge = this.add.circle(15, -15, 10, 0x4ecdc4)
-    const undoBadgeText = this.add.text(15, -15, '5', { fontSize: '10px', color: '#ffffff' }).setOrigin(0.5)
-    
-    const undoLabel = this.add.text(0, 35, '悔棋', { fontSize: '12px', color: '#666666' }).setOrigin(0.5)
-    
-    this.undoBtn.add([undoBg, undoIcon, undoBadge, undoBadgeText, undoLabel])
-    
-    this.undoBtn.on('pointerdown', () => {
-      this.emitAction({ type: 'undo' })
-    })
   }
 
   renderBoard() {

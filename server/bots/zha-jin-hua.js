@@ -3,9 +3,6 @@ const { evaluateHand, getCallAmount, getCompareAmount } = require('../game-engin
 function zhaJinHuaStrategy(state, botId) {
   if (state.phase === 'look') {
     if (state.actedThisRound?.includes(botId)) return null;
-    if (!state.lookedPlayers?.includes(botId) && Math.random() < 0.45) {
-      return { type: 'peek' };
-    }
     return { type: 'ready' };
   }
 

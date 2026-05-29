@@ -303,26 +303,6 @@ class ChessEngine {
     if (playerIndex === -1) return state;
     const playerColor = playerIndex === 0 ? COLORS.RED : COLORS.BLACK;
 
-    if (action.type === 'undo') {
-      const lastMove = state.moveHistory[state.moveHistory.length - 1];
-      if (!lastMove || lastMove.player !== playerId) return state;
-
-      state.moveHistory.pop();
-      state.board[lastMove.from.row][lastMove.from.col] = state.board[lastMove.to.row][lastMove.to.col];
-      state.board[lastMove.to.row][lastMove.to.col] = lastMove.captured;
-      if (lastMove.captured) {
-        const moverColor = lastMove.color || state.board[lastMove.from.row][lastMove.from.col]?.color;
-        if (moverColor) state.capturedPieces[moverColor]?.pop();
-      }
-      state.currentPlayer = lastMove.color || playerColor;
-      state.selectedPiece = null;
-      state.lastMove = state.moveHistory.length > 0 
-        ? state.moveHistory[state.moveHistory.length - 1] 
-        : null;
-      state.timerStarted = Date.now();
-      return state;
-    }
-    
     // Only allow current player's color to move
     if (state.currentPlayer !== playerColor) return state;
 

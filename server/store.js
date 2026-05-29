@@ -8,6 +8,7 @@ class Store {
     this.rooms = new Map();
     this.matchQueue = new Map();
     this.spectators = new Map();
+    this.gameRecords = new Map();
     this.instanceId = `srv_${randomUUID()}`;
     this.initialized = false;
   }
@@ -256,6 +257,74 @@ class Store {
       p.winStreak = 0;
     }
     this.savePlayer(p);
+  }
+
+  recordGameRecord(record) {
+    if (!record?.playerId || String(record.playerId).startsWith('bot_')) return;
+
+    const normalized = {
+      id: record.id || this.makeId('gr'),
+      playerId: record.playerId,
+      roomId: record.roomId || '',
+      gameType: record.gameType || '',
+      gameName: record.gameName || record.gameType || '',
+      result: record.result || 'draw',
+      scoreDelta: Number(record.scoreDelta || 0),
+      pointsBefore: Number(record.pointsBefore || 0),
+      pointsAfter: Number(record.pointsAfter || 0),
+      opponents: Array.isArray(record.opponents) ? record.opponents : [],
+      teammates: Array.isArray(record.teammates) ? record.teammates : [],
+      metadata: record.metadata || null,
+      createdAt: Number(record.createdAt || Date.now())
+    };
+
+    if (!this.gameRecords.has(normalized.playerId)) {
+      this.gameRecords.set(normalized.playerId, []);
+    }
+
+    const history = this.gameRecords.get(normalized.playerId);
+    history.unshift(normalized);
+    if (history.length > 100) {
+      history.length = 100;
+    }
+
+    this.runAsync(async () => {
+      await mysqlStore.recordGameRecord(normalized);
+    }, 'recordGameRecord');
+  }
+
+  async getPlayerGameRecords(playerId, limit = 30) {
+    if (!playerId) return [];
+
+    const numericLimit = Math.max(1, Math.min(Number(limit) || 30, 100));
+    const memoryRecords = this.gameRecords.get(playerId) || [];
+
+    if (!mysqlStore.isEnabled()) {
+      return memoryRecords.slice(0, numericLimit);
+    }
+
+    const persistedRecords = await mysqlStore.getPlayerGameRecords(playerId, numericLimit);
+    const merged = [];
+    const seen = new Set();
+
+    [...memoryRecords, ...persistedRecords]
+      .sort((a, b) => Number(b.createdAt || 0) - Number(a.createdAt || 0))
+      .forEach((record) => {
+        const key = [
+          record.roomId,
+          record.playerId,
+          record.gameType,
+          record.createdAt,
+          record.scoreDelta,
+          record.result
+        ].join(':');
+
+        if (seen.has(key)) return;
+        seen.add(key);
+        merged.push(record);
+      });
+
+    return merged.slice(0, numericLimit);
   }
 
   createRoom(gameType, players, options = {}) {

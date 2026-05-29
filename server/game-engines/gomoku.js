@@ -72,20 +72,6 @@ class GomokuEngine {
   update(state, action, playerId) {
     if (state.phase !== 'playing') return state;
 
-    if (action.type === 'undo') {
-      const lastMove = state.moveHistory[state.moveHistory.length - 1];
-      if (!lastMove || lastMove.player !== playerId) return state;
-
-      state.moveHistory.pop();
-      state.board[lastMove.x][lastMove.y] = EMPTY;
-      state.currentPlayer = lastMove.player;
-      state.lastMove = state.moveHistory.length > 0 
-        ? state.moveHistory[state.moveHistory.length - 1] 
-        : null;
-      state.timerStarted = Date.now();
-      return state;
-    }
-
     if (playerId !== state.currentPlayer) return state;
 
     if (action.type === 'place') {

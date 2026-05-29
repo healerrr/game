@@ -12,15 +12,8 @@
             姓名
           </label>
 
-          <input
-            id="nickname"
-            v-model="nickname"
-            type="text"
-            maxlength="12"
-            class="field-input"
-            placeholder="请输入您的姓名"
-            @keyup.enter="handleSubmit"
-          />
+          <input id="nickname" v-model="nickname" type="text" maxlength="12" class="field-input" placeholder="请输入您的姓名"
+            @keyup.enter="handleSubmit" />
         </div>
 
         <div class="field-group field-group-bus">
@@ -32,14 +25,8 @@
           <p class="field-tip">请选择您所在的大巴车</p>
 
           <div class="bus-grid">
-            <button
-              v-for="n in busCount"
-              :key="n"
-              type="button"
-              class="bus-item"
-              :class="{ active: busNumber === n }"
-              @click="busNumber = n"
-            >
+            <button v-for="n in busCount" :key="n" type="button" class="bus-item" :class="{ active: busNumber === n }"
+              @click="busNumber = n">
               <span class="bus-icon">🚌</span>
               <strong>{{ n }}号车</strong>
               <span v-if="busNumber === n" class="bus-check">✓</span>
@@ -49,20 +36,13 @@
 
         <div class="reference-banner" aria-hidden="true"></div>
 
-        <button
-          class="enter-btn"
-          :disabled="!nickname.trim() || !busNumber || submitting"
-          @click="handleSubmit"
-        >
+        <button class="enter-btn" :disabled="!nickname.trim() || !busNumber || submitting" @click="handleSubmit">
           <span>{{ submitting ? '连接中...' : '进入游戏平台' }}</span>
           <i>›</i>
         </button>
 
-        <button
-          class="test-enter-btn"
-          :disabled="!nickname.trim() || !busNumber || submitting"
-          @click="handleTestSubmit"
-        >
+        <button class="test-enter-btn" :disabled="!nickname.trim() || !busNumber || submitting"
+          @click="handleTestSubmit">
           进入游戏测试平台
         </button>
 
@@ -78,180 +58,180 @@
 </template>
 
 <script setup>
-import { onMounted, onUnmounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { gameState, socket, setPlayer, setPlayMode } from '../socket'
+  import { onMounted, onUnmounted, ref } from 'vue'
+  import { useRouter } from 'vue-router'
+  import { gameState, socket, setPlayer, setPlayMode } from '../socket'
 
-const router = useRouter()
-const nickname = ref('')
-const busNumber = ref(1)
-const busCount = ref(4)
-const stats = ref({ onlinePlayers: 0, totalPlayers: 0 })
-const submitting = ref(false)
-const submitError = ref('')
+  const router = useRouter()
+  const nickname = ref('')
+  const busNumber = ref(1)
+  const busCount = ref(4)
+  const stats = ref({ onlinePlayers: 0, totalPlayers: 0 })
+  const submitting = ref(false)
+  const submitError = ref('')
 
-function rememberPlayer(player) {
-  setPlayer(player)
-  localStorage.setItem(
-    'bus_game_player',
-    JSON.stringify({
-      id: player.id,
-      nickname: player.nickname,
-      busNumber: player.busNumber
-    })
-  )
-}
-
-function toLobby(player, mode = 'normal') {
-  setPlayMode(mode)
-  rememberPlayer(player)
-  router.push('/lobby')
-}
-
-function resumeRoom(player, currentRoom) {
-  rememberPlayer(player)
-  gameState.currentRoom = currentRoom
-  gameState.currentGame = currentRoom.gameState
-  socket.emit('room:join', { roomId: currentRoom.roomId })
-  router.push(`/game/${currentRoom.roomId}`)
-}
-
-function restorePlayer() {
-  const saved = localStorage.getItem('bus_game_player')
-  if (!saved) return
-
-  let player
-  try {
-    player = JSON.parse(saved)
-  } catch {
-    localStorage.removeItem('bus_game_player')
-    return
-  }
-
-  ensureSocketConnected()
-    .then(() => {
-      socket.emit('player:reconnect', { playerId: player.id }, (res) => {
-        if (res?.player && res?.currentRoom) {
-          resumeRoom(res.player, res.currentRoom)
-        } else if (res?.player) {
-          toLobby(res.player, localStorage.getItem('bus_game_play_mode') || 'normal')
-        } else {
-          localStorage.removeItem('bus_game_player')
-        }
+  function rememberPlayer(player) {
+    setPlayer(player)
+    localStorage.setItem(
+      'bus_game_player',
+      JSON.stringify({
+        id: player.id,
+        nickname: player.nickname,
+        busNumber: player.busNumber
       })
-    })
-    .catch(() => null)
-}
-
-function handleServerUpdate(data) {
-  stats.value = data.stats || {}
-}
-
-function ensureSocketConnected() {
-  if (socket.connected) return Promise.resolve()
-
-  return new Promise((resolve, reject) => {
-    const timeoutId = window.setTimeout(() => {
-      cleanup()
-      reject(new Error('当前无法连接到游戏服务，请确认后端已启动'))
-    }, 4000)
-
-    function handleConnect() {
-      cleanup()
-      resolve()
-    }
-
-    function handleError() {
-      cleanup()
-      reject(new Error('当前无法连接到游戏服务，请确认后端已启动'))
-    }
-
-    function cleanup() {
-      window.clearTimeout(timeoutId)
-      socket.off('connect', handleConnect)
-      socket.off('connect_error', handleError)
-    }
-
-    socket.once('connect', handleConnect)
-    socket.once('connect_error', handleError)
-    socket.connect()
-  })
-}
-
-async function handleSubmit() {
-  await handleSubmitWithMode('normal')
-}
-
-async function handleTestSubmit() {
-  await handleSubmitWithMode('test')
-}
-
-async function handleSubmitWithMode(mode) {
-  if (!nickname.value.trim() || !busNumber.value) return
-  if (submitting.value) return
-
-  submitError.value = ''
-  submitting.value = true
-
-  try {
-    await ensureSocketConnected()
-  } catch (error) {
-    submitting.value = false
-    submitError.value = error.message
-    return
+    )
   }
 
-  socket.emit(
-    'player:register',
-    {
-      nickname: nickname.value.trim(),
-      busNumber: busNumber.value
-    },
-    (res) => {
-      submitting.value = false
-      if (res?.error) {
-        submitError.value = res.error
-        return
-      }
-      if (res?.player) {
-        toLobby(res.player, mode)
-        return
-      }
-      submitError.value = '进入失败，请稍后重试'
+  function toLobby(player, mode = 'normal') {
+    setPlayMode(mode)
+    rememberPlayer(player)
+    router.push('/lobby')
+  }
+
+  function resumeRoom(player, currentRoom) {
+    rememberPlayer(player)
+    gameState.currentRoom = currentRoom
+    gameState.currentGame = currentRoom.gameState
+    socket.emit('room:join', { roomId: currentRoom.roomId })
+    router.push(`/game/${currentRoom.roomId}`)
+  }
+
+  function restorePlayer() {
+    const saved = localStorage.getItem('bus_game_player')
+    if (!saved) return
+
+    let player
+    try {
+      player = JSON.parse(saved)
+    } catch {
+      localStorage.removeItem('bus_game_player')
+      return
     }
-  )
-}
 
-onMounted(() => {
-  restorePlayer()
-  socket.on('server:update', handleServerUpdate)
-})
+    ensureSocketConnected()
+      .then(() => {
+        socket.emit('player:reconnect', { playerId: player.id }, (res) => {
+          if (res?.player && res?.currentRoom) {
+            resumeRoom(res.player, res.currentRoom)
+          } else if (res?.player) {
+            toLobby(res.player, localStorage.getItem('bus_game_play_mode') || 'normal')
+          } else {
+            localStorage.removeItem('bus_game_player')
+          }
+        })
+      })
+      .catch(() => null)
+  }
 
-onUnmounted(() => {
-  socket.off('server:update', handleServerUpdate)
-})
+  function handleServerUpdate(data) {
+    stats.value = data.stats || {}
+  }
+
+  function ensureSocketConnected() {
+    if (socket.connected) return Promise.resolve()
+
+    return new Promise((resolve, reject) => {
+      const timeoutId = window.setTimeout(() => {
+        cleanup()
+        reject(new Error('当前无法连接到游戏服务，请确认后端已启动'))
+      }, 4000)
+
+      function handleConnect() {
+        cleanup()
+        resolve()
+      }
+
+      function handleError() {
+        cleanup()
+        reject(new Error('当前无法连接到游戏服务，请确认后端已启动'))
+      }
+
+      function cleanup() {
+        window.clearTimeout(timeoutId)
+        socket.off('connect', handleConnect)
+        socket.off('connect_error', handleError)
+      }
+
+      socket.once('connect', handleConnect)
+      socket.once('connect_error', handleError)
+      socket.connect()
+    })
+  }
+
+  async function handleSubmit() {
+    await handleSubmitWithMode('normal')
+  }
+
+  async function handleTestSubmit() {
+    await handleSubmitWithMode('test')
+  }
+
+  async function handleSubmitWithMode(mode) {
+    if (!nickname.value.trim() || !busNumber.value) return
+    if (submitting.value) return
+
+    submitError.value = ''
+    submitting.value = true
+
+    try {
+      await ensureSocketConnected()
+    } catch (error) {
+      submitting.value = false
+      submitError.value = error.message
+      return
+    }
+
+    socket.emit(
+      'player:register',
+      {
+        nickname: nickname.value.trim(),
+        busNumber: busNumber.value
+      },
+      (res) => {
+        submitting.value = false
+        if (res?.error) {
+          submitError.value = res.error
+          return
+        }
+        if (res?.player) {
+          toLobby(res.player, mode)
+          return
+        }
+        submitError.value = '进入失败，请稍后重试'
+      }
+    )
+  }
+
+  onMounted(() => {
+    restorePlayer()
+    socket.on('server:update', handleServerUpdate)
+  })
+
+  onUnmounted(() => {
+    socket.off('server:update', handleServerUpdate)
+  })
 </script>
 
 <style scoped>
-.landing-page {
-  min-height: 100vh;
-  padding: 0 14px 30px;
-  position: relative;
-  overflow: hidden;
-  /* background: linear-gradient(180deg, #0a64ef 0%, #47b4ff 46%, #eef9ff 88%); */
-}
+  .landing-page {
+    min-height: 100vh;
+    padding: 0 14px 30px;
+    position: relative;
+    overflow: hidden;
+    /* background: linear-gradient(180deg, #0a64ef 0%, #47b4ff 46%, #eef9ff 88%); */
+  }
 
-.landing-page::before,
-.landing-page::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  pointer-events: none;
-  z-index: 0;
-}
+  .landing-page::before,
+  .landing-page::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+    z-index: 0;
+  }
 
-/* .landing-page::before {
+  /* .landing-page::before {
   top: 0;
   height: 430px;
 }
@@ -261,262 +241,262 @@ onUnmounted(() => {
   height: 220px;
 } */
 
-.landing-shell {
-  width: min(100%, 460px);
-  margin: 0 auto;
-  min-height: 100vh;
-  position: relative;
-  z-index: 1;
-  padding-top: 10px;
-}
+  .landing-shell {
+    width: min(100%, 460px);
+    margin: 0 auto;
+    min-height: 100vh;
+    position: relative;
+    z-index: 1;
+    padding-top: 10px;
+  }
 
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
 
-.hero-area {
-  width: 100%;
-  aspect-ratio: 941 / 648;
-  background: url('/assets/ui-ref/landing.png') center top / 100% auto no-repeat;
-}
-
-.entry-card {
-  margin-top: -16px;
-  padding: 28px 22px 20px;
-  border-radius: 36px;
-  background: rgba(255, 255, 255, 0.98);
-  border: 1px solid rgba(228, 237, 250, 0.96);
-  box-shadow:
-    0 22px 44px rgba(10, 74, 170, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.8);
-}
-
-.field-group + .field-group {
-  margin-top: 26px;
-  padding-top: 22px;
-  border-top: 1px dashed #d7e4f7;
-}
-
-.field-label {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 12px;
-  color: #1f3562;
-  font-size: 18px;
-  font-weight: 900;
-}
-
-.field-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 12px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, rgba(31, 111, 255, 0.12), rgba(32, 197, 192, 0.14));
-  font-size: 18px;
-}
-
-.field-tip {
-  margin: -4px 0 14px;
-  color: #6b82ac;
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.field-input {
-  width: 100%;
-  min-height: 60px;
-  padding: 0 18px;
-  border: 1px solid #d2e0f4;
-  border-radius: 18px;
-  outline: none;
-  background: #fbfdff;
-  color: #17315d;
-  font-size: 18px;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease;
-}
-
-.field-input:focus {
-  border-color: #4d95ff;
-  box-shadow: 0 0 0 4px rgba(77, 149, 255, 0.14);
-}
-
-.bus-grid {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.bus-item {
-  position: relative;
-  min-height: 118px;
-  padding: 14px 8px 12px;
-  border-radius: 20px;
-  border: 1px solid #d9e4f5;
-  background: linear-gradient(180deg, #ffffff, #fbfdff);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  color: #20355f;
-  box-shadow: 0 10px 18px rgba(7, 84, 178, 0.08);
-}
-
-.bus-icon {
-  font-size: 30px;
-}
-
-.bus-item strong {
-  font-size: 17px;
-  line-height: 1;
-}
-
-.bus-item.active {
-  border-color: rgba(28, 113, 255, 0.32);
-  background: linear-gradient(180deg, #318cff, #115df3);
-  color: #fff;
-  box-shadow: 0 18px 28px rgba(10, 90, 212, 0.22);
-}
-
-.bus-check {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  display: grid;
-  place-items: center;
-  background: rgba(255, 255, 255, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  color: #fff;
-  font-size: 14px;
-  font-weight: 900;
-}
-
-.reference-banner {
-  margin-top: 22px;
-  width: 100%;
-  aspect-ratio: 754 / 166;
-  border-radius: 22px;
-  background: url('/assets/landing/banner-strip.png') center / cover no-repeat;
-  border: 1px solid rgba(208, 228, 247, 0.96);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
-}
-
-.enter-btn {
-  margin-top: 26px;
-  width: 100%;
-  min-height: 68px;
-  padding: 0 22px;
-  border-radius: 24px;
-  border: 1px solid rgba(22, 108, 255, 0.18);
-  background: linear-gradient(180deg, #3291ff, #145ff2);
-  color: #fff;
-  display: inline-flex;
-  align-items: center;
-  justify-content: space-between;
-  font-size: 24px;
-  font-weight: 900;
-  box-shadow:
-    0 16px 26px rgba(10, 90, 212, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22);
-}
-
-.enter-btn i {
-  font-style: normal;
-  font-size: 34px;
-  line-height: 1;
-}
-
-.enter-btn:disabled {
-  opacity: 0.58;
-  cursor: not-allowed;
-  box-shadow: none;
-  filter: grayscale(0.2);
-}
-
-.test-enter-btn {
-  margin-top: 12px;
-  width: 100%;
-  min-height: 48px;
-  border-radius: 18px;
-  border: 1px solid #bcd5fb;
-  background: linear-gradient(180deg, #ffffff, #eef6ff);
-  color: #1764df;
-  font-size: 16px;
-  font-weight: 900;
-}
-
-.test-enter-btn:disabled {
-  opacity: 0.52;
-  cursor: not-allowed;
-}
-
-.reward-note {
-  margin: 18px 0 0;
-  text-align: center;
-  color: #2f456e;
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.gift-icon {
-  margin-right: 8px;
-}
-
-.reward-note strong {
-  color: #f06d00;
-}
-
-.submit-error {
-  margin: 12px 0 0;
-  color: #d63b3b;
-  font-size: 14px;
-  font-weight: 700;
-  text-align: center;
-}
-
-@media (max-width: 390px) {
-  .landing-page {
-    padding-inline: 10px;
+  .hero-area {
+    width: 100%;
+    aspect-ratio: 941 / 750;
+    background: url('/assets/ui-ref/landing.png') center top / 100% auto no-repeat;
   }
 
   .entry-card {
-    padding: 24px 16px 18px;
+    margin-top: -16px;
+    padding: 28px 22px 20px;
+    border-radius: 36px;
+    background: rgba(255, 255, 255, 0.98);
+    border: 1px solid rgba(228, 237, 250, 0.96);
+    box-shadow:
+      0 22px 44px rgba(10, 74, 170, 0.14),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8);
+  }
+
+  .field-group+.field-group {
+    margin-top: 26px;
+    padding-top: 22px;
+    border-top: 1px dashed #d7e4f7;
+  }
+
+  .field-label {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 12px;
+    color: #1f3562;
+    font-size: 18px;
+    font-weight: 900;
+  }
+
+  .field-icon {
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, rgba(31, 111, 255, 0.12), rgba(32, 197, 192, 0.14));
+    font-size: 18px;
+  }
+
+  .field-tip {
+    margin: -4px 0 14px;
+    color: #6b82ac;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .field-input {
+    width: 100%;
+    min-height: 60px;
+    padding: 0 18px;
+    border: 1px solid #d2e0f4;
+    border-radius: 18px;
+    outline: none;
+    background: #fbfdff;
+    color: #17315d;
+    font-size: 18px;
+    transition: border-color 0.16s ease, box-shadow 0.16s ease;
+  }
+
+  .field-input:focus {
+    border-color: #4d95ff;
+    box-shadow: 0 0 0 4px rgba(77, 149, 255, 0.14);
   }
 
   .bus-grid {
-    gap: 10px;
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 12px;
   }
 
   .bus-item {
-    min-height: 108px;
-    border-radius: 18px;
+    position: relative;
+    min-height: 118px;
+    padding: 14px 8px 12px;
+    border-radius: 20px;
+    border: 1px solid #d9e4f5;
+    background: linear-gradient(180deg, #ffffff, #fbfdff);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    color: #20355f;
+    box-shadow: 0 10px 18px rgba(7, 84, 178, 0.08);
+  }
+
+  .bus-icon {
+    font-size: 30px;
   }
 
   .bus-item strong {
-    font-size: 15px;
+    font-size: 17px;
+    line-height: 1;
+  }
+
+  .bus-item.active {
+    border-color: rgba(28, 113, 255, 0.32);
+    background: linear-gradient(180deg, #318cff, #115df3);
+    color: #fff;
+    box-shadow: 0 18px 28px rgba(10, 90, 212, 0.22);
+  }
+
+  .bus-check {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: rgba(255, 255, 255, 0.18);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 900;
   }
 
   .reference-banner {
-    border-radius: 18px;
+    margin-top: 22px;
+    width: 100%;
+    aspect-ratio: 754 / 166;
+    border-radius: 22px;
+    background: url('/assets/landing/banner-strip.png') center / cover no-repeat;
+    border: 1px solid rgba(208, 228, 247, 0.96);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
   }
 
   .enter-btn {
-    min-height: 62px;
-    font-size: 21px;
+    margin-top: 26px;
+    width: 100%;
+    min-height: 68px;
+    padding: 0 22px;
+    border-radius: 24px;
+    border: 1px solid rgba(22, 108, 255, 0.18);
+    background: linear-gradient(180deg, #3291ff, #145ff2);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 24px;
+    font-weight: 900;
+    box-shadow:
+      0 16px 26px rgba(10, 90, 212, 0.22),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22);
   }
-}
+
+  .enter-btn i {
+    font-style: normal;
+    font-size: 34px;
+    line-height: 1;
+  }
+
+  .enter-btn:disabled {
+    opacity: 0.58;
+    cursor: not-allowed;
+    box-shadow: none;
+    filter: grayscale(0.2);
+  }
+
+  .test-enter-btn {
+    margin-top: 12px;
+    width: 100%;
+    min-height: 48px;
+    border-radius: 18px;
+    border: 1px solid #bcd5fb;
+    background: linear-gradient(180deg, #ffffff, #eef6ff);
+    color: #1764df;
+    font-size: 16px;
+    font-weight: 900;
+  }
+
+  .test-enter-btn:disabled {
+    opacity: 0.52;
+    cursor: not-allowed;
+  }
+
+  .reward-note {
+    margin: 18px 0 0;
+    text-align: center;
+    color: #2f456e;
+    font-size: 16px;
+    font-weight: 700;
+  }
+
+  .gift-icon {
+    margin-right: 8px;
+  }
+
+  .reward-note strong {
+    color: #f06d00;
+  }
+
+  .submit-error {
+    margin: 12px 0 0;
+    color: #d63b3b;
+    font-size: 14px;
+    font-weight: 700;
+    text-align: center;
+  }
+
+  @media (max-width: 390px) {
+    .landing-page {
+      padding-inline: 10px;
+    }
+
+    .entry-card {
+      padding: 24px 16px 18px;
+    }
+
+    .bus-grid {
+      gap: 10px;
+    }
+
+    .bus-item {
+      min-height: 108px;
+      border-radius: 18px;
+    }
+
+    .bus-item strong {
+      font-size: 15px;
+    }
+
+    .reference-banner {
+      border-radius: 18px;
+    }
+
+    .enter-btn {
+      min-height: 62px;
+      font-size: 21px;
+    }
+  }
 </style>

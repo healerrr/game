@@ -59,7 +59,16 @@ test('猜数字达到最大次数后无人获胜', () => {
   assert.equal(state.guesses.length, 10);
 });
 
-test('五子棋只能撤销自己的上一手', () => {
+test('快问快答每局只有三道高难度题', () => {
+  const engine = getEngine('quiz');
+  const state = engine.init(null, ['p1', 'p2']);
+
+  assert.equal(state.maxRounds, 3);
+  assert.equal(state.questions.length, 3);
+  assert.equal(state.currentQuestion.options.length, 4);
+});
+
+test('五子棋忽略悔棋动作', () => {
   const engine = new GomokuEngine();
   const state = engine.init(null, ['p1', 'p2']);
 
@@ -69,11 +78,7 @@ test('五子棋只能撤销自己的上一手', () => {
   assert.notEqual(state.board[7][7], EMPTY);
   assert.equal(state.moveHistory.length, 1);
 
-  engine.update(state, { type: 'undo' }, 'p1');
-
-  assert.equal(state.board[7][7], EMPTY);
-  assert.equal(state.moveHistory.length, 0);
-  assert.equal(state.currentPlayer, 'p1');
+  assert.equal(state.currentPlayer, 'p2');
 });
 
 test('象棋将帅照面会被视为将军并阻止露将移动', () => {
@@ -90,7 +95,7 @@ test('象棋将帅照面会被视为将军并阻止露将移动', () => {
   assert.equal(moves.some(move => move.row === 5 && move.col === 5), false);
 });
 
-test('象棋只能撤销自己的上一手', () => {
+test('象棋忽略悔棋动作', () => {
   const engine = new ChessEngine();
   const state = engine.init(null, ['p1', 'p2']);
 
@@ -103,8 +108,8 @@ test('象棋只能撤销自己的上一手', () => {
 
   engine.update(state, { type: 'undo' }, 'p1');
 
-  assert.equal(state.board[6][0]?.type, PIECE_TYPES.PAWN);
-  assert.equal(state.board[5][0], null);
-  assert.equal(state.moveHistory.length, 0);
-  assert.equal(state.currentPlayer, COLORS.RED);
+  assert.equal(state.board[5][0]?.type, PIECE_TYPES.PAWN);
+  assert.equal(state.board[6][0], null);
+  assert.equal(state.moveHistory.length, 1);
+  assert.equal(state.currentPlayer, COLORS.BLACK);
 });

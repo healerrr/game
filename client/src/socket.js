@@ -105,8 +105,11 @@ socket.on('room:abandoned', (data) => {
 })
 
 socket.on('room:invited', (data) => {
-  gameState.invitations.unshift(data)
-  gameState.invitations = gameState.invitations.slice(0, 3)
+  const roomId = data?.room?.roomId || data?.room?.id
+  gameState.invitations = [
+    data,
+    ...gameState.invitations.filter(item => (item?.room?.roomId || item?.room?.id) !== roomId)
+  ].slice(0, 3)
   window.dispatchEvent(new CustomEvent('room:invited', { detail: data }))
 })
 

@@ -26,6 +26,25 @@ test('炸金花暗牌倍率为 2，明牌倍率为 1', () => {
   assert.equal(blindMultiplier(state, 'p1'), 1);
 });
 
+test('炸金花房间准备完成后直接进入下注阶段', () => {
+  const engine = new ZhaJinHuaEngine();
+  const state = engine.init(null, ['p1', 'p2', 'p3']);
+
+  assert.equal(state.phase, 'bet');
+  assert.equal(state.currentPlayer, 'p1');
+  assert.deepEqual(state.actedThisRound, []);
+});
+
+test('炸金花开局前不能看牌', () => {
+  const engine = new ZhaJinHuaEngine();
+  const state = engine.init(null, ['p1', 'p2']);
+  state.phase = 'look';
+
+  engine.update(state, { type: 'peek' }, 'p1');
+
+  assert.deepEqual(state.lookedPlayers, []);
+});
+
 test('炸金花比牌会淘汰失败玩家并结束', () => {
   const engine = new ZhaJinHuaEngine();
   const state = engine.init(null, ['p1', 'p2']);

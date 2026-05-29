@@ -67,13 +67,7 @@
           <!-- 手牌 -->
           <div
             class="hand-row"
-            :class="{ dragging: isDraggingHand }"
             ref="handRowRef"
-            @pointerdown="onHandPointerDown"
-            @pointermove="onHandPointerMove"
-            @pointerup="finishHandDrag"
-            @pointercancel="finishHandDrag"
-            @lostpointercapture="finishHandDrag"
           >
             <div
               v-for="(tile, index) in myHand"
@@ -86,6 +80,9 @@
                 'is-zhong': tile.suit === 'zhong'
               }"
               :data-tile-index="index"
+              role="button"
+              :aria-label="`${selectedIndex === index ? '打出' : '选择'}${getTileAlt(tile)}`"
+              @click.stop="onTileTap(index)"
             >
               <img
                 :src="getTileImageUrl(tile)"
@@ -100,11 +97,7 @@
 
         <!-- 右侧操作按钮 -->
         <div class="action-buttons">
-          <template v-if="canDraw">
-            <button class="btn-draw" @click="draw">摸牌</button>
-          </template>
-
-          <template v-else-if="canDiscard">
+          <template v-if="canDiscard">
             <button class="btn-peng" :disabled="!canSelfAction('peng')" @click="emitSelfAction('peng')">碰</button>
             <button class="btn-gang" :disabled="!canSelfAction('gang') && !canSelfAction('angang') && !canSelfAction('bugang')" @click="emitSelfGang">杠</button>
             <button class="btn-hu" :disabled="!canSelfAction('hu')" @click="emitSelfAction('hu')">胡</button>
@@ -236,10 +229,10 @@ function getTileSvgFilename(tile) {
 
 function getTileImageUrl(tile) {
   const filename = getTileSvgFilename(tile)
-  return new URL(`../../assets/mahjong-tiles/riichi-mahjong-tiles-master/Regular/${filename}`, import.meta.url).href
+  return `/assets/mahjong-tiles/Regular/${filename}`
 }
 
-const backTileUrl = new URL('../../assets/mahjong-tiles/riichi-mahjong-tiles-master/Regular/Back.svg', import.meta.url).href
+const backTileUrl = '/assets/mahjong-tiles/Regular/Back.svg'
 
 function getTileAlt(tile) {
   if (!tile) return '牌背'
@@ -257,18 +250,13 @@ const seatOrder = ['south', 'west', 'north', 'east']
 const selectedIndex = ref(null)
 const showRules = ref(false)
 const isPortrait = ref(false)
-const isDraggingHand = ref(false)
 const canvasRef = ref(null)
 const canvasWrapRef = ref(null)
 const handRowRef = ref(null)
 let renderer = null
 let rafId = 0
 let resizeObserver = null
-const handDrag = {
-  active: false,
-  pointerId: null,
-  startIndex: null
-}
+let autoDrawTimer = null
 
 // ============== 计算属性 ==============
 
@@ -367,7 +355,7 @@ const myMelds = computed(() => {
 const lastDiscard = computed(() => props.gs.lastDiscard || null)
 
 const waitingText = computed(() => {
-  if (canDraw.value) return '摸牌'
+  if (canDraw.value) return '自动摸牌中'
   if (canDiscard.value) return '出牌'
   if (props.gs.phase === 'response') return '等待响应'
   if (props.gs.phase === 'finished') return '结算'
@@ -499,53 +487,14 @@ function emitResponseByType(type) {
   else emit('action', { type: opt.type })
 }
 
-function selectTile(index) {
+function onTileTap(index) {
   if (!canDiscard.value) return
-  selectedIndex.value = selectedIndex.value === index ? null : index
-}
-
-function onHandPointerDown(event) {
-  const index = getTileIndexFromPoint(event)
-  if (index === null) return
-
-  event.preventDefault()
-  handRowRef.value?.setPointerCapture?.(event.pointerId)
-  handDrag.active = true
-  handDrag.pointerId = event.pointerId
-  handDrag.startIndex = index
-  isDraggingHand.value = true
-  selectTile(index)
-}
-
-function onHandPointerMove(event) {
-  if (!handDrag.active || handDrag.pointerId !== event.pointerId) return
-  const index = getTileIndexFromPoint(event)
-  if (index === null || index === selectedIndex.value) return
-
-  event.preventDefault()
+  if (selectedIndex.value === index) {
+    discard()
+    return
+  }
   selectedIndex.value = index
 }
-
-function finishHandDrag(event) {
-  if (!handDrag.active) return
-  if (event?.pointerId != null && event.pointerId !== handDrag.pointerId) return
-  handRowRef.value?.releasePointerCapture?.(handDrag.pointerId)
-  handDrag.active = false
-  handDrag.pointerId = null
-  handDrag.startIndex = null
-  isDraggingHand.value = false
-}
-
-function getTileIndexFromPoint(event) {
-  if (!canDiscard.value || typeof document === 'undefined') return null
-  const elements = document.elementsFromPoint(event.clientX, event.clientY)
-  const tileEl = elements.find((el) => el?.classList?.contains('hand-tile-wrap') && handRowRef.value?.contains(el))
-  if (!tileEl) return null
-  const index = Number(tileEl.dataset.tileIndex)
-  return Number.isInteger(index) && index >= 0 && index < myHand.value.length ? index : null
-}
-
-function draw() { emit('action', { type: 'draw' }) }
 
 function discard() {
   const card = myHand.value[selectedIndex.value]
@@ -555,6 +504,14 @@ function discard() {
 }
 
 // ============== Canvas 渲染 ==============
+
+function queueAutoDraw() {
+  if (autoDrawTimer || !canDraw.value) return
+  autoDrawTimer = window.setTimeout(() => {
+    autoDrawTimer = null
+    if (canDraw.value) emit('action', { type: 'draw' })
+  }, 120)
+}
 
 function scheduleRedraw() {
   if (rafId) cancelAnimationFrame(rafId)
@@ -660,25 +617,27 @@ function drawTable() {
   drawCenterDiscards(innerX, innerY, innerW, innerH)
 
   // 中心剩余牌数保持轻量，避免盖住弃牌区。
-  const labelW = 92, labelH = 30
-  const labelX = innerX + innerW / 2 - labelW / 2
-  const labelY = innerY + innerH / 2 - labelH / 2
-  renderer.drawRoundRect(labelX, labelY, labelW, labelH, 15, 'rgba(12, 55, 38, 0.55)', 'rgba(255, 220, 130, 0.45)', 1)
-  renderer.drawText('剩余', labelX + labelW / 2 - 13, labelY + 9, {
-    font: 'bold 11px "PingFang SC", sans-serif',
-    color: '#dff5e3',
-    align: 'right',
-    baseline: 'middle'
-  })
-  renderer.drawText(String(props.gs.remainingTiles ?? 0), labelX + labelW / 2 - 7, labelY + 9, {
-    font: 'bold 15px "PingFang SC", sans-serif',
-    color: '#FFD54F',
-    align: 'left',
-    baseline: 'middle'
-  })
+  if (innerH >= 260) {
+    const labelW = 92, labelH = 30
+    const labelX = innerX + innerW / 2 - labelW / 2
+    const labelY = innerY + innerH / 2 - labelH / 2
+    renderer.drawRoundRect(labelX, labelY, labelW, labelH, 15, 'rgba(12, 55, 38, 0.55)', 'rgba(255, 220, 130, 0.45)', 1)
+    renderer.drawText('剩余', labelX + labelW / 2 - 13, labelY + 9, {
+      font: 'bold 11px "PingFang SC", sans-serif',
+      color: '#dff5e3',
+      align: 'right',
+      baseline: 'middle'
+    })
+    renderer.drawText(String(props.gs.remainingTiles ?? 0), labelX + labelW / 2 - 7, labelY + 9, {
+      font: 'bold 15px "PingFang SC", sans-serif',
+      color: '#FFD54F',
+      align: 'left',
+      baseline: 'middle'
+    })
+  }
 
   // 底部我方座位信息
-  if (bottom) {
+  if (bottom && innerH >= 240) {
     const seatX = innerX + innerW / 2 - 20
     const seatY = innerY + innerH - 70
     renderer.drawSeatInfo(seatX, seatY, {
@@ -702,8 +661,19 @@ function drawTable() {
 function drawCenterDiscards(innerX, innerY, innerW, innerH) {
   const cx = innerX + innerW / 2
   const cy = innerY + innerH / 2
-  const tileW = 20, tileH = 28, gap = 2
-  const cols = 8
+  const compact = innerH < 235
+  const tileH = compact ? 18 : Math.min(26, Math.max(20, Math.floor(innerH * 0.095)))
+  const tileW = Math.round(tileH * 0.72)
+  const gap = compact ? 1 : 2
+  const pad = compact ? 4 : 6
+  const hCols = compact ? 6 : 7
+  const hRows = compact ? 2 : 3
+  const vCols = compact ? 3 : 4
+  const vRows = compact ? 4 : 5
+  const hPanelW = hCols * tileW + (hCols - 1) * gap + pad * 2
+  const hPanelH = hRows * tileH + (hRows - 1) * gap + pad * 2
+  const vPanelW = vCols * tileW + (vCols - 1) * gap + pad * 2
+  const vPanelH = vRows * tileH + (vRows - 1) * gap + pad * 2
 
   const playerByPos = {
     top: seatTop.value,
@@ -712,45 +682,46 @@ function drawCenterDiscards(innerX, innerY, innerW, innerH) {
     bottom: seatBottom.value
   }
 
-  const offset = Math.max(48, Math.min(innerW, innerH) * 0.18)
+  const topY = innerY + (compact ? 92 : 108)
+  const sideY = cy - vPanelH / 2
+  const sideInset = compact ? 88 : 108
+  const bottomY = innerY + innerH - hPanelH - (compact ? 8 : 14)
 
-  // 上方弃牌
-  const topDiscards = (props.gs.discards?.[playerByPos.top?.id] || []).slice(-cols)
-  topDiscards.forEach((tile, i) => {
-    const tx = cx - (cols * (tileW + gap) - gap) / 2 + i * (tileW + gap)
-    const ty = cy - offset - tileH
+  drawDiscardRiver(playerByPos.top, cx - hPanelW / 2, topY, hCols, hRows, tileW, tileH, gap, pad)
+  drawDiscardRiver(playerByPos.left, innerX + sideInset, sideY, vCols, vRows, tileW, tileH, gap, pad)
+  drawDiscardRiver(playerByPos.right, innerX + innerW - sideInset - vPanelW, sideY, vCols, vRows, tileW, tileH, gap, pad)
+  drawDiscardRiver(playerByPos.bottom, cx - hPanelW / 2, bottomY, hCols, hRows, tileW, tileH, gap, pad)
+}
+
+function drawDiscardRiver(player, x, y, cols, rows, tileW, tileH, gap, pad) {
+  if (!player) return
+  const maxTiles = cols * rows
+  const tiles = (props.gs.discards?.[player.id] || []).slice(-maxTiles)
+  if (!tiles.length) return
+  const usedRows = Math.ceil(tiles.length / cols)
+  const panelW = cols * tileW + (cols - 1) * gap + pad * 2
+  const panelH = usedRows * tileH + Math.max(usedRows - 1, 0) * gap + pad * 2
+
+  renderer.drawRoundRect(x, y, panelW, panelH, 8, 'rgba(4, 34, 23, 0.52)', 'rgba(218, 186, 99, 0.24)', 1)
+
+  tiles.forEach((tile, i) => {
+    const col = i % cols
+    const row = Math.floor(i / cols)
+    const tx = x + pad + col * (tileW + gap)
+    const ty = y + pad + row * (tileH + gap)
     const imageUrl = getTileImageUrl(tile)
     renderer.drawMahjongTileFace(tx, ty, tileW, tileH, tile, imageUrl)
+    if (isLastDiscard(player.id, tile)) {
+      renderer.drawRoundRect(tx - 1, ty - 1, tileW + 2, tileH + 2, 4, null, '#FFD54F', 2)
+    }
   })
+}
 
-  // 下方弃牌
-  const bottomDiscards = (props.gs.discards?.[playerByPos.bottom?.id] || []).slice(-cols)
-  bottomDiscards.forEach((tile, i) => {
-    const tx = cx - (cols * (tileW + gap) - gap) / 2 + i * (tileW + gap)
-    const ty = cy + offset
-    const imageUrl = getTileImageUrl(tile)
-    renderer.drawMahjongTileFace(tx, ty, tileW, tileH, tile, imageUrl)
-  })
-
-  // 左侧弃牌
-  const leftRows = 6
-  const leftDiscards = (props.gs.discards?.[playerByPos.left?.id] || []).slice(-leftRows)
-  leftDiscards.forEach((tile, i) => {
-    const tx = cx - offset - tileW
-    const ty = cy - (leftRows * (tileH + gap) - gap) / 2 + i * (tileH + gap)
-    const imageUrl = getTileImageUrl(tile)
-    renderer.drawMahjongTileFace(tx, ty, tileW, tileH, tile, imageUrl)
-  })
-
-  // 右侧弃牌
-  const rightRows = 6
-  const rightDiscards = (props.gs.discards?.[playerByPos.right?.id] || []).slice(-rightRows)
-  rightDiscards.forEach((tile, i) => {
-    const tx = cx + offset
-    const ty = cy - (rightRows * (tileH + gap) - gap) / 2 + i * (tileH + gap)
-    const imageUrl = getTileImageUrl(tile)
-    renderer.drawMahjongTileFace(tx, ty, tileW, tileH, tile, imageUrl)
-  })
+function isLastDiscard(playerId, tile) {
+  const last = lastDiscard.value
+  if (!last || last.playerId !== playerId) return false
+  const card = last.card || last.tile
+  return card?.id === tile?.id || (card?.suit === tile?.suit && card?.rank === tile?.rank)
 }
 
 // ============== 生命周期 ==============
@@ -823,6 +794,7 @@ async function preloadAllTiles() {
 
 onBeforeUnmount(() => {
   if (rafId) cancelAnimationFrame(rafId)
+  if (autoDrawTimer) window.clearTimeout(autoDrawTimer)
   if (resizeObserver) resizeObserver.disconnect()
   else window.removeEventListener('resize', scheduleRedraw)
   window.removeEventListener('resize', checkOrientation)
@@ -840,6 +812,14 @@ watch(
   { deep: true }
 )
 
+watch(canDraw, (value) => {
+  if (!value && autoDrawTimer) {
+    window.clearTimeout(autoDrawTimer)
+    autoDrawTimer = null
+  }
+  if (value) queueAutoDraw()
+}, { immediate: true })
+
 watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
   if (!canDiscard.value) selectedIndex.value = null
   if (selectedIndex.value !== null && selectedIndex.value >= myHand.value.length) selectedIndex.value = null
@@ -851,6 +831,7 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
 .game-wrapper {
   width: 100%;
   height: 100vh;
+  height: 100dvh;
   overflow: hidden;
 }
 
@@ -1387,10 +1368,11 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
 }
 
 .mj-info-bar {
-  flex-basis: 40px;
-  min-height: 40px;
+  flex-basis: 36px;
+  min-height: 36px;
   background: linear-gradient(180deg, rgba(15, 91, 57, 0.98), rgba(8, 60, 38, 0.98));
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2);
+  overflow: hidden;
 }
 
 .rules-toggle-btn {
@@ -1400,24 +1382,24 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
 }
 
 .canvas-area {
-  margin: 6px 8px 0;
-  border-radius: 16px;
+  margin: 4px 6px 0;
+  border-radius: 14px;
   border: 1px solid rgba(255, 214, 114, 0.22);
 }
 
 .bottom-zone {
   position: relative;
-  flex: 0 0 clamp(144px, 32vh, 164px);
-  min-height: 144px;
-  max-height: 164px;
+  flex: 0 0 clamp(112px, 28vh, 132px);
+  min-height: 112px;
+  max-height: 132px;
   display: grid;
-  grid-template-columns: 70px minmax(0, 1fr);
-  gap: 8px;
-  margin: 6px 8px 6px;
-  padding: 8px;
-  overflow: visible;
+  grid-template-columns: clamp(50px, 8vw, 62px) minmax(0, 1fr);
+  gap: 6px;
+  margin: 4px 6px 5px;
+  padding: 6px;
+  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 18px;
+  border-radius: 14px;
   background:
     linear-gradient(180deg, rgba(16, 63, 43, 0.98), rgba(8, 38, 27, 0.98));
   box-shadow:
@@ -1430,23 +1412,23 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
   min-width: 0;
   align-self: stretch;
   justify-content: flex-end;
-  padding: 6px 4px;
-  border-radius: 14px;
+  padding: 5px 3px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.09);
 }
 
 .my-avatar {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   border: 2px solid rgba(255, 255, 255, 0.78);
-  font-size: 15px;
+  font-size: 13px;
 }
 
 .my-meta strong {
-  max-width: 62px;
+  max-width: 54px;
   color: #fff;
-  font-size: 12px;
+  font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1454,22 +1436,22 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
 
 .my-meta span {
   color: #8ee9b8;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 800;
   white-space: nowrap;
 }
 
 .hand-area {
   min-width: 0;
-  padding-top: 40px;
-  overflow: visible;
+  padding-top: 32px;
+  overflow: hidden;
 }
 
 .melds-row {
   min-height: 0;
-  max-height: 32px;
-  padding: 0 3px 2px;
-  gap: 6px;
+  max-height: 24px;
+  padding: 0 2px 1px;
+  gap: 4px;
   scrollbar-width: none;
 }
 
@@ -1478,7 +1460,7 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
 }
 
 .meld-tile-img {
-  height: 28px;
+  height: 22px;
   border-radius: 3px;
 }
 
@@ -1489,8 +1471,8 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
 }
 
 .hand-row {
-  min-height: 76px;
-  padding: 8px 8px 2px;
+  min-height: 58px;
+  padding: 4px 4px 1px;
   overflow-x: auto;
   overflow-y: visible;
   touch-action: pan-x;
@@ -1501,20 +1483,17 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
   display: none;
 }
 
-.hand-row.dragging {
-  touch-action: none;
-}
-
 .hand-tile-wrap {
-  margin-left: -5px;
+  margin-left: -3px;
   touch-action: pan-x;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
   filter: drop-shadow(0 7px 8px rgba(0, 0, 0, 0.16));
 }
 
 .hand-tile-wrap:not(.disabled) {
-  touch-action: none;
+  touch-action: manipulation;
 }
 
 .hand-tile-wrap:first-child {
@@ -1522,17 +1501,20 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
 }
 
 .hand-tile-wrap.last-draw {
-  margin-left: 10px;
+  margin-left: 7px;
 }
 
 .hand-tile-wrap.selected {
-  transform: translateY(-10px);
+  transform: translateY(-7px);
 }
 
 .hand-tile-img {
-  height: clamp(62px, 15.2vh, 74px);
+  height: clamp(48px, 12.8vh, 58px);
   padding: 1px;
   border-radius: 5px;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
 }
 
 .hand-tile-wrap.is-zhong {
@@ -1547,30 +1529,30 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
 
 .action-buttons {
   position: absolute;
-  top: 8px;
-  left: 86px;
-  right: 10px;
+  top: 6px;
+  left: clamp(62px, 9vw, 76px);
+  right: 8px;
   z-index: 12;
   flex: none;
-  height: 36px;
+  height: 28px;
   display: flex;
   flex-direction: row;
   align-items: center;
   justify-content: center;
-  gap: 8px;
+  gap: 6px;
   pointer-events: none;
 }
 
 .action-buttons button {
-  flex: 0 1 88px;
+  flex: 0 1 76px;
   width: auto;
-  min-width: 58px;
-  max-width: 98px;
-  height: 36px;
-  min-height: 36px;
-  padding: 0 14px;
+  min-width: 50px;
+  max-width: 86px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 9px;
   border-radius: 999px;
-  font-size: 15px;
+  font-size: 13px;
   letter-spacing: 0;
   line-height: 1;
   pointer-events: auto;
@@ -1612,35 +1594,63 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
   }
 }
 
+@media (max-width: 720px) {
+  .mj-info-bar {
+    gap: 5px;
+    padding: 0 8px;
+  }
+
+  .info-sep {
+    display: none;
+  }
+
+  .info-item {
+    font-size: 11px;
+  }
+
+  .back-btn {
+    width: 24px;
+    height: 24px;
+  }
+
+  .rules-toggle-btn {
+    padding: 3px 8px;
+    font-size: 11px;
+  }
+}
+
 @media (max-height: 500px) {
   .mj-info-bar {
-    flex-basis: 36px;
-    min-height: 36px;
+    flex-basis: 32px;
+    min-height: 32px;
+    gap: 5px;
+    padding: 0 8px;
+    font-size: 12px;
   }
 
   .canvas-area {
-    margin: 4px 6px 0;
+    margin: 3px 5px 0;
   }
 
   .bottom-zone {
-    flex-basis: 134px;
-    min-height: 134px;
-    max-height: 134px;
-    grid-template-columns: 62px minmax(0, 1fr);
-    gap: 7px;
-    margin: 5px 6px 5px;
-    padding: 7px;
+    flex-basis: 104px;
+    min-height: 104px;
+    max-height: 104px;
+    grid-template-columns: 48px minmax(0, 1fr);
+    gap: 5px;
+    margin: 3px 5px 4px;
+    padding: 5px;
   }
 
   .my-avatar {
-    width: 30px;
-    height: 30px;
-    font-size: 13px;
+    width: 24px;
+    height: 24px;
+    font-size: 12px;
   }
 
   .my-meta strong {
-    max-width: 54px;
-    font-size: 11px;
+    max-width: 42px;
+    font-size: 10px;
   }
 
   .my-meta span {
@@ -1648,45 +1658,46 @@ watch([() => props.gs.phase, () => props.gs.currentPlayer, myHand], () => {
   }
 
   .hand-area {
-    padding-top: 36px;
+    padding-top: 29px;
   }
 
   .action-buttons {
-    top: 7px;
-    left: 76px;
-    right: 8px;
-    height: 32px;
-    gap: 6px;
+    top: 5px;
+    left: 58px;
+    right: 7px;
+    height: 26px;
+    gap: 5px;
   }
 
   .action-buttons button {
-    flex-basis: 76px;
-    max-width: 84px;
-    height: 32px;
-    min-height: 32px;
-    padding: 0 10px;
-    font-size: 13px;
+    flex-basis: 66px;
+    max-width: 74px;
+    min-width: 46px;
+    height: 26px;
+    min-height: 26px;
+    padding: 0 7px;
+    font-size: 12px;
   }
 
   .melds-row {
-    max-height: 28px;
+    max-height: 20px;
   }
 
   .meld-tile-img {
-    height: 24px;
+    height: 18px;
   }
 
   .hand-row {
-    min-height: 66px;
-    padding-top: 5px;
+    min-height: 52px;
+    padding-top: 3px;
   }
 
   .hand-tile-img {
-    height: clamp(54px, 13.8vh, 64px);
+    height: clamp(42px, 11.8vh, 50px);
   }
 
   .hand-tile-wrap.selected {
-    transform: translateY(-8px);
+    transform: translateY(-6px);
   }
 }
 </style>

@@ -38,7 +38,7 @@
         <div class="board-head">
           <span class="mode-chip">{{ mySideLabel }}</span>
           <span class="mode-chip soft">
-            {{ selectedPieceLabel ? `${selectedPieceLabel} · 可走 ${legalMoves.length} 步` : '九路十行标准棋盘' }}
+            {{ selectedPieceLabel ? `已选 ${selectedPieceLabel}` : '九路十行标准棋盘' }}
           </span>
         </div>
 
@@ -112,27 +112,11 @@
       </section>
 
       <section class="action-grid">
-        <button type="button" class="action-btn select" @click="showSelectionTip">
-          <span class="action-btn__badge">步</span>
+        <button type="button" class="action-btn surrender" :disabled="gamePhase === 'finished'" @click="$emit('forfeit')">
+          <span class="action-btn__badge">认</span>
           <span class="action-btn__copy">
-            <strong>走法提示</strong>
-            <small>{{ selectedPieceLabel ? `当前 ${legalMoves.length} 个落点` : '先点己方棋子' }}</small>
-          </span>
-        </button>
-
-        <button type="button" class="action-btn undo" @click="emit('action', { type: 'undo' })">
-          <span class="action-btn__badge">悔</span>
-          <span class="action-btn__copy">
-            <strong>悔棋</strong>
-            <small>回退上一手</small>
-          </span>
-        </button>
-
-        <button type="button" class="action-btn restart" @click="$emit('rematch')">
-          <span class="action-btn__badge">重</span>
-          <span class="action-btn__copy">
-            <strong>重新开始</strong>
-            <small>快速再来一局</small>
+            <strong>认输</strong>
+            <small>结束本局</small>
           </span>
         </button>
 
@@ -140,15 +124,11 @@
           <span class="action-btn__badge">返</span>
           <span class="action-btn__copy">
             <strong>返回大厅</strong>
-            <small>退出当前对局</small>
+            <small>离开对局</small>
           </span>
         </button>
       </section>
     </template>
-
-    <transition name="fade">
-      <div v-if="toast" class="toast">{{ toast }}</div>
-    </transition>
 
     <transition name="fade">
       <div v-if="gamePhase === 'finished'" class="result-panel">
@@ -159,7 +139,6 @@
           <h2>{{ resultText }}</h2>
           <p>{{ resultDetail }}</p>
           <div class="result-actions">
-            <button type="button" class="primary-btn" @click="$emit('rematch')">再来一局</button>
             <button type="button" class="secondary-btn" @click="$emit('back')">返回大厅</button>
           </div>
         </div>
@@ -169,7 +148,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed } from 'vue'
 
 const props = defineProps({
   gs: { type: Object, default: () => ({}) },
@@ -177,7 +156,7 @@ const props = defineProps({
   roomPlayers: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['action', 'rematch', 'back'])
+const emit = defineEmits(['action', 'back', 'forfeit'])
 
 const ROWS = 10
 const COLS = 9
@@ -225,9 +204,6 @@ const pieceLabels = {
     [PIECE_TYPES.PAWN]: '卒'
   }
 }
-
-const toast = ref('')
-let toastTimer = null
 
 const emptyBoard = () => Array.from({ length: ROWS }, () => Array(COLS).fill(null))
 
@@ -336,34 +312,6 @@ const verticalLines = computed(() => {
   }
   return lines
 })
-
-onBeforeUnmount(() => {
-  clearToast()
-})
-
-function showToast(text) {
-  clearToast()
-  toast.value = text
-  toastTimer = setTimeout(() => {
-    toast.value = ''
-    toastTimer = null
-  }, 1800)
-}
-
-function clearToast() {
-  if (toastTimer) {
-    clearTimeout(toastTimer)
-    toastTimer = null
-  }
-}
-
-function showSelectionTip() {
-  if (!selectedPiece.value) {
-    showToast('先点击己方棋子，再查看可落点。')
-    return
-  }
-  showToast(`${selectedPieceLabel.value} 当前可走 ${legalMoves.value.length} 步`)
-}
 
 function pointStyle(cell) {
   const { row, col } = toViewPoint(cell.row, cell.col)
@@ -1058,35 +1006,18 @@ function getLegalMoves(stateBoard, row, col) {
   color: rgba(255, 255, 255, 0.82);
 }
 
-.action-btn.select {
-  background: linear-gradient(135deg, #48c8d8, #418bff);
-}
-
-.action-btn.undo {
-  background: linear-gradient(135deg, #5f8cff, #3d6cff);
-}
-
-.action-btn.restart {
-  background: linear-gradient(135deg, #ffbe45, #ff8e4a);
+.action-btn.surrender {
+  background: linear-gradient(135deg, #ff6f61, #de3d37);
 }
 
 .action-btn.back {
   background: linear-gradient(135deg, #6d7ee7, #5263ce);
 }
 
-.toast {
-  position: fixed;
-  left: 50%;
-  bottom: 120px;
-  transform: translateX(-50%);
-  padding: 10px 16px;
-  border-radius: 999px;
-  background: rgba(21, 39, 77, 0.9);
-  color: #fff;
-  font-size: 13px;
-  font-weight: 700;
-  z-index: 30;
-  box-shadow: 0 12px 22px rgba(14, 27, 55, 0.24);
+.action-btn:disabled {
+  opacity: 0.54;
+  cursor: not-allowed;
+  filter: grayscale(0.15);
 }
 
 .result-panel {
@@ -1140,12 +1071,11 @@ function getLegalMoves(stateBoard, row, col) {
 
 .result-actions {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 10px;
   margin-top: 18px;
 }
 
-.primary-btn,
 .secondary-btn {
   border: 0;
   border-radius: 16px;
@@ -1153,11 +1083,6 @@ function getLegalMoves(stateBoard, row, col) {
   font-size: 14px;
   font-weight: 800;
   cursor: pointer;
-}
-
-.primary-btn {
-  background: linear-gradient(180deg, #4f9cff, #2f6cff);
-  color: #fff;
 }
 
 .secondary-btn {
