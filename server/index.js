@@ -1284,7 +1284,7 @@ function startRoomMonitor() {
 
 // ========== 游戏结束处理 ==========
 function handleGameEnd(room) {
-  if (!room || room.status === 'finished') return;
+  if (!room || room.status === 'finished' || room.settlementApplied) return;
 
   const config = getGameConfig(room.gameType);
   const winnerId = room.gameState.finalWinner ?? room.gameState.winner;
@@ -1292,6 +1292,9 @@ function handleGameEnd(room) {
   const pointsBefore = Object.fromEntries(
     room.players.map((pid) => [pid, Number(store.getPlayer(pid)?.points || 0)])
   );
+  room.settlementApplied = true;
+  room.settledAt = Date.now();
+  store.saveRoom(room);
 
   // 根据游戏类型采用不同的积分结算规则
   if (room.gameType === 'zha_jin_hua' || room.gameType === 'mahjong') {
@@ -1314,6 +1317,13 @@ function handleGameEnd(room) {
   recordBattleHistory(room, config, winningPlayers, pointsBefore);
 
   room.status = 'finished';
+  room.players.forEach(pid => {
+    const player = store.getPlayer(pid);
+    if (player?.currentRoom === room.id) {
+      player.currentRoom = null;
+      store.savePlayer(player);
+    }
+  });
   store.saveRoom(room);
 
   // 广播结算
@@ -1709,55 +1719,8 @@ function startQuickPlayLoop(room, bots) {
 
     // 游戏结束处理
     if (room.gameState.phase === 'finished') {
-      const config = getGameConfig(room.gameType);
-      const winnerId = room.gameState.finalWinner ?? room.gameState.winner;
-      const winningPlayers = room.gameState.winningPlayers || (winnerId && winnerId !== 'draw' ? [winnerId] : []);
-      const entryFee = config.entryFee;
-
-      // 根据游戏类型采用不同的积分结算规则
-      if (room.gameType === 'zha_jin_hua' || room.gameType === 'mahjong') {
-        settleGameWithPot(room, winningPlayers);
-      } else if (room.gameType === 'guandan') {
-        settleGuandan(room, winningPlayers);
-      } else if (room.gameType === 'doudizhu') {
-        settleDoudizhu(room, winningPlayers);
-      } else if (room.players.length === 2) {
-        settle1v1(room, winnerId);
-      } else {
-        settleMultiplayer(room, winningPlayers);
-      }
-
-      room.status = 'finished';
-      room.players.forEach(pid => {
-        const p = store.getPlayer(pid);
-        if (p?.currentRoom === room.id) {
-          p.currentRoom = null;
-          store.savePlayer(p);
-        }
-      });
-      store.saveRoom(room);
-
-      const resultPlayers = room.players.map(pid => {
-        const p = store.getPlayer(pid);
-        const isWinner = winningPlayers.includes(pid);
-        return { id: pid, nickname: p ? (p.nickname || p.name) : '未知', points: p ? p.points : 0, won: isWinner };
-      });
-      room.players.forEach(pid => {
-        io.to(`player:${pid}`).emit('game:result', {
-          winner: winnerId,
-          winningPlayers,
-          room: serializeRoom(room, pid),
-          players: resultPlayers
-        });
-      });
-      io.to(`room:${room.id}:spectators`).emit('game:result', {
-        winner: winnerId,
-        winningPlayers,
-        room: serializeRoom(room),
-        players: resultPlayers
-      });
-
-      broadcastUpdate();
+      handleGameEnd(room);
+      return;
     }
   }, 1500);
 

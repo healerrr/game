@@ -159,6 +159,119 @@ class ZhaJinHua {
     return deck;
   }
 
+  shuffle(list) {
+    const result = [...list];
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+  }
+
+  makeQuestion({ q, correct, wrong, category }) {
+    const wrongOptions = this.shuffle(wrong).slice(0, 3);
+    const options = this.shuffle([correct, ...wrongOptions]);
+    return {
+      q,
+      options,
+      answer: options.indexOf(correct),
+      category
+    };
+  }
+
+  getGeneralQuestionFacts() {
+    return [
+      { category: 'geography', q: '下列哪座城市不在欧洲？', correct: '开罗', wrong: ['维也纳', '布拉格', '里斯本', '哥本哈根'] },
+      { category: 'geography', q: '下列哪条河流最终流入地中海？', correct: '尼罗河', wrong: ['亚马孙河', '恒河', '密西西比河', '长江'] },
+      { category: 'geography', q: '下列哪个国家同时跨越欧亚两洲？', correct: '土耳其', wrong: ['葡萄牙', '埃及', '墨西哥', '新西兰'] },
+      { category: 'geography', q: '马六甲海峡主要连接哪两个海域？', correct: '印度洋与南海', wrong: ['地中海与红海', '黑海与地中海', '北海与波罗的海', '加勒比海与太平洋'] },
+      { category: 'science', q: '声音在下列哪种介质中通常传播最快？', correct: '钢铁', wrong: ['空气', '真空', '水蒸气', '软木'] },
+      { category: 'science', q: '下列哪一种变化属于化学变化？', correct: '铁生锈', wrong: ['冰融化', '水蒸发', '玻璃破碎', '盐溶于水'] },
+      { category: 'science', q: '太阳能量主要来自哪一类过程？', correct: '核聚变', wrong: ['核裂变', '化学燃烧', '潮汐摩擦', '地热释放'] },
+      { category: 'science', q: '人体血液中主要负责运输氧气的是？', correct: '红细胞', wrong: ['血小板', '白细胞', '淋巴细胞', '胆汁'] },
+      { category: 'culture', q: '文艺复兴最早兴起于欧洲哪个地区？', correct: '意大利', wrong: ['北欧', '伊比利亚半岛', '巴尔干半岛', '不列颠群岛'] },
+      { category: 'culture', q: '下列哪部作品通常被归为莎士比亚的悲剧？', correct: '《哈姆雷特》', wrong: ['《威尼斯商人》', '《仲夏夜之梦》', '《皆大欢喜》', '《暴风雨》'] },
+      { category: 'culture', q: '下列哪一个节气最接近昼夜等长？', correct: '春分', wrong: ['小暑', '大雪', '立冬', '芒种'] },
+      { category: 'reasoning', q: '如果“所有甲都是乙”成立，下列哪项一定成立？', correct: '不是乙的一定不是甲', wrong: ['所有乙都是甲', '有些甲不是乙', '不是甲的一定不是乙', '甲和乙完全相同'] },
+      { category: 'reasoning', q: '“幸存者偏差”最接近下列哪种情况？', correct: '只观察留下来的样本而忽略消失的样本', wrong: ['随机样本数量太大', '所有样本概率完全相同', '重复实验导致结果稳定', '用平均数代替中位数'] },
+      { category: 'economics', q: '“机会成本”指的是？', correct: '选择某项方案而放弃的最佳替代收益', wrong: ['已经发生且无法收回的成本', '账面上记录的全部成本', '产品售出后的净利润', '固定资产折旧总额'] },
+      { category: 'economics', q: '“通货膨胀”通常表示？', correct: '总体物价水平持续上升', wrong: ['某一商品价格偶然上涨', '失业率持续下降', '货币购买力持续增强', '出口量必然增加'] },
+      { category: 'math', q: '一个数增加20%后再减少20%，结果与原数相比？', correct: '减少4%', wrong: ['不变', '增加4%', '减少20%', '增加20%'] },
+      { category: 'math', q: '若三个独立事件发生概率均为1/2，它们同时发生的概率是？', correct: '1/8', wrong: ['1/2', '1/4', '3/8', '1/16'] },
+      { category: 'life', q: '做实验时设置对照组的主要目的是什么？', correct: '用于比较变量产生的影响', wrong: ['让实验人数更多', '保证结果一定正确', '减少记录工作', '替代实验组'] },
+      { category: 'life', q: '阅读统计图时，最需要警惕哪种误导？', correct: '坐标轴截断造成差异被夸大', wrong: ['标题字号太大', '颜色数量太少', '图例放在右侧', '数据点太整齐'] }
+    ];
+  }
+
+  makeGeneratedQuestion(seed) {
+    const generators = [
+      () => {
+        const base = 12 + Math.floor(Math.random() * 24);
+        const percent = [10, 15, 20, 25][Math.floor(Math.random() * 4)];
+        const correct = String(Math.round(base * (1 - (percent / 100) ** 2) * 100) / 100);
+        return {
+          category: 'math',
+          q: `某数先增加${percent}%，再减少${percent}%，若原数为${base}，结果最接近多少？`,
+          correct,
+          wrong: [String(base), String(Math.round(base * (1 - percent / 100) * 100) / 100), String(Math.round(base * (1 + percent / 100) * 100) / 100), String(base - percent / 10)]
+        };
+      },
+      () => {
+        const pairs = [
+          ['水星', '太阳系中最靠近太阳的行星', ['金星', '火星', '木星', '土星']],
+          ['臭氧层', '主要吸收太阳紫外线的地球大气结构', ['电离层', '对流层水汽', '磁层', '平流层云']],
+          ['活字印刷术', '北宋毕昇相关的技术发明', ['指南针', '火药', '造纸术', '地动仪']],
+          ['二十四节气', '古代中国用于指导农事的时间知识体系', ['十二生肖', '干支纪年', '五行学说', '星座体系']]
+        ];
+        const [correct, clue, wrong] = pairs[Math.floor(Math.random() * pairs.length)];
+        return { category: 'culture', q: `下列哪一项最符合“${clue}”？`, correct, wrong };
+      },
+      () => {
+        const examples = [
+          ['把只返回问卷的人当成全部人群来判断', '自选择偏差', ['安慰剂效应', '沉没成本', '边际收益', '规模经济']],
+          ['因为已经投入很多而继续投入一个明显不划算的项目', '沉没成本误区', ['幸存者偏差', '从众效应', '机会成本', '路径依赖']],
+          ['看到两个变量同时变化，就断定其中一个导致另一个', '相关不等于因果', ['样本均衡', '边际递减', '复利效应', '风险对冲']],
+          ['只凭少数醒目案例判断整体概率', '可得性偏差', ['价格歧视', '比较优势', '复盘效应', '对照实验']]
+        ];
+        const [scene, correct, wrong] = examples[Math.floor(Math.random() * examples.length)];
+        return { category: 'reasoning', q: `下面情境最接近哪一个概念：${scene}？`, correct, wrong };
+      }
+    ];
+    return this.makeQuestion(generators[seed % generators.length]());
+  }
+
+  generateQuestions(count) {
+    const questions = [];
+    const seen = new Set();
+    const usedCategories = new Set();
+    const facts = this.shuffle(this.getGeneralQuestionFacts());
+
+    for (const fact of facts) {
+      if (questions.length >= count) break;
+      if (seen.has(fact.q) || usedCategories.has(fact.category)) continue;
+      questions.push(this.makeQuestion(fact));
+      seen.add(fact.q);
+      usedCategories.add(fact.category);
+    }
+
+    for (const fact of facts) {
+      if (questions.length >= count) break;
+      if (seen.has(fact.q)) continue;
+      questions.push(this.makeQuestion(fact));
+      seen.add(fact.q);
+    }
+
+    let seed = 0;
+    while (questions.length < count) {
+      const question = this.makeGeneratedQuestion(seed++);
+      if (seen.has(question.q)) continue;
+      questions.push(question);
+      seen.add(question.q);
+    }
+
+    return questions;
+  }
+
   init(room, players) {
     const deck = this.createDeck();
     const hands = {};
@@ -819,6 +932,109 @@ class Undercover {
     ];
   }
 
+  shuffle(list) {
+    const result = [...list];
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+  }
+
+  makeQuestion({ q, correct, wrong, category }) {
+    const wrongOptions = this.shuffle(wrong).slice(0, 3);
+    const options = this.shuffle([correct, ...wrongOptions]);
+    return { q, options, answer: options.indexOf(correct), category };
+  }
+
+  getGeneralQuestionFacts() {
+    return [
+      { category: 'geography', q: '下列哪座城市不在欧洲？', correct: '开罗', wrong: ['维也纳', '布拉格', '里斯本', '哥本哈根'] },
+      { category: 'geography', q: '下列哪条河流最终流入地中海？', correct: '尼罗河', wrong: ['亚马孙河', '恒河', '密西西比河', '长江'] },
+      { category: 'science', q: '声音在下列哪种介质中通常传播最快？', correct: '钢铁', wrong: ['空气', '真空', '水蒸气', '软木'] },
+      { category: 'science', q: '下列哪一种变化属于化学变化？', correct: '铁生锈', wrong: ['冰融化', '水蒸发', '玻璃破碎', '盐溶于水'] },
+      { category: 'culture', q: '文艺复兴最早兴起于欧洲哪个地区？', correct: '意大利', wrong: ['北欧', '伊比利亚半岛', '巴尔干半岛', '不列颠群岛'] },
+      { category: 'culture', q: '下列哪部作品通常被归为莎士比亚的悲剧？', correct: '《哈姆雷特》', wrong: ['《威尼斯商人》', '《仲夏夜之梦》', '《皆大欢喜》', '《暴风雨》'] },
+      { category: 'reasoning', q: '如果“所有甲都是乙”成立，下列哪项一定成立？', correct: '不是乙的一定不是甲', wrong: ['所有乙都是甲', '有些甲不是乙', '不是甲的一定不是乙', '甲和乙完全相同'] },
+      { category: 'reasoning', q: '“幸存者偏差”最接近下列哪种情况？', correct: '只观察留下来的样本而忽略消失的样本', wrong: ['随机样本数量太大', '所有样本概率完全相同', '重复实验导致结果稳定', '用平均数代替中位数'] },
+      { category: 'economics', q: '“机会成本”指的是？', correct: '选择某项方案而放弃的最佳替代收益', wrong: ['已经发生且无法收回的成本', '账面上记录的全部成本', '产品售出后的净利润', '固定资产折旧总额'] },
+      { category: 'economics', q: '“通货膨胀”通常表示？', correct: '总体物价水平持续上升', wrong: ['某一商品价格偶然上涨', '失业率持续下降', '货币购买力持续增强', '出口量必然增加'] },
+      { category: 'math', q: '一个数增加20%后再减少20%，结果与原数相比？', correct: '减少4%', wrong: ['不变', '增加4%', '减少20%', '增加20%'] },
+      { category: 'math', q: '若三个独立事件发生概率均为1/2，它们同时发生的概率是？', correct: '1/8', wrong: ['1/2', '1/4', '3/8', '1/16'] },
+      { category: 'life', q: '做实验时设置对照组的主要目的是什么？', correct: '用于比较变量产生的影响', wrong: ['让实验人数更多', '保证结果一定正确', '减少记录工作', '替代实验组'] },
+      { category: 'life', q: '阅读统计图时，最需要警惕哪种误导？', correct: '坐标轴截断造成差异被夸大', wrong: ['标题字号太大', '颜色数量太少', '图例放在右侧', '数据点太整齐'] }
+    ];
+  }
+
+  makeGeneratedQuestion(seed) {
+    const generators = [
+      () => {
+        const base = 12 + Math.floor(Math.random() * 24);
+        const percent = [10, 15, 20, 25][Math.floor(Math.random() * 4)];
+        const correct = String(Math.round(base * (1 - (percent / 100) ** 2) * 100) / 100);
+        return {
+          category: 'math',
+          q: `某数先增加${percent}%，再减少${percent}%，若原数为${base}，结果最接近多少？`,
+          correct,
+          wrong: [String(base), String(Math.round(base * (1 - percent / 100) * 100) / 100), String(Math.round(base * (1 + percent / 100) * 100) / 100), String(base - percent / 10)]
+        };
+      },
+      () => {
+        const pairs = [
+          ['水星', '太阳系中最靠近太阳的行星', ['金星', '火星', '木星', '土星']],
+          ['臭氧层', '主要吸收太阳紫外线的地球大气结构', ['电离层', '对流层水汽', '磁层', '平流层云']],
+          ['活字印刷术', '北宋毕昇相关的技术发明', ['指南针', '火药', '造纸术', '地动仪']],
+          ['二十四节气', '古代中国用于指导农事的时间知识体系', ['十二生肖', '干支纪年', '五行学说', '星座体系']]
+        ];
+        const [correct, clue, wrong] = pairs[Math.floor(Math.random() * pairs.length)];
+        return { category: 'culture', q: `下列哪一项最符合“${clue}”？`, correct, wrong };
+      },
+      () => {
+        const examples = [
+          ['把只返回问卷的人当成全部人群来判断', '自选择偏差', ['安慰剂效应', '沉没成本', '边际收益', '规模经济']],
+          ['因为已经投入很多而继续投入一个明显不划算的项目', '沉没成本误区', ['幸存者偏差', '从众效应', '机会成本', '路径依赖']],
+          ['看到两个变量同时变化，就断定其中一个导致另一个', '相关不等于因果', ['样本均衡', '边际递减', '复利效应', '风险对冲']],
+          ['只凭少数醒目案例判断整体概率', '可得性偏差', ['价格歧视', '比较优势', '复盘效应', '对照实验']]
+        ];
+        const [scene, correct, wrong] = examples[Math.floor(Math.random() * examples.length)];
+        return { category: 'reasoning', q: `下面情境最接近哪一个概念：${scene}？`, correct, wrong };
+      }
+    ];
+    return this.makeQuestion(generators[seed % generators.length]());
+  }
+
+  generateQuestions(count) {
+    const questions = [];
+    const seen = new Set();
+    const usedCategories = new Set();
+    const facts = this.shuffle(this.getGeneralQuestionFacts());
+
+    for (const fact of facts) {
+      if (questions.length >= count) break;
+      if (seen.has(fact.q) || usedCategories.has(fact.category)) continue;
+      questions.push(this.makeQuestion(fact));
+      seen.add(fact.q);
+      usedCategories.add(fact.category);
+    }
+
+    for (const fact of facts) {
+      if (questions.length >= count) break;
+      if (seen.has(fact.q)) continue;
+      questions.push(this.makeQuestion(fact));
+      seen.add(fact.q);
+    }
+
+    let seed = 0;
+    while (questions.length < count) {
+      const question = this.makeGeneratedQuestion(seed++);
+      if (seen.has(question.q)) continue;
+      questions.push(question);
+      seen.add(question.q);
+    }
+
+    return questions;
+  }
+
   init(room, players) {
     // 随机选词语对
     const pair = this.wordPairs[Math.floor(Math.random() * this.wordPairs.length)];
@@ -992,6 +1208,109 @@ class Undercover {
 
 // ========== 快问快答 ==========
 class QuizGame {
+  shuffle(list) {
+    const result = [...list];
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+    return result;
+  }
+
+  makeQuestion({ q, correct, wrong, category }) {
+    const wrongOptions = this.shuffle(wrong).slice(0, 3);
+    const options = this.shuffle([correct, ...wrongOptions]);
+    return { q, options, answer: options.indexOf(correct), category };
+  }
+
+  getGeneralQuestionFacts() {
+    return [
+      { category: 'geography', q: '下列哪座城市不在欧洲？', correct: '开罗', wrong: ['维也纳', '布拉格', '里斯本', '哥本哈根'] },
+      { category: 'geography', q: '下列哪条河流最终流入地中海？', correct: '尼罗河', wrong: ['亚马孙河', '恒河', '密西西比河', '长江'] },
+      { category: 'science', q: '声音在下列哪种介质中通常传播最快？', correct: '钢铁', wrong: ['空气', '真空', '水蒸气', '软木'] },
+      { category: 'science', q: '下列哪一种变化属于化学变化？', correct: '铁生锈', wrong: ['冰融化', '水蒸发', '玻璃破碎', '盐溶于水'] },
+      { category: 'culture', q: '文艺复兴最早兴起于欧洲哪个地区？', correct: '意大利', wrong: ['北欧', '伊比利亚半岛', '巴尔干半岛', '不列颠群岛'] },
+      { category: 'culture', q: '下列哪部作品通常被归为莎士比亚的悲剧？', correct: '《哈姆雷特》', wrong: ['《威尼斯商人》', '《仲夏夜之梦》', '《皆大欢喜》', '《暴风雨》'] },
+      { category: 'reasoning', q: '如果“所有甲都是乙”成立，下列哪项一定成立？', correct: '不是乙的一定不是甲', wrong: ['所有乙都是甲', '有些甲不是乙', '不是甲的一定不是乙', '甲和乙完全相同'] },
+      { category: 'reasoning', q: '“幸存者偏差”最接近下列哪种情况？', correct: '只观察留下来的样本而忽略消失的样本', wrong: ['随机样本数量太大', '所有样本概率完全相同', '重复实验导致结果稳定', '用平均数代替中位数'] },
+      { category: 'economics', q: '“机会成本”指的是？', correct: '选择某项方案而放弃的最佳替代收益', wrong: ['已经发生且无法收回的成本', '账面上记录的全部成本', '产品售出后的净利润', '固定资产折旧总额'] },
+      { category: 'economics', q: '“通货膨胀”通常表示？', correct: '总体物价水平持续上升', wrong: ['某一商品价格偶然上涨', '失业率持续下降', '货币购买力持续增强', '出口量必然增加'] },
+      { category: 'math', q: '一个数增加20%后再减少20%，结果与原数相比？', correct: '减少4%', wrong: ['不变', '增加4%', '减少20%', '增加20%'] },
+      { category: 'math', q: '若三个独立事件发生概率均为1/2，它们同时发生的概率是？', correct: '1/8', wrong: ['1/2', '1/4', '3/8', '1/16'] },
+      { category: 'life', q: '做实验时设置对照组的主要目的是什么？', correct: '用于比较变量产生的影响', wrong: ['让实验人数更多', '保证结果一定正确', '减少记录工作', '替代实验组'] },
+      { category: 'life', q: '阅读统计图时，最需要警惕哪种误导？', correct: '坐标轴截断造成差异被夸大', wrong: ['标题字号太大', '颜色数量太少', '图例放在右侧', '数据点太整齐'] }
+    ];
+  }
+
+  makeGeneratedQuestion(seed) {
+    const generators = [
+      () => {
+        const base = 12 + Math.floor(Math.random() * 24);
+        const percent = [10, 15, 20, 25][Math.floor(Math.random() * 4)];
+        const correct = String(Math.round(base * (1 - (percent / 100) ** 2) * 100) / 100);
+        return {
+          category: 'math',
+          q: `某数先增加${percent}%，再减少${percent}%，若原数为${base}，结果最接近多少？`,
+          correct,
+          wrong: [String(base), String(Math.round(base * (1 - percent / 100) * 100) / 100), String(Math.round(base * (1 + percent / 100) * 100) / 100), String(base - percent / 10)]
+        };
+      },
+      () => {
+        const pairs = [
+          ['水星', '太阳系中最靠近太阳的行星', ['金星', '火星', '木星', '土星']],
+          ['臭氧层', '主要吸收太阳紫外线的地球大气结构', ['电离层', '对流层水汽', '磁层', '平流层云']],
+          ['活字印刷术', '北宋毕昇相关的技术发明', ['指南针', '火药', '造纸术', '地动仪']],
+          ['二十四节气', '古代中国用于指导农事的时间知识体系', ['十二生肖', '干支纪年', '五行学说', '星座体系']]
+        ];
+        const [correct, clue, wrong] = pairs[Math.floor(Math.random() * pairs.length)];
+        return { category: 'culture', q: `下列哪一项最符合“${clue}”？`, correct, wrong };
+      },
+      () => {
+        const examples = [
+          ['把只返回问卷的人当成全部人群来判断', '自选择偏差', ['安慰剂效应', '沉没成本', '边际收益', '规模经济']],
+          ['因为已经投入很多而继续投入一个明显不划算的项目', '沉没成本误区', ['幸存者偏差', '从众效应', '机会成本', '路径依赖']],
+          ['看到两个变量同时变化，就断定其中一个导致另一个', '相关不等于因果', ['样本均衡', '边际递减', '复利效应', '风险对冲']],
+          ['只凭少数醒目案例判断整体概率', '可得性偏差', ['价格歧视', '比较优势', '复盘效应', '对照实验']]
+        ];
+        const [scene, correct, wrong] = examples[Math.floor(Math.random() * examples.length)];
+        return { category: 'reasoning', q: `下面情境最接近哪一个概念：${scene}？`, correct, wrong };
+      }
+    ];
+    return this.makeQuestion(generators[seed % generators.length]());
+  }
+
+  generateQuestions(count) {
+    const questions = [];
+    const seen = new Set();
+    const usedCategories = new Set();
+    const facts = this.shuffle(this.getGeneralQuestionFacts());
+
+    for (const fact of facts) {
+      if (questions.length >= count) break;
+      if (seen.has(fact.q) || usedCategories.has(fact.category)) continue;
+      questions.push(this.makeQuestion(fact));
+      seen.add(fact.q);
+      usedCategories.add(fact.category);
+    }
+
+    for (const fact of facts) {
+      if (questions.length >= count) break;
+      if (seen.has(fact.q)) continue;
+      questions.push(this.makeQuestion(fact));
+      seen.add(fact.q);
+    }
+
+    let seed = 0;
+    while (questions.length < count) {
+      const question = this.makeGeneratedQuestion(seed++);
+      if (seen.has(question.q)) continue;
+      questions.push(question);
+      seen.add(question.q);
+    }
+
+    return questions;
+  }
+
   constructor() {
     this.questionBank = [
       { q: '大巴车一般有多少个座位？', options: ['20-30', '30-50', '50-70', '70-90'], answer: 1 },
@@ -1025,6 +1344,25 @@ class QuizGame {
 
   init(room, players) {
     const roundCount = 3;
+    {
+      const questions = this.generateQuestions(roundCount);
+
+      return {
+        phase: 'question',       // question | answer | finished
+        round: 1,
+        maxRounds: roundCount,
+        players,
+        questions,
+        currentQuestion: questions[0],
+        answers: {},              // { playerId: answerIndex }
+        answeredPlayers: [],
+        scores: Object.fromEntries(players.map(p => [p, 0])),
+        correctPlayers: [],
+        timer: 15,
+        timerStarted: Date.now(),
+        roundResult: null
+      };
+    }
     const hardQuestions = [
       { q: '如果所有“甲类”都是“乙类”，且部分“乙类”是“丙类”，必然成立的是？', options: ['所有甲类是丙类', '部分甲类是丙类', '部分乙类可能不是甲类', '所有丙类是乙类'], answer: 2 },
       { q: '二进制数 101101 转换为十进制是多少？', options: ['41', '43', '45', '47'], answer: 2 },

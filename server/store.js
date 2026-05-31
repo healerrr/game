@@ -278,7 +278,6 @@ class Store {
 
   recordGameRecord(record) {
     if (!record?.playerId || String(record.playerId).startsWith('bot_')) return;
-
     const normalized = {
       id: record.id || this.makeId('gr'),
       playerId: record.playerId,
@@ -300,11 +299,18 @@ class Store {
     }
 
     const history = this.gameRecords.get(normalized.playerId);
+    const existingIndex = history.findIndex((item) => (
+      item.roomId === normalized.roomId &&
+      item.playerId === normalized.playerId &&
+      item.gameType === normalized.gameType
+    ));
+    if (existingIndex !== -1) {
+      history.splice(existingIndex, 1);
+    }
     history.unshift(normalized);
     if (history.length > 100) {
       history.length = 100;
     }
-
     this.runAsync(async () => {
       await mysqlStore.recordGameRecord(normalized);
     }, 'recordGameRecord');
@@ -330,10 +336,7 @@ class Store {
         const key = [
           record.roomId,
           record.playerId,
-          record.gameType,
-          record.createdAt,
-          record.scoreDelta,
-          record.result
+          record.gameType
         ].join(':');
 
         if (seen.has(key)) return;

@@ -373,8 +373,8 @@
     </section>
 
     <transition name="fade">
-      <div v-if="opponentDisconnected" class="dc-overlay">
-        <p>玩家掉线，正在等待重连...</p>
+      <div v-if="showOpponentDisconnected" class="dc-overlay">
+        <p>对手掉线，正在等待重连...</p>
       </div>
     </transition>
 
@@ -437,10 +437,13 @@ let kickedHandler = null
 let requeuedHandler = null
 let abandonedHandler = null
 let matchedHandler = null
+let opponentDisconnectedTimer = null
 
 const gameType = computed(() => gameState.currentRoom?.gameType)
 const roomPlayers = computed(() => gameState.currentRoom?.players || [])
 const currentRoom = computed(() => gameState.currentRoom || {})
+const isActivePlayingRoom = computed(() => currentRoom.value?.status === 'playing' && gs.value?.phase !== 'finished')
+const showOpponentDisconnected = computed(() => opponentDisconnected.value && isActivePlayingRoom.value)
 const isFullscreenGame = computed(() => ['guandan', 'doudizhu', 'mahjong'].includes(gameType.value))
 const isReadyRoom = computed(() => currentRoom.value?.status === 'readying' || (!gs.value?.phase && currentRoom.value?.status !== 'playing'))
 const myReady = computed(() => Boolean(currentRoom.value?.ready?.[player.value?.id] || roomPlayers.value.find(item => item.id === player.value?.id)?.ready))
@@ -772,6 +775,14 @@ function settleConfirm(confirmed) {
   confirmDialog.value = { ...confirmDialog.value, visible: false }
 }
 
+function clearOpponentDisconnectedNotice() {
+  opponentDisconnected.value = false
+  if (opponentDisconnectedTimer) {
+    clearTimeout(opponentDisconnectedTimer)
+    opponentDisconnectedTimer = null
+  }
+}
+
 async function backToLobby() {
   const room = currentRoom.value
   if (!room?.roomId) {
@@ -850,13 +861,23 @@ onMounted(() => {
     const { players: resultPlayers, room: resultRoom, ...result } = event.detail
     gs.value = { ...gs.value, ...result, resultPlayers }
     guessSubmitting.value = false
+    clearOpponentDisconnectedNotice()
   }
   window.addEventListener('game:result', resultHandler)
 
   dcHandler = (event) => {
+    if (!isActivePlayingRoom.value) {
+      clearOpponentDisconnectedNotice()
+      return
+    }
+
     opponentDisconnected.value = true
-    setTimeout(() => {
+    if (opponentDisconnectedTimer) {
+      clearTimeout(opponentDisconnectedTimer)
+    }
+    opponentDisconnectedTimer = setTimeout(() => {
       opponentDisconnected.value = false
+      opponentDisconnectedTimer = null
     }, event.detail?.graceMs || 10000)
   }
   window.addEventListener('game:opponent_disconnected', dcHandler)
@@ -895,6 +916,7 @@ onMounted(() => {
 onUnmounted(() => {
   if (timerInterval) clearInterval(timerInterval)
   if (readyInterval) clearInterval(readyInterval)
+  clearOpponentDisconnectedNotice()
   if (stateHandler) window.removeEventListener('game:state', stateHandler)
   if (resultHandler) window.removeEventListener('game:result', resultHandler)
   if (dcHandler) window.removeEventListener('game:opponent_disconnected', dcHandler)

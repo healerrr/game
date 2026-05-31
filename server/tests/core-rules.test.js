@@ -66,6 +66,13 @@ test('快问快答每局只有三道高难度题', () => {
   assert.equal(state.maxRounds, 3);
   assert.equal(state.questions.length, 3);
   assert.equal(state.currentQuestion.options.length, 4);
+  assert.equal(new Set(state.questions.map(question => question.q)).size, 3);
+  assert.ok(new Set(state.questions.map(question => question.category)).size >= 2);
+  state.questions.forEach((question) => {
+    assert.equal(question.options.length, 4);
+    assert.equal(new Set(question.options).size, 4);
+    assert.ok(question.answer >= 0 && question.answer < question.options.length);
+  });
 });
 
 test('五子棋忽略悔棋动作', () => {

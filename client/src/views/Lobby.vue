@@ -82,7 +82,7 @@
         <div v-if="matching" class="overlay" @click="cancelMatch">
           <div class="dialog" @click.stop>
             <div class="spinner"></div>
-            <h3>正在创建房间</h3>
+            <h3>正在匹配对手</h3>
             <p>{{ selectedGameName }}</p>
             <button type="button" class="dialog-btn" @click="cancelMatch">取消匹配</button>
           </div>
@@ -150,7 +150,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { gameState, getPlayer, getPlayMode, socket } from '../socket'
+import { gameState, getPlayer, getPlayMode, socket, ensureAuthenticated } from '../socket'
 
 import cardChineseChess from '../../img/card_chinese_chess_transparent.png'
 import cardDoudizhu from '../../img/card_doudizhu.png'
@@ -203,7 +203,11 @@ const playerInitial = computed(() => {
   return text.slice(0, 1)
 })
 
-onMounted(() => {
+onMounted(async () => {
+  if (!player.value) {
+    await ensureAuthenticated()
+  }
+
   if (!player.value) {
     router.push('/')
     return
@@ -266,8 +270,17 @@ function enterQuickPlayRoom(data) {
   router.push(`/game/${data.roomId}`)
 }
 
-function joinGame(gameType) {
-  if (!player.value || matching.value) return
+async function joinGame(gameType) {
+  if (matching.value) return
+
+  if (!player.value) {
+    await ensureAuthenticated()
+  }
+
+  if (!player.value) {
+    router.push('/')
+    return
+  }
 
   selectedGameKey.value = gameType
   matching.value = true
@@ -308,7 +321,16 @@ function joinGame(gameType) {
     })
 }
 
-function createRoom(gameType) {
+async function createRoom(gameType) {
+  if (!player.value) {
+    await ensureAuthenticated()
+  }
+
+  if (!player.value) {
+    router.push('/')
+    return
+  }
+
   showCreateRoom.value = false
   selectedGameKey.value = gameType
   socket.emit('room:create', { gameType }, (res) => {

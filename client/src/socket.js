@@ -25,6 +25,138 @@ export const gameState = reactive({
   invitations: []
 })
 
+let authenticatedPlayerId = null
+let authenticatedSocketId = null
+let restorePromise = null
+
+export function readSavedPlayer() {
+  const saved = localStorage.getItem('bus_game_player')
+  if (!saved) return null
+
+  try {
+    const player = JSON.parse(saved)
+    return player?.id ? player : null
+  } catch {
+    localStorage.removeItem('bus_game_player')
+    return null
+  }
+}
+
+export function rememberPlayer(player) {
+  if (!player?.id) return
+
+  setPlayer(player)
+  authenticatedPlayerId = player.id
+  authenticatedSocketId = socket.id || authenticatedSocketId
+  localStorage.setItem(
+    'bus_game_player',
+    JSON.stringify({
+      id: player.id,
+      nickname: player.nickname,
+      busNumber: player.busNumber
+    })
+  )
+}
+
+export function clearSavedPlayer() {
+  authenticatedPlayerId = null
+  authenticatedSocketId = null
+  gameState.player = null
+  localStorage.removeItem('bus_game_player')
+}
+
+export function ensureSocketConnected() {
+  if (socket.connected) return Promise.resolve()
+
+  return new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      cleanup()
+      reject(new Error('当前无法连接到游戏服务，请确认后端已启动'))
+    }, 4000)
+
+    function handleConnect() {
+      cleanup()
+      resolve()
+    }
+
+    function handleError() {
+      cleanup()
+      reject(new Error('当前无法连接到游戏服务，请确认后端已启动'))
+    }
+
+    function cleanup() {
+      window.clearTimeout(timeoutId)
+      socket.off('connect', handleConnect)
+      socket.off('connect_error', handleError)
+    }
+
+    socket.once('connect', handleConnect)
+    socket.once('connect_error', handleError)
+    socket.connect()
+  })
+}
+
+export async function restoreSavedPlayer({ force = false } = {}) {
+  const savedPlayer = readSavedPlayer()
+  if (!savedPlayer) return null
+
+  if (
+    !force &&
+    gameState.player?.id === savedPlayer.id &&
+    authenticatedPlayerId === savedPlayer.id &&
+    authenticatedSocketId === socket.id
+  ) {
+    return { player: gameState.player, currentRoom: gameState.currentRoom }
+  }
+
+  if (restorePromise) return restorePromise
+
+  restorePromise = ensureSocketConnected()
+    .then(() => new Promise((resolve) => {
+      socket.emit('player:reconnect', { playerId: savedPlayer.id }, (res) => {
+        if (res?.player) {
+          rememberPlayer(res.player)
+          if (res.currentRoom) {
+            gameState.currentRoom = res.currentRoom
+            gameState.currentGame = res.currentRoom.gameState
+          }
+          resolve(res)
+          return
+        }
+
+        if (res?.error) {
+          clearSavedPlayer()
+        }
+        resolve(null)
+      })
+    }))
+    .catch(() => null)
+    .finally(() => {
+      restorePromise = null
+    })
+
+  return restorePromise
+}
+
+export async function ensureAuthenticated() {
+  if (
+    gameState.player?.id &&
+    authenticatedPlayerId === gameState.player.id &&
+    authenticatedSocketId === socket.id &&
+    socket.connected
+  ) {
+    return gameState.player
+  }
+
+  const restored = await restoreSavedPlayer({ force: Boolean(gameState.player?.id) })
+  return restored?.player || null
+}
+
+socket.on('connect', () => {
+  authenticatedSocketId = null
+  restoreSavedPlayer({ force: true })
+})
+
 // 监听服务器推送
 socket.on('server:update', (data) => {
   gameState.personalRank = data.personal || []

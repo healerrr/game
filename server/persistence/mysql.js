@@ -217,18 +217,29 @@ async function recordPointTransaction(playerId, delta, reason = 'game', metadata
 async function recordGameRecord(record) {
   if (!pool || !record?.playerId || String(record.playerId).startsWith('bot_')) return;
 
+  const playerId = String(record.playerId);
+  const roomId = String(record.roomId || '');
+  const gameType = String(record.gameType || '');
+
+  if (roomId) {
+    await pool.execute(
+      'DELETE FROM game_records WHERE player_id = ? AND room_id = ? AND game_type = ?',
+      [playerId, roomId, gameType]
+    );
+  }
+
   await pool.execute(
     `
       INSERT INTO game_records (
         player_id, room_id, game_type, game_name, result, score_delta,
-        points_before, points_after, opponents, teammates, metadata
+        points_before, points_after, opponents, teammates, metadata, created_at
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(? / 1000))
     `,
     [
-      String(record.playerId),
-      String(record.roomId || ''),
-      String(record.gameType || ''),
+      playerId,
+      roomId,
+      gameType,
       String(record.gameName || record.gameType || ''),
       String(record.result || 'draw'),
       Number(record.scoreDelta || 0),
@@ -236,7 +247,8 @@ async function recordGameRecord(record) {
       Number(record.pointsAfter || 0),
       record.opponents ? JSON.stringify(record.opponents) : null,
       record.teammates ? JSON.stringify(record.teammates) : null,
-      record.metadata ? JSON.stringify(record.metadata) : null
+      record.metadata ? JSON.stringify(record.metadata) : null,
+      Number(record.createdAt || Date.now())
     ]
   );
 }
