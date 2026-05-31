@@ -1,0 +1,316 @@
+[
+  {
+    "gameType": "rock_paper_scissors",
+    "name": "?????",
+    "player": {
+      "id": "p_563b4239-cad6-426d-a4f9-bd1e2f7fa459",
+      "nickname": "QA-?????-59363",
+      "busNumber": 88,
+      "points": 1000,
+      "totalGames": 0,
+      "wins": 0,
+      "currentRoom": null,
+      "online": true,
+      "createdAt": 1780157959374,
+      "winStreak": 0,
+      "lossStreak": 0,
+      "isBot": false,
+      "socketId": "uRN2OccJk5Am9kepAAAF",
+      "lastSeenAt": 1780157959374
+    },
+    "ok": true,
+    "roomId": "r_56b69f4f-2514-4fdf-812d-c87046bf799e",
+    "status": "playing",
+    "phase": "choose",
+    "stage": null,
+    "currentPlayer": null,
+    "playerCount": 2,
+    "handKeys": [],
+    "handCounts": null,
+    "fieldFlags": {
+      "hasSecret": false,
+      "hasCurrentQuestionAnswer": false,
+      "hasHands": false
+    },
+    "privacyWarnings": [],
+    "error": null
+  },
+  {
+    "gameType": "guess_number",
+    "name": "???",
+    "player": {
+      "id": "p_5d694f60-f601-4549-ae06-fd4a1d016dfe",
+      "nickname": "QA-???-59424",
+      "busNumber": 88,
+      "points": 1000,
+      "totalGames": 0,
+      "wins": 0,
+      "currentRoom": null,
+      "online": true,
+      "createdAt": 1780157959434,
+      "winStreak": 0,
+      "lossStreak": 0,
+      "isBot": false,
+      "socketId": "qnXtGb4M5nLTyd3CAAAH",
+      "lastSeenAt": 1780157959434
+    },
+    "ok": true,
+    "roomId": "r_070590dd-aa49-4ca5-88c6-526c87cfec1e",
+    "status": "playing",
+    "phase": "guess",
+    "stage": null,
+    "currentPlayer": "bot_14387beb-72d2-40c7-8649-76a2f3d991c6",
+    "playerCount": 2,
+    "handKeys": [],
+    "handCounts": null,
+    "fieldFlags": {
+      "hasSecret": true,
+      "hasCurrentQuestionAnswer": false,
+      "hasHands": false
+    },
+    "privacyWarnings": [
+      "state exposes secret"
+    ],
+    "error": null
+  },
+  {
+    "gameType": "quiz",
+    "name": "????",
+    "player": {
+      "id": "p_081f4124-27fd-4ab6-b7d4-5db201e67889",
+      "nickname": "QA-????-59441",
+      "busNumber": 88,
+      "points": 1000,
+      "totalGames": 0,
+      "wins": 0,
+      "currentRoom": null,
+      "online": true,
+      "createdAt": 1780157959451,
+      "winStreak": 0,
+      "lossStreak": 0,
+      "isBot": false,
+      "socketId": "scrrPQhEBRLD1St6AAAJ",
+      "lastSeenAt": 1780157959451
+    },
+    "ok": true,
+    "roomId": "r_87dd04ad-8718-42b9-a83d-a5bcc696f4e5",
+    "status": "playing",
+    "phase": "question",
+    "stage": null,
+    "currentPlayer": null,
+    "playerCount": 4,
+    "handKeys": [],
+    "handCounts": null,
+    "fieldFlags": {
+      "hasSecret": false,
+      "hasCurrentQuestionAnswer": true,
+      "hasHands": false
+    },
+    "privacyWarnings": [
+      "question exposes answer"
+    ],
+    "error": null
+  },
+  {
+    "gameType": "gomoku",
+    "name": "???",
+    "player": {
+      "id": "p_472ecbdd-e017-4fc9-b1aa-1ec9bc9b0176",
+      "nickname": "QA-???-59479",
+      "busNumber": 88,
+      "points": 1000,
+      "totalGames": 0,
+      "wins": 0,
+      "currentRoom": null,
+      "online": true,
+      "createdAt": 1780157959490,
+      "winStreak": 0,
+      "lossStreak": 0,
+      "isBot": false,
+      "socketId": "YidYnrqWpmyO4hVDAAAL",
+      "lastSeenAt": 1780157959490
+    },
+    "ok": true,
+    "roomId": "r_c485882c-d988-40a5-b36a-c1e12cc8e4e4",
+    "status": "playing",
+    "phase": "playing",
+    "stage": null,
+    "currentPlayer": "p_472ecbdd-e017-4fc9-b1aa-1ec9bc9b0176",
+    "playerCount": 2,
+    "handKeys": [],
+    "handCounts": null,
+    "fieldFlags": {
+      "hasSecret": false,
+      "hasCurrentQuestionAnswer": false,
+      "hasHands": false
+    },
+    "privacyWarnings": [],
+    "error": null
+  },
+  {
+    "gameType": "chess",
+    "name": "??",
+    "player": {
+      "id": "p_e92f084e-7d1a-482a-ab91-fe6453c20f79",
+      "nickname": "QA-??-59508",
+      "busNumber": 88,
+      "points": 1000,
+      "totalGames": 0,
+      "wins": 0,
+      "currentRoom": null,
+      "online": true,
+      "createdAt": 1780157959518,
+      "winStreak": 0,
+      "lossStreak": 0,
+      "isBot": false,
+      "socketId": "squhFHmUV_L46pApAAAN",
+      "lastSeenAt": 1780157959518
+    },
+    "ok": true,
+    "roomId": "r_cc5127fc-d4a7-41f1-be0c-c7f254796a08",
+    "status": "playing",
+    "phase": "playing",
+    "stage": null,
+    "currentPlayer": "red",
+    "playerCount": 2,
+    "handKeys": [],
+    "handCounts": null,
+    "fieldFlags": {
+      "hasSecret": false,
+      "hasCurrentQuestionAnswer": false,
+      "hasHands": false
+    },
+    "privacyWarnings": [],
+    "error": null
+  },
+  {
+    "gameType": "guandan",
+    "name": "??",
+    "player": {
+      "id": "p_5cb90ab6-f548-4d50-ae40-67a1c0e1c14b",
+      "nickname": "QA-??-59530",
+      "busNumber": 88,
+      "points": 1000,
+      "totalGames": 0,
+      "wins": 0,
+      "currentRoom": null,
+      "online": true,
+      "createdAt": 1780157959540,
+      "winStreak": 0,
+      "lossStreak": 0,
+      "isBot": false,
+      "socketId": "KCO4Fl8rJVYWtKosAAAP",
+      "lastSeenAt": 1780157959540
+    },
+    "ok": true,
+    "roomId": "r_350ceeda-182d-4a61-9051-81ec5b22b31b",
+    "status": "playing",
+    "phase": "play",
+    "stage": "play",
+    "currentPlayer": "p_5cb90ab6-f548-4d50-ae40-67a1c0e1c14b",
+    "playerCount": 4,
+    "handKeys": [
+      "p_5cb90ab6-f548-4d50-ae40-67a1c0e1c14b"
+    ],
+    "handCounts": {
+      "p_5cb90ab6-f548-4d50-ae40-67a1c0e1c14b": 27,
+      "bot_cc153d90-ecf8-49df-9dca-f27a0bb044e7": 27,
+      "bot_264623e6-30d5-4bba-95d6-94cbddc458f2": 27,
+      "bot_69f5946e-b43f-47dc-bf72-c3c257b1c295": 27
+    },
+    "fieldFlags": {
+      "hasSecret": false,
+      "hasCurrentQuestionAnswer": false,
+      "hasHands": true
+    },
+    "privacyWarnings": [],
+    "error": null
+  },
+  {
+    "gameType": "zha_jin_hua",
+    "name": "???",
+    "player": {
+      "id": "p_ba6f08b6-71c4-4a96-bcb8-e95a1dd9e1bd",
+      "nickname": "QA-???-59560",
+      "busNumber": 88,
+      "points": 1000,
+      "totalGames": 0,
+      "wins": 0,
+      "currentRoom": null,
+      "online": true,
+      "createdAt": 1780157959574,
+      "winStreak": 0,
+      "lossStreak": 0,
+      "isBot": false,
+      "socketId": "KwjI8o9KQJQhqZgsAAAR",
+      "lastSeenAt": 1780157959574
+    },
+    "ok": true,
+    "roomId": "r_e165f746-472f-4705-b23e-34f00f104239",
+    "status": "playing",
+    "phase": "bet",
+    "stage": null,
+    "currentPlayer": "p_ba6f08b6-71c4-4a96-bcb8-e95a1dd9e1bd",
+    "playerCount": 5,
+    "handKeys": [
+      "p_ba6f08b6-71c4-4a96-bcb8-e95a1dd9e1bd"
+    ],
+    "handCounts": {
+      "p_ba6f08b6-71c4-4a96-bcb8-e95a1dd9e1bd": 3,
+      "bot_5e185194-f6b9-4e3f-b17c-d48e7a9eb1a3": 3,
+      "bot_4314eb6e-0c1c-48c5-94d7-68919d2b4d83": 3,
+      "bot_f244b714-1ba1-4f37-a71f-2d4ac77ecfd8": 3,
+      "bot_b9403aaf-033b-4ed9-8d08-91d6a4ba87ff": 3
+    },
+    "fieldFlags": {
+      "hasSecret": false,
+      "hasCurrentQuestionAnswer": false,
+      "hasHands": true
+    },
+    "privacyWarnings": [],
+    "error": null
+  },
+  {
+    "gameType": "mahjong",
+    "name": "????",
+    "player": {
+      "id": "p_1392c5c0-14e1-475b-9a49-b53aa0d45699",
+      "nickname": "QA-????-59598",
+      "busNumber": 88,
+      "points": 1000,
+      "totalGames": 0,
+      "wins": 0,
+      "currentRoom": null,
+      "online": true,
+      "createdAt": 1780157959613,
+      "winStreak": 0,
+      "lossStreak": 0,
+      "isBot": false,
+      "socketId": "EB7f1Kc4SM0QSgtYAAAT",
+      "lastSeenAt": 1780157959613
+    },
+    "ok": true,
+    "roomId": "r_fe617206-19a6-41dd-bb52-93bb7295f0f4",
+    "status": "playing",
+    "phase": "discard",
+    "stage": null,
+    "currentPlayer": "p_1392c5c0-14e1-475b-9a49-b53aa0d45699",
+    "playerCount": 4,
+    "handKeys": [
+      "p_1392c5c0-14e1-475b-9a49-b53aa0d45699"
+    ],
+    "handCounts": {
+      "p_1392c5c0-14e1-475b-9a49-b53aa0d45699": 14,
+      "bot_5c90e1d4-9ba1-4846-8cf0-c1025f302a81": 13,
+      "bot_484f1f52-c373-41f4-9925-e2bda3e4b4e2": 13,
+      "bot_85cafbf0-072e-4120-af19-db6c0f1c5f87": 13
+    },
+    "fieldFlags": {
+      "hasSecret": false,
+      "hasCurrentQuestionAnswer": false,
+      "hasHands": true
+    },
+    "privacyWarnings": [],
+    "error": null
+  }
+]

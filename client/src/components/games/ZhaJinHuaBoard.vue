@@ -130,6 +130,7 @@
           <span>跟注 {{ callCost }}</span>
           <span>加注 {{ raiseCost }}</span>
           <span>比牌 {{ compareCost }}</span>
+          <span>剩余 {{ remainingPoints }}</span>
         </div>
         
         <div v-if="gs.currentPlayer === player?.id && !gs.foldedPlayers?.includes(player?.id)" class="action-buttons">
@@ -139,14 +140,14 @@
           <button class="btn btn-fold" @click="$emit('action', { type: 'fold' })">
             弃牌
           </button>
-          <button class="btn btn-call" @click="$emit('action', { type: 'call' })">
-            跟注
+          <button class="btn btn-call" :disabled="!canCall" @click="$emit('action', { type: 'call' })">
+            {{ canCall ? '跟注' : '积分不足' }}
           </button>
-          <button class="btn btn-raise" @click="$emit('action', { type: 'raise' })">
-            加注
+          <button class="btn btn-raise" :disabled="!canRaise" @click="$emit('action', { type: 'raise' })">
+            {{ canRaise ? '加注' : '不能加注' }}
           </button>
-          <button class="btn btn-compare" @click="showCompare = !showCompare">
-            比牌
+          <button class="btn btn-compare" :disabled="!canCompare || !activeOpponents.length" @click="showCompare = !showCompare">
+            {{ canCompare ? '比牌' : '积分不足' }}
           </button>
         </div>
         
@@ -159,6 +160,7 @@
             v-for="pid in activeOpponents"
             :key="pid"
             class="btn btn-compare-target"
+            :disabled="!canCompare"
             @click="compareWith(pid)"
           >
             比 {{ getPlayerName(pid) }}
@@ -235,6 +237,16 @@ const activeOpponents = computed(() => {
 const callCost = computed(() => (props.gs.currentBet || 0) * (myLooked.value ? 1 : 2))
 const raiseCost = computed(() => ((props.gs.currentBet || 0) + (props.gs.raiseStep || 10)) * (myLooked.value ? 1 : 2))
 const compareCost = computed(() => callCost.value * 2)
+const playerBalance = computed(() => {
+  const value = props.gs.playerBalances?.[myId.value] ?? props.player?.points
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : 0
+})
+const committedBet = computed(() => Number(props.gs.playerBets?.[myId.value] || 0))
+const remainingPoints = computed(() => Math.max(0, playerBalance.value - committedBet.value))
+const canCall = computed(() => callCost.value <= remainingPoints.value)
+const canRaise = computed(() => raiseCost.value <= remainingPoints.value)
+const canCompare = computed(() => compareCost.value <= remainingPoints.value)
 
 const phaseText = computed(() => {
   if (props.gs?.phase === 'finished') return '本局已结束'
@@ -266,6 +278,7 @@ function getPlayerName(pid) {
 }
 
 function compareWith(pid) {
+  if (!canCompare.value) return
   showCompare.value = false
   emit('action', { type: 'compare', targetId: pid })
 }
@@ -2870,7 +2883,7 @@ const handTypeLabel = computed(() => {
 .cost-display {
   width: 100%;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(78px, 1fr));
   gap: 7px;
   padding: 0;
   border: 0;

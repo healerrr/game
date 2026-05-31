@@ -145,7 +145,7 @@
           <div class="round-result" :class="roundResult">{{ roundResultText }}</div>
           <div class="dual-btns">
             <button class="primary-btn" @click="nextRound">
-              {{ roundResult === 'draw' ? '继续加赛' : '查看结算' }}
+              {{ roundResult === 'draw' ? '再来一局' : '查看结算' }}
             </button>
             <button class="secondary-btn" @click="backToLobby">返回大厅</button>
           </div>
@@ -316,6 +316,16 @@
       @back="backToLobby"
     />
 
+    <DoudizhuBoard
+      v-else-if="gameType === 'doudizhu'"
+      :gs="gs"
+      :player="player"
+      :room-players="roomPlayers"
+      @action="emitGameAction"
+      @rematch="rematch"
+      @back="backToLobby"
+    />
+
     <MahjongBoard
       v-else-if="gameType === 'mahjong'"
       :gs="gs"
@@ -333,6 +343,7 @@
       :room-players="roomPlayers"
       @action="emitGameAction"
       @forfeit="forfeitGame"
+      @rematch="rematch"
       @back="backToLobby"
     />
 
@@ -343,6 +354,7 @@
       :room-players="roomPlayers"
       @action="emitGameAction"
       @forfeit="forfeitGame"
+      @rematch="rematch"
       @back="backToLobby"
     />
 
@@ -365,6 +377,19 @@
         <p>玩家掉线，正在等待重连...</p>
       </div>
     </transition>
+
+    <transition name="fade">
+      <div v-if="confirmDialog.visible" class="confirm-overlay">
+        <div class="confirm-panel" role="dialog" aria-modal="true">
+          <h3>{{ confirmDialog.title }}</h3>
+          <p>{{ confirmDialog.message }}</p>
+          <div class="confirm-actions">
+            <button class="secondary-btn" type="button" @click="settleConfirm(false)">取消</button>
+            <button class="primary-btn" type="button" @click="settleConfirm(true)">继续</button>
+          </div>
+        </div>
+      </div>
+    </transition>
   </main>
 </template>
 
@@ -375,6 +400,7 @@ import { gameState, getPlayer, getPlayMode, socket } from '../socket'
 import UndercoverGame from '../components/UndercoverGame.vue'
 import ZhaJinHuaBoard from '../components/games/ZhaJinHuaBoard.vue'
 import GuandanBoard from '../components/games/GuandanBoard.vue'
+import DoudizhuBoard from '../components/games/DoudizhuBoard.vue'
 import MahjongBoard from '../components/games/MahjongBoard.vue'
 import GomokuBoard from '../components/games/GomokuBoard.vue'
 import ChessBoard from '../components/games/ChessBoard.vue'
@@ -397,9 +423,11 @@ const readySubmitting = ref(false)
 const showInvitePanel = ref(false)
 const inviteCandidates = ref([])
 const inviteLoading = ref(false)
+const confirmDialog = ref({ visible: false, title: '确认操作', message: '' })
 
 let timerInterval = null
 let readyInterval = null
+let confirmResolver = null
 let stateHandler = null
 let resultHandler = null
 let dcHandler = null
@@ -413,7 +441,7 @@ let matchedHandler = null
 const gameType = computed(() => gameState.currentRoom?.gameType)
 const roomPlayers = computed(() => gameState.currentRoom?.players || [])
 const currentRoom = computed(() => gameState.currentRoom || {})
-const isFullscreenGame = computed(() => ['guandan', 'mahjong'].includes(gameType.value))
+const isFullscreenGame = computed(() => ['guandan', 'doudizhu', 'mahjong'].includes(gameType.value))
 const isReadyRoom = computed(() => currentRoom.value?.status === 'readying' || (!gs.value?.phase && currentRoom.value?.status !== 'playing'))
 const myReady = computed(() => Boolean(currentRoom.value?.ready?.[player.value?.id] || roomPlayers.value.find(item => item.id === player.value?.id)?.ready))
 const readyButtonText = computed(() => {
@@ -432,6 +460,7 @@ const gameLabel = computed(() => {
     undercover: '谁是卧底',
     quiz: '快问快答',
     guandan: '掼蛋',
+    doudizhu: '斗地主',
     mahjong: '红中麻将',
     gomoku: '五子棋',
     chess: '象棋'
@@ -583,8 +612,8 @@ function emitGameAction(action) {
   socket.emit('game:action', { action })
 }
 
-function forfeitGame() {
-  if (!window.confirm('确认认输吗？')) return
+async function forfeitGame() {
+  if (!(await askConfirm('确认认输吗？'))) return
   socket.emit('game:forfeit', { reason: 'forfeit' }, (res) => {
     if (res?.error) {
       alert(res.error)
@@ -693,15 +722,24 @@ function enterQuickPlayRoom(data) {
 async function rematch() {
   if (!player.value || !gameType.value) return
   if (getPlayMode() !== 'test') {
-    const nextGame = gameType.value
-    gameState.currentRoom = null
-    gameState.currentGame = null
-    socket.emit('match:join', { gameType: nextGame }, (res) => {
+    const targetRoomId = currentRoom.value?.roomId || currentRoom.value?.id || roomId.value
+    socket.emit('game:rematch', { roomId: targetRoomId }, (res) => {
       if (res?.error) {
         alert(res.error)
+        return
+      }
+      if (res?.requeued) {
+        router.push({ path: '/lobby', query: { matching: res.gameType || gameType.value } })
+        return
+      }
+      if (res?.room) {
+        gameState.currentRoom = res.room
+        gameState.currentGame = res.room.gameState
+        gs.value = res.room.gameState || {}
+        readySubmitting.value = false
+        updateReadyDeadline()
       }
     })
-    router.push({ path: '/lobby', query: { matching: nextGame } })
     return
   }
   try {
@@ -718,7 +756,23 @@ async function rematch() {
   }
 }
 
-function backToLobby() {
+function askConfirm(message, title = '确认操作') {
+  if (confirmResolver) confirmResolver(false)
+  confirmDialog.value = { visible: true, title, message }
+  return new Promise((resolve) => {
+    confirmResolver = resolve
+  })
+}
+
+function settleConfirm(confirmed) {
+  if (confirmResolver) {
+    confirmResolver(confirmed)
+    confirmResolver = null
+  }
+  confirmDialog.value = { ...confirmDialog.value, visible: false }
+}
+
+async function backToLobby() {
   const room = currentRoom.value
   if (!room?.roomId) {
     router.push('/lobby')
@@ -729,15 +783,15 @@ function backToLobby() {
     const message = room.players?.length === 2
       ? '当前对局未结束，返回大厅将视为认输，是否继续？'
       : '当前对局未结束，返回后本局结束前不能参与其他游戏，是否继续？'
-    if (!window.confirm(message)) return
+    if (!(await askConfirm(message))) return
   }
 
-  socket.emit('room:leave_current', { confirmForfeit: true }, (res) => {
+  socket.emit('room:leave_current', { confirmForfeit: true }, async (res) => {
     if (res?.error && !res.requiresConfirmation) {
       alert(res.error)
       return
     }
-    if (res?.requiresConfirmation && !window.confirm('返回大厅将视为认输，是否继续？')) {
+    if (res?.requiresConfirmation && !(await askConfirm('返回大厅将视为认输，是否继续？'))) {
       return
     }
     if (res?.requiresConfirmation) {
@@ -850,6 +904,7 @@ onUnmounted(() => {
   if (requeuedHandler) window.removeEventListener('match:requeued', requeuedHandler)
   if (abandonedHandler) window.removeEventListener('room:abandoned', abandonedHandler)
   if (matchedHandler) window.removeEventListener('game:matched', matchedHandler)
+  settleConfirm(false)
 })
 
 watch(() => gs.value?.timerStarted, (started) => {
@@ -1352,6 +1407,45 @@ watch(() => roomId.value, () => {
   border: 1px solid #aac9f4;
   background: #fff;
   color: #1f66da;
+}
+
+.confirm-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(8, 20, 38, 0.46);
+  backdrop-filter: blur(8px);
+}
+
+.confirm-panel {
+  width: min(360px, 100%);
+  border-radius: 18px;
+  padding: 22px;
+  background: #fff;
+  box-shadow: 0 18px 42px rgba(8, 24, 52, 0.28);
+  color: #183052;
+}
+
+.confirm-panel h3 {
+  margin: 0 0 8px;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.confirm-panel p {
+  margin: 0;
+  line-height: 1.55;
+  color: #51647f;
+}
+
+.confirm-actions {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 .hero-strip {

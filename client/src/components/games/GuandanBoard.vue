@@ -8,7 +8,7 @@
       </button>
       <span class="info-item">第 {{ gs.round || 1 }} 局</span>
       <span class="info-sep">|</span>
-      <span class="info-item">级牌: <b>{{ gs.level || '2' }}</b></span>
+      <span class="info-item">级牌: <b>{{ myTeamLevel }}</b>/<b>{{ oppTeamLevel }}</b></span>
       <span class="info-sep">|</span>
       <span class="info-item team-vs">
         <em class="team-mine-label">{{ myTeamLabel }}</em>
@@ -31,6 +31,7 @@
         <div class="my-meta">
           <strong>{{ getPlayerName(props.player?.id) || '我' }}</strong>
           <span>剩余 {{ myHand.length }} 张</span>
+          <span v-if="teammateCountText" class="team-count">{{ teammateCountText }}</span>
         </div>
       </div>
 
@@ -48,10 +49,6 @@
               <span class="timer-num">{{ countdown }}</span>
             </div>
           </div>
-          <button class="btn-hint" @click="nextHint">
-            提示
-            <span v-if="hints.length" class="badge">{{ hints.length }}</span>
-          </button>
           <button class="btn-play" :disabled="!canPlay" @click="playCards">出牌</button>
         </div>
 
@@ -92,10 +89,11 @@
 
     <!-- 结算区 -->
     <div v-if="gs.phase !== 'play'" class="result-zone">
-      <strong>{{ gs.finalWinner === props.player?.id ? '恭喜！我方率先出完' : `${getPlayerName(gs.finalWinner)} 率先出完` }}</strong>
-      <span v-if="gs.settlement">升级 +{{ gs.settlement.levelUp }} · 下局级牌 {{ gs.settlement.nextLevel }}</span>
+      <strong>{{ resultTitle }}</strong>
+      <span v-if="gs.settlement">{{ settlementText }}</span>
       <div class="result-actions">
-        <button class="btn-play" @click="$emit('rematch')">再来一局</button>
+        <button v-if="gs.phase === 'round_finished'" class="btn-play" @click="continueRound">下一局</button>
+        <button v-else class="btn-play" @click="$emit('rematch')">再来一局</button>
         <button class="btn-pass" @click="$emit('back')">返回大厅</button>
       </div>
     </div>
@@ -263,14 +261,41 @@ const opponentTeamPlayers = computed(() => {
   return (props.gs.players || []).filter(pid => !mySet.has(pid))
 })
 
+const myTeamKey = computed(() => mySideTeamKey())
+const opponentTeamKey = computed(() => myTeamKey.value === 'south_north' ? 'east_west' : 'south_north')
+const myTeamLevel = computed(() => props.gs.teamLevels?.[myTeamKey.value] || props.gs.level || '2')
+const oppTeamLevel = computed(() => props.gs.teamLevels?.[opponentTeamKey.value] || '2')
 const myTeamLabel = computed(() => myTeamPlayers.value.map(p => getPlayerName(p)).join('+') || '我方')
 const oppTeamLabel = computed(() => opponentTeamPlayers.value.map(p => getPlayerName(p)).join('+') || '对方')
+const teammateCountText = computed(() => {
+  const teammateId = myTeamPlayers.value.find(pid => pid && pid !== props.player?.id)
+  return teammateId ? `队友 ${getCardCount(teammateId)} 张` : ''
+})
+const teammateId = computed(() => myTeamPlayers.value.find(pid => pid && pid !== props.player?.id) || null)
 
 const headerScore = computed(() => {
   const teamKey = mySideTeamKey()
   const s = props.gs.scores?.[teamKey]
   if (typeof s === 'number') return s
   return 0
+})
+
+const resultTitle = computed(() => {
+  const myWon = props.gs.settlement?.winningPlayers?.includes(props.player?.id)
+  if (props.gs.phase === 'round_finished') {
+    return myWon ? '本局我方升级' : '本局对方升级'
+  }
+  if (props.gs.phase === 'finished') {
+    return myWon ? '恭喜，我方打到 1' : '对方打到 1 获胜'
+  }
+  return props.gs.finalWinner === props.player?.id ? '恭喜，我方率先出完' : `${getPlayerName(props.gs.finalWinner)} 率先出完`
+})
+
+const settlementText = computed(() => {
+  const levelUp = props.gs.settlement?.levelUp || 0
+  const nextLevel = props.gs.settlement?.nextLevel || props.gs.level || '2'
+  const prefix = props.gs.phase === 'finished' ? '本场结束' : `下局级牌 ${nextLevel}`
+  return `升级 +${levelUp} · ${prefix} · 我方 ${myTeamLevel.value} / 对方 ${oppTeamLevel.value}`
 })
 
 const timerDash = computed(() => {
@@ -455,6 +480,11 @@ function playCards() {
 
 function onPass() {
   emit('action', { type: 'pass' })
+  selectedCards.value = new Set()
+}
+
+function continueRound() {
+  emit('action', { type: 'next_round' })
   selectedCards.value = new Set()
 }
 
@@ -1100,6 +1130,37 @@ function drawTable() {
   renderer.drawText(lvlText, feltX + 45, feltY + 20, { font: 'bold 12px sans-serif', color: '#3a2300', align: 'center', baseline: 'middle' })
 }
 
+function drawTeammateCountBadge(feltX, feltY, feltW, feltH) {
+  const pid = teammateId.value
+  if (!pid) return
+
+  const seat = relativeSeats.value
+  const pos = seat.top?.playerId === pid
+    ? { x: feltX + feltW / 2, y: feltY + 88 }
+    : seat.left?.playerId === pid
+      ? { x: feltX + 118, y: feltY + feltH / 2 - 4 }
+      : seat.right?.playerId === pid
+        ? { x: feltX + feltW - 118, y: feltY + feltH / 2 - 4 }
+        : null
+  if (!pos) return
+
+  const text = `${getPlayerName(pid)} ${getCardCount(pid)}张`
+  const label = `队友 ${text}`
+  const ctx = renderer._ctx
+  ctx.save()
+  ctx.font = 'bold 13px sans-serif'
+  const labelW = Math.min(feltW - 24, Math.max(104, ctx.measureText(label).width + 22))
+  renderer.drawRoundRect(pos.x - labelW / 2, pos.y - 13, labelW, 26, 13, 'rgba(25, 205, 112, 0.94)', 'rgba(255,255,255,0.72)', 1)
+  renderer.drawText(label, pos.x, pos.y + 1, {
+    font: 'bold 13px sans-serif',
+    color: '#ffffff',
+    align: 'center',
+    baseline: 'middle',
+    shadow: { color: 'rgba(0,0,0,0.28)', blur: 3, offsetY: 1 }
+  })
+  ctx.restore()
+}
+
 function drawPlayedCardsStrip(centerX, centerY, cards, options = {}) {
   const W = renderer._logicalWidth
   const gap = Math.max(2, Math.min(5, W * 0.004))
@@ -1340,6 +1401,17 @@ watch(() => props.gs?.currentPlayer, () => {
 .my-meta { text-align: center; line-height: 1.2; }
 .my-meta strong { display: block; font-size: 12px; color: #e0e0e0; }
 .my-meta span { font-size: 10px; color: #8fbc8f; }
+.my-meta .team-count {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(27, 190, 104, 0.92);
+  color: #fff;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.22);
+}
 .pattern-label {
   padding: 2px 8px; border-radius: 8px;
   background: rgba(255,215,0,0.2); color: #FFD700;
@@ -1949,7 +2021,7 @@ watch(() => props.gs?.currentPlayer, () => {
 
 .action-buttons {
   display: grid;
-  grid-template-columns: minmax(100px, 1fr) 58px minmax(108px, 1fr) minmax(94px, 0.8fr);
+  grid-template-columns: minmax(100px, 1fr) 58px minmax(118px, 1fr);
   align-items: center;
   justify-items: stretch;
   gap: 8px;
@@ -2110,7 +2182,7 @@ watch(() => props.gs?.currentPlayer, () => {
   }
 
   .action-buttons {
-    grid-template-columns: minmax(82px, 1fr) 48px minmax(88px, 1fr) minmax(76px, 0.8fr);
+    grid-template-columns: minmax(82px, 1fr) 48px minmax(94px, 1fr);
     gap: 6px;
   }
 
@@ -2191,6 +2263,18 @@ watch(() => props.gs?.currentPlayer, () => {
   font-size: 11px;
 }
 
+.my-meta .team-count {
+  display: inline-block;
+  margin-top: 3px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(27, 190, 104, 0.92);
+  color: #fff;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.22);
+}
+
 .hand-stage {
   position: relative;
   grid-template-rows: 38px minmax(70px, 1fr) 28px;
@@ -2201,7 +2285,7 @@ watch(() => props.gs?.currentPlayer, () => {
 .action-buttons {
   width: min(680px, 100%);
   justify-self: center;
-  grid-template-columns: minmax(82px, 1fr) 42px minmax(108px, 1.25fr) minmax(80px, 0.9fr);
+  grid-template-columns: minmax(82px, 1fr) 42px minmax(112px, 1.25fr);
   gap: 7px;
 }
 
@@ -2296,7 +2380,7 @@ watch(() => props.gs?.currentPlayer, () => {
   }
 
   .action-buttons {
-    grid-template-columns: minmax(76px, 1fr) 36px minmax(96px, 1.22fr) minmax(72px, 0.86fr);
+    grid-template-columns: minmax(76px, 1fr) 36px minmax(96px, 1.22fr);
     gap: 5px;
   }
 

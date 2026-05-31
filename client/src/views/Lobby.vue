@@ -155,10 +155,10 @@ import { useRoute, useRouter } from 'vue-router'
 import { gameState, getPlayer, getPlayMode, socket } from '../socket'
 
 import cardChineseChess from '../../img/card_chinese_chess_transparent.png'
+import cardDoudizhu from '../../img/card_doudizhu.png'
 import cardEggSmash from '../../img/card_egg_smash.png'
 import cardGoldenFlower from '../../img/card_golden_flower_transparent.png'
 import cardGomoku from '../../img/card_gomoku.png'
-import cardGuessNumber from '../../img/card_guess_number.png'
 import cardMahjong from '../../img/card_mahjong.png'
 import cardQuickQa from '../../img/card_quick_qa_transparent.png'
 import cardScissorsRockPaper from '../../img/card_scissors_rock_paper.png'
@@ -180,11 +180,11 @@ let requeuedHandler = null
 
 const gameCards = [
   { key: 'rock_paper_scissors', name: '剪刀石头布', image: cardScissorsRockPaper, tag: '双人对战', entryFee: 10 },
-  { key: 'guess_number', name: '猜数字', image: cardGuessNumber, tag: '逻辑挑战', entryFee: 15 },
   { key: 'quiz', name: '快问快答', image: cardQuickQa, tag: '知识竞速', entryFee: 20 },
   { key: 'gomoku', name: '五子棋', image: cardGomoku, tag: '经典棋盘', entryFee: 30 },
   { key: 'chess', name: '象棋', image: cardChineseChess, tag: '残局博弈', entryFee: 50 },
-  { key: 'guandan', name: '掼蛋', image: cardEggSmash, tag: '牌桌欢乐', entryFee: 80 },
+  { key: 'doudizhu', name: '斗地主', image: cardDoudizhu, tag: '经典扑克', entryFee: 60 },
+  { key: 'guandan', name: '掼蛋', image: cardEggSmash, tag: '牌桌欢乐', entryFee: 100 },
   { key: 'zha_jin_hua', name: '炸金花', image: cardGoldenFlower, tag: '运气对决', entryFee: 50 },
   { key: 'mahjong', name: '红中麻将', image: cardMahjong, tag: '休闲搓牌', entryFee: 100 }
 ]

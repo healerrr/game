@@ -98,6 +98,11 @@ const BotStrategy = {
     return cardBotStrategies.guandan(state, botId);
   },
 
+  // 斗地主：跟最小可压牌，农民之间尽量让牌
+  doudizhu(state, botId) {
+    return cardBotStrategies.doudizhu(state, botId);
+  },
+
   // 麻将：摸牌后打最小的
   mahjong(state, botId) {
     return cardBotStrategies.mahjong(state, botId);
@@ -238,6 +243,7 @@ class BotRoom {
         const unanswered = state.players.filter(p => !state.answeredPlayers?.includes(p));
         return unanswered[0];
       case 'guandan':
+      case 'doudizhu':
         return state.currentPlayer;
       case 'mahjong':
         if (state.phase === 'response') {

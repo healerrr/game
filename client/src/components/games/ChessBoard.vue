@@ -139,6 +139,7 @@
           <h2>{{ resultText }}</h2>
           <p>{{ resultDetail }}</p>
           <div class="result-actions">
+            <button type="button" class="primary-btn" @click="$emit('rematch')">再来一局</button>
             <button type="button" class="secondary-btn" @click="$emit('back')">返回大厅</button>
           </div>
         </div>
@@ -156,7 +157,7 @@ const props = defineProps({
   roomPlayers: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['action', 'back', 'forfeit'])
+const emit = defineEmits(['action', 'back', 'forfeit', 'rematch'])
 
 const ROWS = 10
 const COLS = 9
@@ -1071,11 +1072,12 @@ function getLegalMoves(stateBoard, row, col) {
 
 .result-actions {
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
   margin-top: 18px;
 }
 
+.primary-btn,
 .secondary-btn {
   border: 0;
   border-radius: 16px;
@@ -1083,6 +1085,11 @@ function getLegalMoves(stateBoard, row, col) {
   font-size: 14px;
   font-weight: 800;
   cursor: pointer;
+}
+
+.primary-btn {
+  background: linear-gradient(180deg, #2f92ff, #0758ef);
+  color: #fff;
 }
 
 .secondary-btn {

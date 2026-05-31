@@ -127,6 +127,18 @@
         </div>
       </div>
 
+      <!-- 斗地主 -->
+      <div v-else-if="gameType === 'doudizhu'" class="spectator-simple">
+        <div class="gd-info">地主: {{ getPlayerName(gs.landlord) }}</div>
+        <div class="gd-info">轮到: {{ getPlayerName(gs.currentPlayer) }}</div>
+        <div v-for="p in players" :key="p.id" class="gd-hand-info">
+          {{ p.nickname }}: {{ gs.handCounts?.[p.id] || 0 }} 张
+        </div>
+        <div v-if="gs.lastPlay" class="gd-last">
+          上家: {{ getPlayerName(gs.lastPlay.playerId) }} 出了 {{ gs.lastPlay.cards.length }} 张牌
+        </div>
+      </div>
+
       <!-- 麻将 -->
       <div v-else-if="gameType === 'mahjong'" class="spectator-simple">
         <div class="mj-info">轮到: {{ getPlayerName(gs.currentPlayer) }} — {{ gs.phase === 'draw' ? '摸牌' : '打牌' }}</div>
@@ -168,6 +180,7 @@ const gameLabel = computed(() => {
     undercover: '🎯 谁是卧底',
     quiz: '🧠 知识问答',
     guandan: '🃏 掼蛋',
+    doudizhu: '🃏 斗地主',
     mahjong: '🀄 麻将'
   }
   return map[gameType.value] || gameType.value

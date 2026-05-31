@@ -1478,6 +1478,7 @@ const engines = {
   undercover: new Undercover(),
   quiz: new QuizGame(),
   guandan: cardEngines.guandan,
+  doudizhu: cardEngines.doudizhu,
   mahjong: cardEngines.mahjong,
   gomoku: new (require('./game-engines/gomoku')).GomokuEngine(),
   chess: new (require('./game-engines/chess')).ChessEngine()
@@ -1527,10 +1528,18 @@ const GAME_CONFIG = {
   },
   guandan: {
     name: '掼蛋',
-    entryFee: 80,
+    entryFee: 100,
     category: 'card',
     minPlayers: 4,
     maxPlayers: 4,
+    duration: '3-5分钟'
+  },
+  doudizhu: {
+    name: '斗地主',
+    entryFee: 60,
+    category: 'card',
+    minPlayers: 3,
+    maxPlayers: 3,
     duration: '3-5分钟'
   },
   mahjong: {

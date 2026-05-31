@@ -12,6 +12,12 @@ const redisStore = require('./persistence/redis');
 const { getEngine, getGameConfig, getAllGameConfigs } = require('./game-engine');
 const { tryMatch } = require('./matchmaker');
 const { BotManager, BotPlayer, BotStrategy } = require('./bots');
+const {
+  getPublicGameState,
+  getRoomPlayerSummaries,
+  serializeRoom
+} = require('./room-view');
+const { getLevelScore } = require('./game-engines/guandan');
 
 const app = express();
 const server = http.createServer(app);
@@ -198,7 +204,7 @@ io.on('connection', (socket) => {
     socket.join(`bus:${player.busNumber}`);
 
     const room = store.getPlayerRoom(player.id);
-    const currentRoom = room && room.status !== 'finished' ? serializeRoom(room) : null;
+    const currentRoom = room && room.status !== 'finished' ? serializeRoom(room, player.id) : null;
     if (currentRoom) {
       markSeatConnection(room, player.id, 'online', { intent: 'active', disconnectedAt: null });
       store.saveRoom(room);
@@ -224,7 +230,7 @@ io.on('connection', (socket) => {
         error: blockingRoom.status === 'playing'
           ? '你仍在未结束对局中，暂时不能加入其他游戏'
           : '你已在房间中',
-        currentRoom: serializeRoom(blockingRoom)
+        currentRoom: serializeRoom(blockingRoom, currentPlayer.id)
       });
     }
 
@@ -251,7 +257,7 @@ io.on('connection', (socket) => {
 
     const blockingRoom = getBlockingRoom(currentPlayer.id);
     if (blockingRoom) {
-      return callback({ error: '你仍在未结束房间中，暂时不能创建新房间', currentRoom: serializeRoom(blockingRoom) });
+      return callback({ error: '你仍在未结束房间中，暂时不能创建新房间', currentRoom: serializeRoom(blockingRoom, currentPlayer.id) });
     }
 
     store.dequeue(currentPlayer.id);
@@ -261,7 +267,7 @@ io.on('connection', (socket) => {
       ownerId: currentPlayer.id
     });
     socket.join(`room:${room.id}`);
-    callback({ success: true, room: serializeRoom(room) });
+    callback({ success: true, room: serializeRoom(room, currentPlayer.id) });
     broadcastUpdate();
   });
 
@@ -286,7 +292,7 @@ io.on('connection', (socket) => {
     store.saveRoom(room);
     emitRoomUpdate(room);
     maybeStartReadyRoom(room);
-    callback({ success: true, room: serializeRoom(room) });
+    callback({ success: true, room: serializeRoom(room, currentPlayer.id) });
   });
 
   socket.on('room:leave_current', ({ confirmForfeit = false } = {}, callback) => {
@@ -309,6 +315,21 @@ io.on('connection', (socket) => {
 
     forfeitPlayer(room, currentPlayer.id, payload.reason || 'forfeit');
     callback?.({ success: true });
+  });
+
+  socket.on('game:rematch', ({ roomId } = {}, callback) => {
+    if (!currentPlayer) return callback?.({ error: '请先注册' });
+
+    const room = roomId ? store.getRoom(roomId) : store.getPlayerRoom(currentPlayer.id);
+    if (!room || !room.players.includes(currentPlayer.id)) {
+      return callback?.({ error: '房间不存在或你已离开房间' });
+    }
+    if (!['finished', 'readying'].includes(room.status)) {
+      return callback?.({ error: '当前房间不能再来一局' });
+    }
+
+    const result = prepareRoomRematch(room, currentPlayer.id);
+    callback?.(result);
   });
 
   socket.on('players:list', (payload, callback) => {
@@ -374,7 +395,7 @@ io.on('connection', (socket) => {
     store.saveRoom(updatedRoom);
     socket.join(`room:${updatedRoom.id}`);
 
-    const payload = serializeRoom(updatedRoom);
+    const payload = serializeRoom(updatedRoom, currentPlayer.id);
     io.to(`player:${currentPlayer.id}`).emit('game:matched', payload);
     emitRoomUpdate(updatedRoom);
     callback({ success: true, room: payload });
@@ -386,7 +407,7 @@ io.on('connection', (socket) => {
     const room = store.getRoom(roomId);
     if (!room) return callback({ error: '房间不存在' });
 
-    socket.join(`room:${roomId}`);
+    socket.join(`room:${roomId}:spectators`);
     store.addSpectator(roomId, currentPlayer.id);
 
     // 发送当前房间状态给观战者
@@ -399,7 +420,7 @@ io.on('connection', (socket) => {
         const p = store.getPlayer(pid);
         return p ? { id: p.id, nickname: p.nickname, busNumber: p.busNumber, isBot: p.isBot } : null;
       }).filter(Boolean),
-      gameState: room.gameState
+      gameState: getPublicGameState(room)
     });
   });
 
@@ -410,7 +431,7 @@ io.on('connection', (socket) => {
       return;
     }
     store.removeSpectator(roomId, currentPlayer.id);
-    socket.leave(`room:${roomId}`);
+    socket.leave(`room:${roomId}:spectators`);
     if (typeof callback === 'function') callback({ success: true });
   });
 
@@ -542,42 +563,36 @@ function getBlockingRoom(playerId) {
   return room;
 }
 
-function getRoomPlayerSummaries(room) {
-  if (!room) return [];
-
-  return room.players.map(pid => {
-    const p = store.getPlayer(pid);
-    const seat = room.seatStates?.[pid] || {};
-    return p ? {
-      id: p.id,
-      nickname: p.nickname || p.name,
-      busNumber: p.busNumber,
-      isBot: p.isBot || false,
-      ready: Boolean(room.ready?.[pid] || seat.ready),
-      connection: seat.connection || (p.online ? 'online' : 'offline'),
-      intent: seat.intent || 'active'
-    } : null;
-  }).filter(Boolean);
-}
-
 function emitRoomUpdate(room) {
   if (!room) return;
-  io.to(`room:${room.id}`).emit('room:update', serializeRoom(room));
+  room.players.forEach(pid => {
+    io.to(`player:${pid}`).emit('room:update', serializeRoom(room, pid));
+  });
+  io.to(`room:${room.id}:spectators`).emit('room:update', serializeRoom(room));
 }
 
 function emitGameState(room) {
   if (!room) return;
-  io.to(`room:${room.id}`).emit('game:state', {
-    gameState: room.gameState,
-    players: getRoomPlayerSummaries(room),
-    room: serializeRoom(room)
+  const players = getRoomPlayerSummaries(room);
+  room.players.forEach(pid => {
+    const playerRoom = serializeRoom(room, pid);
+    io.to(`player:${pid}`).emit('game:state', {
+      gameState: playerRoom.gameState,
+      players,
+      room: playerRoom
+    });
+  });
+  const publicRoom = serializeRoom(room);
+  io.to(`room:${room.id}:spectators`).emit('game:state', {
+    gameState: publicRoom.gameState,
+    players,
+    room: publicRoom
   });
 }
 
 function notifyRoomPlayers(room, eventName = 'game:matched') {
-  const payload = serializeRoom(room);
   room.players.forEach(pid => {
-    io.to(`player:${pid}`).emit(eventName, payload);
+    io.to(`player:${pid}`).emit(eventName, serializeRoom(room, pid));
   });
 }
 
@@ -621,15 +636,103 @@ function areAllRoomPlayersReady(room) {
   return isRoomFull(room) && room.players.every(pid => room.ready?.[pid]);
 }
 
+function samePlayerSet(a = [], b = []) {
+  return a.length === b.length && a.every(pid => b.includes(pid));
+}
+
+function getPlayersAvailableForRematch(room) {
+  return room.players.filter(pid => {
+    const player = store.getPlayer(pid);
+    if (!player) return false;
+    const blockingRoom = getBlockingRoom(pid);
+    return !blockingRoom || blockingRoom.id === room.id;
+  });
+}
+
+function prepareRoomRematch(room, playerId) {
+  const config = getGameConfig(room.gameType);
+  if (!config) return { error: '游戏不存在' };
+
+  const wasReadying = room.status === 'readying';
+  room.players = getPlayersAvailableForRematch(room);
+  if (!room.players.includes(playerId)) {
+    room.players.push(playerId);
+  }
+
+  if (room.visibility === 'public' && room.players.length < config.maxPlayers) {
+    const player = store.getPlayer(playerId);
+    if (player?.online) {
+      store.enqueue(playerId, room.gameType);
+      player.currentRoom = null;
+      store.savePlayer(player);
+      io.to(`player:${playerId}`).emit('match:requeued', {
+        gameType: room.gameType,
+        message: '对手已返回大厅，已为你重新匹配'
+      });
+    }
+
+    room.players = room.players.filter(pid => pid !== playerId);
+    if (room.players.length === 0) {
+      store.removeRoom(room.id);
+    } else {
+      room.updatedAt = Date.now();
+      store.saveRoom(room);
+      emitRoomUpdate(room);
+    }
+    broadcastUpdate();
+    return { success: true, requeued: true, gameType: room.gameType };
+  }
+
+  room.status = 'readying';
+  room.ready = wasReadying
+    ? {
+        ...Object.fromEntries(room.players.map(pid => [pid, Boolean(room.ready?.[pid])])),
+        [playerId]: true
+      }
+    : Object.fromEntries(room.players.map(pid => [pid, pid === playerId]));
+  room.seatStates = Object.fromEntries(room.players.map(pid => {
+    const p = store.getPlayer(pid);
+    const ready = Boolean(room.ready?.[pid]);
+    return [
+      pid,
+      {
+        ...(wasReadying ? (room.seatStates?.[pid] || {}) : {}),
+        ready,
+        connection: p?.online === false ? 'offline' : 'online',
+        intent: 'active'
+      }
+    ];
+  }));
+  room.readyDeadline = null;
+  room.updatedAt = Date.now();
+
+  room.players.forEach(pid => {
+    const p = store.getPlayer(pid);
+    if (!p) return;
+    p.currentRoom = room.id;
+    store.savePlayer(p);
+  });
+
+  ensureReadyDeadline(room);
+  store.saveRoom(room);
+  emitRoomUpdate(room);
+  maybeStartReadyRoom(room);
+  broadcastUpdate();
+  return { success: true, room: serializeRoom(room, playerId) };
+}
+
 function maybeStartReadyRoom(room) {
   if (!room || room.status !== 'readying' || !areAllRoomPlayersReady(room)) return false;
 
   const engine = getEngine(room.gameType);
   if (!engine) return false;
 
+  const previousState = room.gameState;
   room.status = 'playing';
   room.readyDeadline = null;
-  room.gameState = engine.init(room, room.players);
+  room.gameState = previousState?.phase === 'finished' && engine.nextRound && samePlayerSet(previousState.players || [], room.players)
+    ? engine.nextRound(previousState)
+    : engine.init(room, room.players);
   room.ready = Object.fromEntries(room.players.map(pid => [pid, true]));
   room.seatStates = room.seatStates || {};
   room.players.forEach(pid => {
@@ -644,7 +747,10 @@ function maybeStartReadyRoom(room) {
   room.updatedAt = Date.now();
   store.saveRoom(room);
 
-  io.to(`room:${room.id}`).emit('room:started', serializeRoom(room));
+  room.players.forEach(pid => {
+    io.to(`player:${pid}`).emit('room:started', serializeRoom(room, pid));
+  });
+  io.to(`room:${room.id}:spectators`).emit('room:started', serializeRoom(room));
   emitGameState(room);
   broadcastUpdate();
   return true;
@@ -781,11 +887,23 @@ function skipUnavailableTurns(room) {
         pid !== state.lastLeadPlayer
       ));
 
-      if (state.lastPattern && state.lastLeadPlayer && !unavailable.has(state.lastLeadPlayer) &&
+      const leadFinished = finished.has(state.lastLeadPlayer);
+      if (state.lastPattern && state.lastLeadPlayer && !unavailable.has(state.lastLeadPlayer) && !leadFinished &&
           activeOthers.every(pid => state.passedPlayers.includes(pid))) {
         state.currentPlayer = state.lastLeadPlayer;
         state.lastPlay = null;
         state.lastPattern = null;
+        state.passedPlayers = [];
+      } else if (state.lastPattern && state.lastLeadPlayer && activeOthers.every(pid => state.passedPlayers.includes(pid))) {
+        state.currentPlayer = getNextAvailablePlayer(
+          state.players || room.players,
+          state.lastLeadPlayer,
+          unavailable,
+          finishedOrder
+        );
+        state.lastPlay = null;
+        state.lastPattern = null;
+        state.lastLeadPlayer = null;
         state.passedPlayers = [];
       } else {
         state.currentPlayer = nextPlayer;
@@ -825,7 +943,7 @@ function resolveCurrentActorId(room) {
     }
   }
 
-  if (room.gameType === 'guandan') {
+  if (room.gameType === 'guandan' || room.gameType === 'doudizhu') {
     return state.currentPlayer || null;
   }
 
@@ -885,7 +1003,8 @@ function maybeAdvanceTimedPhase(room) {
   const autoAdvancePhases = {
     quiz: ['answer'],
     undercover: ['reveal'],
-    rock_paper_scissors: ['reveal']
+    rock_paper_scissors: ['reveal'],
+    guandan: ['round_finished']
   };
   if (!autoAdvancePhases[room.gameType]?.includes(state.phase)) return false;
 
@@ -920,6 +1039,16 @@ function getAutoMahjongAction(state, playerId) {
 }
 
 function getAutoGuandanAction(state, playerId) {
+  if (state.currentPlayer !== playerId) return null;
+  if (state.lastPattern && state.lastLeadPlayer !== playerId) {
+    return { type: 'pass' };
+  }
+
+  const hand = state.hands?.[playerId] || [];
+  return hand[0] ? { type: 'play', cards: [hand[0]] } : null;
+}
+
+function getAutoDoudizhuAction(state, playerId) {
   if (state.currentPlayer !== playerId) return null;
   if (state.lastPattern && state.lastLeadPlayer !== playerId) {
     return { type: 'pass' };
@@ -969,6 +1098,10 @@ function getAutomatedAction(room, playerId) {
     return getAutoGuandanAction(state, playerId);
   }
 
+  if (room.gameType === 'doudizhu') {
+    return getAutoDoudizhuAction(state, playerId);
+  }
+
   if (room.gameType === 'mahjong') {
     return getAutoMahjongAction(state, playerId);
   }
@@ -989,7 +1122,7 @@ function shouldForfeitOnTimeout(gameType) {
 }
 
 function handleActionTimeout(room) {
-  if (!room || room.mode === 'quick' || room.status !== 'playing') return;
+  if (!room || room.status !== 'playing') return;
   const state = room.gameState;
   if (!state || state.phase === 'finished') return;
 
@@ -1031,7 +1164,20 @@ function forfeitPlayer(room, loserId, reason) {
 }
 
 function handlePlayerLeaveRoom(room, playerId, { confirmForfeit = false, reason = 'leave' } = {}) {
-  if (!room || room.status === 'finished') return { success: true };
+  if (!room) return { success: true };
+
+  if (room.status === 'finished') {
+    io.to(`player:${playerId}`).emit('room:left', { roomId: room.id });
+    const updatedRoom = store.removePlayerFromRoom(room.id, playerId);
+    if (!updatedRoom || updatedRoom.players.length === 0) {
+      store.removeRoom(room.id);
+    } else {
+      store.saveRoom(updatedRoom);
+      emitRoomUpdate(updatedRoom);
+    }
+    broadcastUpdate();
+    return { success: true, left: true };
+  }
 
   if (room.status === 'readying') {
     const remainingIds = room.players.filter(pid => pid !== playerId);
@@ -1134,6 +1280,9 @@ function handleGameEnd(room) {
   } else if (room.gameType === 'guandan') {
     // 掼蛋 2v2 团队游戏
     settleGuandan(room, winningPlayers);
+  } else if (room.gameType === 'doudizhu') {
+    // 斗地主：地主 1v2，农民共同获胜
+    settleDoudizhu(room, winningPlayers);
   } else if (room.players.length === 2) {
     // 1v1 游戏：输家输门票，赢家赢门票
     settle1v1(room, winnerId);
@@ -1145,30 +1294,32 @@ function handleGameEnd(room) {
   recordBattleHistory(room, config, winningPlayers, pointsBefore);
 
   room.status = 'finished';
-  room.players.forEach(pid => {
-    const p = store.getPlayer(pid);
-    if (p?.currentRoom === room.id) {
-      p.currentRoom = null;
-      store.savePlayer(p);
-    }
-  });
   store.saveRoom(room);
 
   // 广播结算
-  io.to(`room:${room.id}`).emit('game:result', {
+  const resultPlayers = room.players.map(pid => {
+    const p = store.getPlayer(pid);
+    const isWinner = winningPlayers.includes(pid);
+    return {
+      id: pid,
+      nickname: p ? p.nickname : '未知',
+      points: p ? p.points : 0,
+      won: isWinner
+    };
+  });
+  room.players.forEach(pid => {
+    io.to(`player:${pid}`).emit('game:result', {
+      winner: winnerId,
+      winningPlayers,
+      room: serializeRoom(room, pid),
+      players: resultPlayers
+    });
+  });
+  io.to(`room:${room.id}:spectators`).emit('game:result', {
     winner: winnerId,
-    winningPlayers: winningPlayers,
+    winningPlayers,
     room: serializeRoom(room),
-    players: room.players.map(pid => {
-      const p = store.getPlayer(pid);
-      const isWinner = winningPlayers.includes(pid);
-      return {
-        id: pid,
-        nickname: p ? p.nickname : '未知',
-        points: p ? p.points : 0,
-        won: isWinner
-      };
-    })
+    players: resultPlayers
   });
 
   // 更新排行榜
@@ -1220,25 +1371,54 @@ function settleMultiplayer(room, winningPlayers) {
   });
 }
 
-// 掼蛋 2v2 结算
+// Guandan 2v2 settlement
 function settleGuandan(room, winningPlayers) {
-  const entryFee = 80;
-  const totalPool = entryFee * 4;
-  const winAmount = Math.floor(totalPool / 2); // 2人平分
+  const config = getGameConfig(room.gameType);
+  const entryFee = config?.entryFee || 100;
+  const teams = room.gameState?.teams || {};
+  const winnerTeam = room.gameState?.settlement?.winnerTeam
+    || Object.keys(teams).find(key => teams[key]?.some(pid => winningPlayers.includes(pid)));
+  const loserTeam = Object.keys(teams).find(key => key !== winnerTeam);
+  const winnerLevel = room.gameState?.teamLevels?.[winnerTeam] || room.gameState?.settlement?.nextLevel || '1';
+  const loserLevel = room.gameState?.teamLevels?.[loserTeam] || '2';
+  const levelBonus = Math.max(0, getLevelScore(winnerLevel) - getLevelScore(loserLevel)) * 10;
+  const payoutDelta = entryFee + levelBonus;
 
   room.players.forEach(pid => {
     const isWinner = winningPlayers.includes(pid);
     store.recordGame(pid, isWinner);
-    
-    if (isWinner) {
-      store.updatePoints(pid, winAmount - entryFee, 'game_settlement', { roomId: room.id, gameType: room.gameType, won: true }); // 净 +80
-    } else {
-      store.updatePoints(pid, -entryFee, 'game_settlement', { roomId: room.id, gameType: room.gameType, won: false }); // 净 -80
-    }
+    store.updatePoints(pid, isWinner ? payoutDelta : -payoutDelta, 'game_settlement', {
+      roomId: room.id,
+      gameType: room.gameType,
+      won: isWinner,
+      winnerLevel,
+      loserLevel,
+      levelBonus
+    });
   });
 }
 
-// 加番游戏结算（炸金花、麻将）
+// Doudizhu 1v2 settlement
+function settleDoudizhu(room, winningPlayers) {
+  const config = getGameConfig(room.gameType);
+  const entryFee = config.entryFee;
+  const landlordId = room.gameState.landlord;
+  const landlordWon = winningPlayers.includes(landlordId);
+
+  room.players.forEach(pid => {
+    const isWinner = winningPlayers.includes(pid);
+    store.recordGame(pid, isWinner);
+    const delta = landlordWon
+      ? (pid === landlordId ? entryFee * 2 : -entryFee)
+      : (pid === landlordId ? -entryFee * 2 : entryFee);
+    store.updatePoints(pid, delta, 'game_settlement', {
+      roomId: room.id,
+      gameType: room.gameType,
+      won: isWinner
+    });
+  });
+}
+
 function settleGameWithPot(room, winningPlayers) {
   const config = getGameConfig(room.gameType);
   const entryFee = config.entryFee;
@@ -1348,28 +1528,6 @@ function broadcastUpdate() {
   });
 }
 
-function serializeRoom(room) {
-  if (!room) return null;
-
-  return {
-    roomId: room.id,
-    id: room.id,
-    gameType: room.gameType,
-    gameName: getGameConfig(room.gameType)?.name || room.gameType,
-    minPlayers: getGameConfig(room.gameType)?.minPlayers || room.players.length,
-    maxPlayers: getGameConfig(room.gameType)?.maxPlayers || room.players.length,
-    players: getRoomPlayerSummaries(room),
-    status: room.status,
-    mode: room.mode || 'normal',
-    visibility: room.visibility || 'public',
-    ownerId: room.ownerId || null,
-    ready: room.ready || {},
-    readyDeadline: room.readyDeadline || null,
-    seatStates: room.seatStates || {},
-    gameState: room.gameState
-  };
-}
-
 function cleanupPlayerBotRooms(playerId) {
   const rooms = store.getRoomsForPlayer(playerId);
   const blockingRooms = [];
@@ -1458,6 +1616,7 @@ function getCurrentBotPlayer(state, gameType) {
     case 'quiz':
       return state.players?.find(p => p.startsWith('bot_') && !state.answeredPlayers?.includes(p)) || null;
     case 'guandan':
+    case 'doudizhu':
       return state.currentPlayer?.startsWith('bot_') ? state.currentPlayer : null;
     case 'mahjong':
       if (state.phase === 'response') {
@@ -1522,12 +1681,7 @@ function startQuickPlayLoop(room, bots) {
     store.saveRoom(room);
 
     // 广播状态更新
-    const allPlayers = room.players.map(pid => {
-      const p = store.getPlayer(pid);
-      return p ? { id: p.id, nickname: p.nickname || p.name, busNumber: p.busNumber, isBot: p.isBot || false } : null;
-    }).filter(Boolean);
-
-    io.to(`room:${room.id}`).emit('game:state', { gameState: room.gameState, players: allPlayers });
+    emitGameState(room);
 
     // 游戏结束处理
     if (room.gameState.phase === 'finished') {
@@ -1541,6 +1695,8 @@ function startQuickPlayLoop(room, bots) {
         settleGameWithPot(room, winningPlayers);
       } else if (room.gameType === 'guandan') {
         settleGuandan(room, winningPlayers);
+      } else if (room.gameType === 'doudizhu') {
+        settleDoudizhu(room, winningPlayers);
       } else if (room.players.length === 2) {
         settle1v1(room, winnerId);
       } else {
@@ -1557,15 +1713,24 @@ function startQuickPlayLoop(room, bots) {
       });
       store.saveRoom(room);
 
-      io.to(`room:${room.id}`).emit('game:result', {
+      const resultPlayers = room.players.map(pid => {
+        const p = store.getPlayer(pid);
+        const isWinner = winningPlayers.includes(pid);
+        return { id: pid, nickname: p ? (p.nickname || p.name) : '未知', points: p ? p.points : 0, won: isWinner };
+      });
+      room.players.forEach(pid => {
+        io.to(`player:${pid}`).emit('game:result', {
+          winner: winnerId,
+          winningPlayers,
+          room: serializeRoom(room, pid),
+          players: resultPlayers
+        });
+      });
+      io.to(`room:${room.id}:spectators`).emit('game:result', {
         winner: winnerId,
         winningPlayers,
         room: serializeRoom(room),
-        players: room.players.map(pid => {
-          const p = store.getPlayer(pid);
-          const isWinner = winningPlayers.includes(pid);
-          return { id: pid, nickname: p ? (p.nickname || p.name) : '未知', points: p ? p.points : 0, won: isWinner };
-        })
+        players: resultPlayers
       });
 
       broadcastUpdate();
@@ -1639,7 +1804,7 @@ app.post('/api/bots/quick-play', express.json(), (req, res) => {
   room.status = 'playing';
   store.saveRoom(room);
 
-  const matchPayload = serializeRoom(room);
+  const matchPayload = serializeRoom(room, playerId);
 
   // 只给真人玩家发送 game:matched
   io.to(`player:${playerId}`).emit('game:matched', matchPayload);
@@ -1694,7 +1859,15 @@ async function startServer() {
   startRoomMonitor();
 }
 
-startServer().catch((error) => {
-  console.error(`[startup] ${error.stack || error.message}`);
-  process.exit(1);
-});
+if (require.main === module) {
+  startServer().catch((error) => {
+    console.error(`[startup] ${error.stack || error.message}`);
+    process.exit(1);
+  });
+}
+
+module.exports = {
+  handleActionTimeout,
+  maybeStartReadyRoom,
+  prepareRoomRematch
+};

@@ -1,4 +1,5 @@
 const { createStandardDeck, shuffle, DEFAULT_RANK_VALUES } = require('./shared/cards');
+const store = require('../store');
 
 const BASE_BET = 10;
 const RAISE_STEP = 10;
@@ -161,9 +162,29 @@ function getCompareAmount(state, playerId) {
   return getCallAmount(state, playerId) * 2;
 }
 
+function getInitialBalance(room, playerId) {
+  const explicit = room?.playerBalances?.[playerId];
+  const playerPoints = store.getPlayer(playerId)?.points;
+  const balance = Number(explicit ?? playerPoints);
+  return Number.isFinite(balance) && balance >= 0 ? balance : Number.MAX_SAFE_INTEGER;
+}
+
+function getRemainingBalance(state, playerId) {
+  const balance = Number(state.playerBalances?.[playerId]);
+  if (!Number.isFinite(balance)) return Number.MAX_SAFE_INTEGER;
+  const committed = Number(state.playerBets?.[playerId] || 0);
+  return Math.max(0, balance - committed);
+}
+
+function canAfford(state, playerId, amount) {
+  return Number(amount) <= getRemainingBalance(state, playerId);
+}
+
 function applyCost(state, playerId, amount) {
+  if (!canAfford(state, playerId, amount)) return false;
   state.playerBets[playerId] = (state.playerBets[playerId] || 0) + amount;
   state.pot += amount;
+  return true;
 }
 
 function foldPlayer(state, playerId) {
@@ -203,6 +224,7 @@ class ZhaJinHuaEngine {
       currentBet: BASE_BET,
       raiseStep: RAISE_STEP,
       pot: 0,
+      playerBalances: Object.fromEntries(players.map((playerId) => [playerId, getInitialBalance(room, playerId)])),
       playerBets: Object.fromEntries(players.map((playerId) => [playerId, 0])),
       actedThisRound: [],
       lastAction: null,
@@ -271,13 +293,14 @@ class ZhaJinHuaEngine {
       }
     } else if (action.type === 'call') {
       const amount = getCallAmount(state, playerId);
-      applyCost(state, playerId, amount);
+      if (!applyCost(state, playerId, amount)) return state;
       if (!state.actedThisRound.includes(playerId)) {
         state.actedThisRound.push(playerId);
       }
       recordAction(state, { type: 'call', playerId, amount });
     } else if (action.type === 'raise') {
       const amount = getRaiseAmount(state, playerId);
+      if (!canAfford(state, playerId, amount)) return state;
       state.currentBet += state.raiseStep;
       applyCost(state, playerId, amount);
       state.actedThisRound = [playerId];
@@ -289,7 +312,7 @@ class ZhaJinHuaEngine {
       }
 
       const amount = getCompareAmount(state, playerId);
-      applyCost(state, playerId, amount);
+      if (!applyCost(state, playerId, amount)) return state;
       const challengerRank = evaluateHand(state.hands[playerId]);
       const targetRank = evaluateHand(state.hands[targetId]);
       const diff = compareHands(challengerRank, targetRank);
@@ -363,5 +386,7 @@ module.exports = {
   blindMultiplier,
   getCallAmount,
   getRaiseAmount,
-  getCompareAmount
+  getCompareAmount,
+  getRemainingBalance,
+  canAfford
 };

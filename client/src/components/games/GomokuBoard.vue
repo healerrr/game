@@ -94,6 +94,7 @@
           <h2>{{ resultText }}</h2>
           <p>{{ resultDetail }}</p>
           <div class="result-actions">
+            <button type="button" class="primary-btn" @click="$emit('rematch')">再来一局</button>
             <button type="button" class="secondary-btn" @click="$emit('back')">返回大厅</button>
           </div>
         </div>
@@ -111,7 +112,7 @@ const props = defineProps({
   roomPlayers: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['action', 'back', 'forfeit'])
+const emit = defineEmits(['action', 'back', 'forfeit', 'rematch'])
 
 const BOARD_SIZE = 15
 const STAR_POINTS = new Set(['3,3', '3,7', '3,11', '7,3', '7,7', '7,11', '11,3', '11,7', '11,11'])
@@ -717,15 +718,22 @@ function showToast(text) {
 .result-actions {
   margin-top: 16px;
   display: grid;
-  grid-template-columns: 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
+.primary-btn,
 .secondary-btn {
   min-height: 46px;
   border-radius: 999px;
   font-size: 15px;
   font-weight: 800;
+}
+
+.primary-btn {
+  background: linear-gradient(180deg, #2f92ff, #0758ef);
+  color: #fff;
+  border: 0;
 }
 
 .secondary-btn {

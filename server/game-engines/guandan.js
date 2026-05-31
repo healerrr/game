@@ -1,7 +1,12 @@
 const { createStandardDeck, shuffle, DEFAULT_RANK_VALUES } = require('./shared/cards');
 
 const SEAT_ORDER = ['south', 'east', 'north', 'west'];
-const LEVEL_SEQUENCE = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+const LEVEL_SEQUENCE = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', '1'];
+const FINAL_LEVEL = '1';
+const DEFAULT_TEAM_LEVELS = {
+  south_north: '2',
+  east_west: '2'
+};
 
 function buildSeats(players) {
   return players.map((playerId, index) => ({
@@ -932,16 +937,60 @@ function hintRocket(results, hand) {
 function getNextPlayer(players, finishedSet, currentPlayer) {
   const alive = players.filter((playerId) => !finishedSet.has(playerId));
   if (alive.length === 0) return null;
-  const currentIndex = alive.indexOf(currentPlayer);
+  const currentIndex = players.indexOf(currentPlayer);
   if (currentIndex === -1) return alive[0];
-  return alive[(currentIndex + 1) % alive.length];
+  for (let offset = 1; offset <= players.length; offset += 1) {
+    const candidate = players[(currentIndex + offset) % players.length];
+    if (!finishedSet.has(candidate)) return candidate;
+  }
+  return alive[0];
 }
 
-function resolveRoundEnd(finishedOrder, teams, level) {
+function getHandCounts(state) {
+  return Object.fromEntries((state.players || []).map((pid) => [
+    pid,
+    (state.hands?.[pid] || []).length
+  ]));
+}
+
+function syncHandCounts(state) {
+  state.handCounts = getHandCounts(state);
+}
+
+function normalizeTeamLevels(levelOrTeamLevels = DEFAULT_TEAM_LEVELS) {
+  if (typeof levelOrTeamLevels === 'string') {
+    return {
+      south_north: levelOrTeamLevels,
+      east_west: levelOrTeamLevels
+    };
+  }
+  return {
+    ...DEFAULT_TEAM_LEVELS,
+    ...(levelOrTeamLevels || {})
+  };
+}
+
+function advanceLevel(level, levelUp) {
+  const currentIndex = Math.max(0, LEVEL_SEQUENCE.indexOf(level));
+  const nextIndex = Math.min(LEVEL_SEQUENCE.length - 1, currentIndex + levelUp);
+  return LEVEL_SEQUENCE[nextIndex];
+}
+
+function getLevelScore(level) {
+  if (level === FINAL_LEVEL) return 13;
+  if (level === 'J') return 11;
+  if (level === 'Q') return 12;
+  if (level === 'K') return 13;
+  const numeric = Number(level);
+  return Number.isFinite(numeric) ? numeric : 2;
+}
+
+function resolveRoundEnd(finishedOrder, teams, levelOrTeamLevels) {
   if (finishedOrder.length < 2) return null;
   const firstTeam = getTeamKey(finishedOrder[0], teams);
   const secondTeam = getTeamKey(finishedOrder[1], teams);
   const thirdTeam = finishedOrder[2] ? getTeamKey(finishedOrder[2], teams) : null;
+  const teamLevels = normalizeTeamLevels(levelOrTeamLevels);
 
   let levelUp = 1;
   if (firstTeam === secondTeam) {
@@ -950,13 +999,20 @@ function resolveRoundEnd(finishedOrder, teams, level) {
     levelUp = 2;
   }
 
-  const currentIndex = LEVEL_SEQUENCE.indexOf(level);
-  const nextIndex = Math.min(LEVEL_SEQUENCE.length - 1, currentIndex + levelUp);
+  const currentLevel = teamLevels[firstTeam] || '2';
+  const nextLevel = advanceLevel(currentLevel, levelUp);
+  const nextTeamLevels = {
+    ...teamLevels,
+    [firstTeam]: nextLevel
+  };
   return {
     winnerTeam: firstTeam,
     winningPlayers: teams[firstTeam] || [],
+    currentLevel,
     levelUp,
-    nextLevel: LEVEL_SEQUENCE[nextIndex]
+    nextLevel,
+    teamLevels: nextTeamLevels,
+    matchFinished: nextLevel === FINAL_LEVEL
   };
 }
 
@@ -979,6 +1035,8 @@ class GuandanEngine {
       seatMap: getSeatMap(players),
       teams,
       level: '2',
+      teamLevels: { ...DEFAULT_TEAM_LEVELS },
+      round: 1,
       dealerSeat: 'south',
       hands,
       currentPlayer: players[0],
@@ -992,6 +1050,7 @@ class GuandanEngine {
       settlement: null,
       timer: 30,
       timerStarted: Date.now(),
+      handCounts: Object.fromEntries(players.map((pid) => [pid, hands[pid].length])),
       currentHints: []
     };
   }
@@ -1030,18 +1089,26 @@ class GuandanEngine {
       if (state.hands[playerId].length === 0 && !state.finishedOrder.includes(playerId)) {
         state.finishedOrder.push(playerId);
       }
+      syncHandCounts(state);
 
       if (state.finishedOrder.length >= state.players.length - 1) {
         const lastPlayer = state.players.find((id) => !state.finishedOrder.includes(id));
         if (lastPlayer) state.finishedOrder.push(lastPlayer);
-        const settlement = resolveRoundEnd(state.finishedOrder, state.teams, state.level);
-        state.phase = 'finished';
-        state.stage = 'settlement';
+        syncHandCounts(state);
+        const settlement = resolveRoundEnd(state.finishedOrder, state.teams, state.teamLevels || state.level);
+        if (settlement?.teamLevels) {
+          state.teamLevels = settlement.teamLevels;
+          state.level = settlement.nextLevel;
+        }
+        state.phase = settlement?.matchFinished ? 'finished' : 'round_finished';
+        state.stage = settlement?.matchFinished ? 'settlement' : 'round_settlement';
         state.roundWinner = state.finishedOrder[0];
         state.finalWinner = state.finishedOrder[0];
         state.winningPlayers = settlement ? settlement.winningPlayers : [state.finishedOrder[0]];
         state.settlement = settlement;
         state.currentHints = [];
+        state.currentPlayer = null;
+        state.timerStarted = Date.now();
         return state;
       }
 
@@ -1061,14 +1128,18 @@ class GuandanEngine {
       const finishedSet = new Set(state.finishedOrder);
       const aliveOthers = state.players.filter((id) => !finishedSet.has(id) && id !== state.lastLeadPlayer);
       if (aliveOthers.every((id) => state.passedPlayers.includes(id))) {
-        state.currentPlayer = state.lastLeadPlayer;
+        state.currentPlayer = finishedSet.has(state.lastLeadPlayer)
+          ? getNextPlayer(state.players, finishedSet, state.lastLeadPlayer || playerId)
+          : state.lastLeadPlayer;
         state.lastPlay = null;
         state.lastPattern = null;
+        state.lastLeadPlayer = null;
         state.passedPlayers = [];
       } else {
         state.currentPlayer = getNextPlayer(state.players, finishedSet, playerId);
       }
       state.timerStarted = Date.now();
+      syncHandCounts(state);
 
       // Generate hints for the next player
       this._updateHints(state);
@@ -1094,7 +1165,14 @@ class GuandanEngine {
 
   getPlayerView(state, playerId) {
     // Return state with hints only visible to the current player
-    const view = { ...state };
+    const handCounts = getHandCounts(state);
+    const view = {
+      ...state,
+      handCounts,
+      hands: {
+        [playerId]: state.hands?.[playerId] || []
+      }
+    };
     if (playerId !== state.currentPlayer) {
       view.currentHints = [];
     }
@@ -1103,8 +1181,17 @@ class GuandanEngine {
 
   nextRound(state) {
     const nextState = this.init(null, state.players);
-    const nextLevel = state.settlement?.nextLevel || state.level || '2';
-    nextState.level = nextLevel;
+    if (state.phase === 'round_finished' && !state.settlement?.matchFinished) {
+      const nextLevel = state.settlement?.nextLevel || state.level || '2';
+      nextState.level = nextLevel;
+      nextState.teamLevels = normalizeTeamLevels(state.settlement?.teamLevels || state.teamLevels);
+      nextState.round = (state.round || 1) + 1;
+      nextState.currentPlayer = state.roundWinner || state.players[0];
+      Object.keys(nextState.hands || {}).forEach((pid) => {
+        nextState.hands[pid] = sortHand(nextState.hands[pid], nextLevel);
+      });
+      syncHandCounts(nextState);
+    }
     return nextState;
   }
 }
@@ -1119,6 +1206,7 @@ module.exports = {
   comparePattern,
   canBeat,
   resolveRoundEnd,
+  getLevelScore,
   getHints,
   isWild
 };

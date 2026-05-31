@@ -1,4 +1,10 @@
-const { evaluateHand, getCallAmount, getCompareAmount } = require('../game-engines/zha-jin-hua');
+const {
+  evaluateHand,
+  getCallAmount,
+  getRaiseAmount,
+  getCompareAmount,
+  canAfford
+} = require('../game-engines/zha-jin-hua');
 
 function zhaJinHuaStrategy(state, botId) {
   if (state.phase === 'look') {
@@ -13,35 +19,43 @@ function zhaJinHuaStrategy(state, botId) {
   const activeOpponents = (state.activePlayers || []).filter((playerId) => playerId !== botId);
   const compareTarget = activeOpponents[0];
   const callCost = getCallAmount(state, botId);
+  const raiseCost = getRaiseAmount(state, botId);
   const compareCost = getCompareAmount(state, botId);
+  const canCall = canAfford(state, botId, callCost);
+  const canRaise = canAfford(state, botId, raiseCost);
+  const canCompare = canAfford(state, botId, compareCost);
+
+  if (!canCall) return { type: 'fold' };
+
+  const betAction = (raiseChance) => (canRaise && Math.random() < raiseChance ? { type: 'raise' } : { type: 'call' });
 
   if (!looked && Math.random() < 0.2) {
     return { type: 'peek' };
   }
 
   if (rank.typeValue >= 5) {
-    if (compareTarget && activeOpponents.length === 1 && Math.random() < 0.45) {
+    if (canCompare && compareTarget && activeOpponents.length === 1 && Math.random() < 0.45) {
       return { type: 'compare', targetId: compareTarget };
     }
-    return Math.random() < 0.55 ? { type: 'raise' } : { type: 'call' };
+    return betAction(0.55);
   }
 
   if (rank.typeValue >= 3) {
-    if (compareTarget && activeOpponents.length === 1 && compareCost <= callCost * 3 && Math.random() < 0.25) {
+    if (canCompare && compareTarget && activeOpponents.length === 1 && compareCost <= callCost * 3 && Math.random() < 0.25) {
       return { type: 'compare', targetId: compareTarget };
     }
-    return Math.random() < 0.35 ? { type: 'raise' } : { type: 'call' };
+    return betAction(0.35);
   }
 
   if (rank.typeValue === 2) {
     if (looked && callCost > state.currentBet * 2 && Math.random() < 0.3) {
       return { type: 'fold' };
     }
-    return Math.random() < 0.2 ? { type: 'raise' } : { type: 'call' };
+    return betAction(0.2);
   }
 
   if (looked && Math.random() < 0.45) return { type: 'fold' };
-  return Math.random() < 0.15 ? { type: 'raise' } : { type: 'call' };
+  return betAction(0.15);
 }
 
 module.exports = { zhaJinHuaStrategy };

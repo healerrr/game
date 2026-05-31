@@ -2,9 +2,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const {
+  GuandanEngine,
   identifyPattern,
   comparePattern,
-  resolveRoundEnd
+  resolveRoundEnd,
+  getLevelScore
 } = require('../game-engines/guandan');
 
 function card(rank, suit, value) {
@@ -47,4 +49,82 @@ test('掼蛋升级结算支持双下', () => {
   }, '2');
   assert.equal(settlement.levelUp, 3);
   assert.equal(settlement.nextLevel, '5');
+});
+
+test('掼蛋出完的玩家不再重新拿到回合', () => {
+  const engine = new GuandanEngine();
+  const state = engine.init(null, ['p1', 'p2', 'p3', 'p4']);
+  state.hands = {
+    p1: [card('3', 'spade', 3)],
+    p2: [card('4', 'spade', 4), card('5', 'spade', 5)],
+    p3: [card('6', 'spade', 6), card('7', 'spade', 7)],
+    p4: [card('8', 'spade', 8), card('9', 'spade', 9)]
+  };
+  state.handCounts = Object.fromEntries(Object.entries(state.hands).map(([pid, hand]) => [pid, hand.length]));
+  state.currentPlayer = 'p1';
+
+  engine.update(state, { type: 'play', cards: [state.hands.p1[0]] }, 'p1');
+  assert.deepEqual(state.finishedOrder, ['p1']);
+  assert.equal(state.currentPlayer, 'p2');
+  assert.equal(state.handCounts.p1, 0);
+
+  engine.update(state, { type: 'pass' }, 'p2');
+  engine.update(state, { type: 'pass' }, 'p3');
+  engine.update(state, { type: 'pass' }, 'p4');
+
+  assert.equal(state.currentPlayer, 'p2');
+  assert.equal(state.lastPattern, null);
+  assert.equal(state.lastLeadPlayer, null);
+});
+
+test('Guandan tracks team levels and only finishes after a team reaches 1', () => {
+  const settlement = resolveRoundEnd(['p1', 'p2', 'p3', 'p4'], {
+    south_north: ['p1', 'p3'],
+    east_west: ['p2', 'p4']
+  }, { south_north: '3', east_west: '2' });
+
+  assert.equal(settlement.winnerTeam, 'south_north');
+  assert.equal(settlement.levelUp, 2);
+  assert.equal(settlement.nextLevel, '5');
+  assert.equal(settlement.teamLevels.south_north, '5');
+  assert.equal(settlement.teamLevels.east_west, '2');
+  assert.equal(settlement.matchFinished, false);
+});
+
+test('Guandan reaches final level 1 and scores level difference from 1 as 13', () => {
+  const settlement = resolveRoundEnd(['p1', 'p2', 'p3', 'p4'], {
+    south_north: ['p1', 'p3'],
+    east_west: ['p2', 'p4']
+  }, { south_north: 'K', east_west: '3' });
+
+  assert.equal(settlement.nextLevel, '1');
+  assert.equal(settlement.matchFinished, true);
+  assert.equal(getLevelScore(settlement.nextLevel) - getLevelScore('3'), 10);
+});
+
+test('Guandan hand end advances to next hand until final match settlement', () => {
+  const engine = new GuandanEngine();
+  const state = engine.init(null, ['p1', 'p2', 'p3', 'p4']);
+  state.hands = {
+    p1: [card('3', 'spade', 3)],
+    p2: [card('4', 'spade', 4)],
+    p3: [card('5', 'spade', 5)],
+    p4: [card('6', 'spade', 6), card('7', 'spade', 7)]
+  };
+  state.currentPlayer = 'p1';
+  state.handCounts = Object.fromEntries(Object.entries(state.hands).map(([pid, hand]) => [pid, hand.length]));
+
+  engine.update(state, { type: 'play', cards: [state.hands.p1[0]] }, 'p1');
+  engine.update(state, { type: 'play', cards: [state.hands.p2[0]] }, 'p2');
+  engine.update(state, { type: 'play', cards: [state.hands.p3[0]] }, 'p3');
+
+  assert.equal(state.phase, 'round_finished');
+  assert.equal(state.teamLevels.south_north, '4');
+  assert.deepEqual(state.winningPlayers, ['p1', 'p3']);
+
+  const next = engine.nextRound(state);
+  assert.equal(next.phase, 'play');
+  assert.equal(next.level, '4');
+  assert.equal(next.teamLevels.south_north, '4');
+  assert.equal(next.round, 2);
 });

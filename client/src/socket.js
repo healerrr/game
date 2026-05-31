@@ -2,7 +2,7 @@
 import { io } from 'socket.io-client'
 import { reactive } from 'vue'
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || (import.meta.env.PROD ? window.location.origin : 'http://localhost:3457')
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || window.location.origin
 
 export const socket = io(SOCKET_URL, {
   autoConnect: true,

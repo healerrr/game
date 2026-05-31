@@ -5,7 +5,8 @@ const {
   ZhaJinHuaEngine,
   evaluateHand,
   compareHands,
-  blindMultiplier
+  blindMultiplier,
+  getRemainingBalance
 } = require('../game-engines/zha-jin-hua');
 
 function card(rank, suit, value) {
@@ -56,4 +57,51 @@ test('炸金花比牌会淘汰失败玩家并结束', () => {
   assert.equal(next.phase, 'finished');
   assert.equal(next.finalWinner, 'p1');
   assert.deepEqual(next.activePlayers, ['p1']);
+});
+
+test('炸金花跟注不能超过玩家剩余积分', () => {
+  const engine = new ZhaJinHuaEngine();
+  const state = engine.init({ playerBalances: { p1: 15, p2: 100 } }, ['p1', 'p2']);
+  state.lookedPlayers = ['p1'];
+
+  engine.update(state, { type: 'call' }, 'p1');
+  assert.equal(state.playerBets.p1, 10);
+  assert.equal(state.pot, 10);
+  assert.equal(getRemainingBalance(state, 'p1'), 5);
+
+  state.currentPlayer = 'p1';
+  engine.update(state, { type: 'call' }, 'p1');
+  assert.equal(state.playerBets.p1, 10);
+  assert.equal(state.pot, 10);
+  assert.equal(state.currentPlayer, 'p1');
+});
+
+test('炸金花加注不能超过玩家剩余积分', () => {
+  const engine = new ZhaJinHuaEngine();
+  const state = engine.init({ playerBalances: { p1: 15, p2: 100 } }, ['p1', 'p2']);
+  state.lookedPlayers = ['p1', 'p2'];
+
+  engine.update(state, { type: 'raise' }, 'p1');
+  assert.equal(state.currentBet, 10);
+  assert.equal(state.playerBets.p1, 0);
+  assert.equal(state.pot, 0);
+  assert.equal(state.currentPlayer, 'p1');
+});
+
+test('炸金花比牌不能超过玩家剩余积分', () => {
+  const engine = new ZhaJinHuaEngine();
+  const state = engine.init({ playerBalances: { p1: 25, p2: 100 } }, ['p1', 'p2']);
+  state.lookedPlayers = ['p1', 'p2'];
+
+  engine.update(state, { type: 'compare', targetId: 'p2' }, 'p1');
+  assert.equal(state.playerBets.p1, 20);
+  assert.equal(state.pot, 20);
+
+  state.phase = 'bet';
+  state.currentPlayer = 'p1';
+  state.activePlayers = ['p1', 'p2'];
+  engine.update(state, { type: 'compare', targetId: 'p2' }, 'p1');
+  assert.equal(state.playerBets.p1, 20);
+  assert.equal(state.pot, 20);
+  assert.equal(state.currentPlayer, 'p1');
 });

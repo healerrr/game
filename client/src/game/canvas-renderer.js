@@ -599,6 +599,7 @@ class CanvasRenderer {
       heart: '♥', hearts: '♥', H: '♥',
       diamond: '♦', diamonds: '♦', D: '♦',
       club: '♣', clubs: '♣', C: '♣',
+      joker: '★',
     }
     return map[suit] || suit
   }
@@ -640,6 +641,40 @@ class CanvasRenderer {
     // 白色牌面
     this.drawRoundRect(x, y, w, h, 3, '#fff', '#aaa', 1)
     const { suit, rank } = card
+    if (suit === 'joker' || rank === 'SJ' || rank === 'BJ') {
+      const isBig = rank === 'BJ'
+      const color = isBig ? '#d32f2f' : '#222'
+      const bg = ctx.createLinearGradient(x, y, x, y + h)
+      bg.addColorStop(0, isBig ? '#fff1f1' : '#f3f3f5')
+      bg.addColorStop(1, isBig ? '#ffe1e1' : '#e2e2e6')
+      this.drawRoundRect(x, y, w, h, 3, bg, 'rgba(164, 190, 230, 0.65)', 1)
+
+      const cornerSize = Math.max(6, Math.min(w * 0.2, 9))
+      const iconScale = Math.min(w / 40, h / 50) * 0.5
+      const iconW = 40 * iconScale
+      const iconH = 50 * iconScale
+      const iconX = x + (w - iconW) / 2
+      const iconY = y + (h - iconH) / 2 + 1
+
+      this.drawText('JOKER', x + w / 2, y + 5, {
+        font: `bold ${cornerSize}px Georgia, "Times New Roman", serif`,
+        color,
+        align: 'center',
+        baseline: 'top'
+      })
+      drawCanvasJokerIcon(ctx, iconX, iconY, iconScale, color)
+      ctx.save()
+      ctx.translate(x + w / 2, y + h - 5)
+      ctx.rotate(Math.PI)
+      this.drawText('JOKER', 0, 0, {
+        font: `bold ${cornerSize}px Georgia, "Times New Roman", serif`,
+        color,
+        align: 'center',
+        baseline: 'top'
+      })
+      ctx.restore()
+      return
+    }
     const symbol = this.getCardSuitSymbol(suit)
     const color = this.getCardSuitColor(suit)
     // 左上角花色和点数
@@ -667,3 +702,84 @@ class CanvasRenderer {
 }
 
 export default CanvasRenderer
+
+function drawCanvasJokerIcon(ctx, x, y, scale, color) {
+  const p = (v) => v * scale
+  ctx.save()
+  ctx.translate(x, y)
+  ctx.fillStyle = color
+  ctx.strokeStyle = color
+  ctx.lineWidth = Math.max(0.5, p(0.8))
+
+  ctx.beginPath()
+  ctx.moveTo(p(7), p(27))
+  ctx.lineTo(p(3), p(9))
+  ctx.lineTo(p(14), p(27))
+  ctx.closePath()
+  ctx.fill()
+
+  ctx.beginPath()
+  ctx.moveTo(p(14), p(27))
+  ctx.lineTo(p(20), p(2))
+  ctx.lineTo(p(26), p(27))
+  ctx.closePath()
+  ctx.fill()
+
+  ctx.beginPath()
+  ctx.moveTo(p(26), p(27))
+  ctx.lineTo(p(37), p(9))
+  ctx.lineTo(p(33), p(27))
+  ctx.closePath()
+  ctx.fill()
+
+  roundRectPath(ctx, p(4.5), p(25.5), p(31), p(5.2), p(2.2))
+  ctx.fill()
+
+  ;[[3, 9], [20, 2.4], [37, 9]].forEach(([cx, cy]) => {
+    ctx.beginPath()
+    ctx.arc(p(cx), p(cy), p(2.3), 0, Math.PI * 2)
+    ctx.fillStyle = '#ffd95a'
+    ctx.fill()
+    ctx.strokeStyle = color
+    ctx.stroke()
+  })
+
+  ctx.fillStyle = '#ffe2c2'
+  ctx.beginPath()
+  ctx.arc(p(20), p(39), p(6.2), 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = color
+  ctx.stroke()
+
+  ctx.fillStyle = color
+  ctx.beginPath()
+  ctx.arc(p(17.4), p(38), p(0.85), 0, Math.PI * 2)
+  ctx.arc(p(22.6), p(38), p(0.85), 0, Math.PI * 2)
+  ctx.fill()
+
+  ctx.beginPath()
+  ctx.moveTo(p(16.2), p(41.2))
+  ctx.quadraticCurveTo(p(20), p(44.2), p(23.8), p(41.2))
+  ctx.stroke()
+
+  ctx.globalAlpha = 0.7
+  ctx.beginPath()
+  ctx.arc(p(13.6), p(41), p(0.7), 0, Math.PI * 2)
+  ctx.arc(p(26.4), p(41), p(0.7), 0, Math.PI * 2)
+  ctx.fill()
+  ctx.restore()
+}
+
+function roundRectPath(ctx, x, y, w, h, radius) {
+  ctx.beginPath()
+  ctx.moveTo(x + radius, y)
+  ctx.lineTo(x + w - radius, y)
+  ctx.arcTo(x + w, y, x + w, y + radius, radius)
+  ctx.lineTo(x + w, y + h - radius)
+  ctx.arcTo(x + w, y + h, x + w - radius, y + h, radius)
+  ctx.lineTo(x + radius, y + h)
+  ctx.arcTo(x, y + h, x, y + h - radius, radius)
+  ctx.lineTo(x, y + radius)
+  ctx.arcTo(x, y, x + radius, y, radius)
+  ctx.closePath()
+}

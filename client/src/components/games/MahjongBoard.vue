@@ -393,7 +393,7 @@ const winSummary = computed(() => {
 // ============== 工具函数 ==============
 
 function concealedCount(playerId) {
-  const count = (props.gs.hands?.[playerId] || []).length
+  const count = props.gs.handCounts?.[playerId] ?? (props.gs.hands?.[playerId] || []).length
   return Math.min(Math.max(count, 0), 14) || 13
 }
 

@@ -41,10 +41,10 @@
           <i>›</i>
         </button>
 
-        <button class="test-enter-btn" :disabled="!nickname.trim() || !busNumber || submitting"
+        <!-- <button class="test-enter-btn" :disabled="!nickname.trim() || !busNumber || submitting"
           @click="handleTestSubmit">
           进入游戏测试平台
-        </button>
+        </button> -->
 
         <p v-if="submitError" class="submit-error">{{ submitError }}</p>
 

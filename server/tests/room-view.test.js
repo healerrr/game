@@ -1,0 +1,170 @@
+const test = require('node:test');
+const assert = require('node:assert/strict');
+
+const store = require('../store');
+const { GuandanEngine } = require('../game-engines/guandan');
+const { getPlayerGameState, getPublicGameState, serializeRoom } = require('../room-view');
+const { handleActionTimeout, prepareRoomRematch } = require('../index');
+
+function card(rank, suit, value) {
+  return { rank, suit, value, id: `${rank}-${suit}` };
+}
+
+function makeGuandanRoom() {
+  const players = ['p1', 'p2', 'p3', 'p4'];
+  players.forEach((id, index) => {
+    store.savePlayer({
+      id,
+      nickname: id,
+      busNumber: index + 1,
+      online: true,
+      currentRoom: 'room-privacy'
+    });
+  });
+
+  const engine = new GuandanEngine();
+  const gameState = engine.init(null, players);
+  gameState.hands = {
+    p1: [card('3', 'spade', 3)],
+    p2: [card('4', 'spade', 4), card('5', 'spade', 5)],
+    p3: [card('6', 'spade', 6), card('7', 'spade', 7), card('8', 'spade', 8)],
+    p4: [card('9', 'spade', 9), card('10', 'spade', 10), card('J', 'spade', 11), card('Q', 'spade', 12)]
+  };
+  gameState.handCounts = Object.fromEntries(Object.entries(gameState.hands).map(([pid, hand]) => [pid, hand.length]));
+
+  return {
+    id: 'room-privacy',
+    gameType: 'guandan',
+    status: 'playing',
+    mode: 'normal',
+    visibility: 'public',
+    players,
+    ready: Object.fromEntries(players.map(pid => [pid, true])),
+    seatStates: {},
+    gameState
+  };
+}
+
+test('room serialization only exposes the viewer hand in Guandan', () => {
+  const room = makeGuandanRoom();
+
+  const p1View = serializeRoom(room, 'p1').gameState;
+  assert.deepEqual(Object.keys(p1View.hands), ['p1']);
+  assert.deepEqual(p1View.hands.p1, room.gameState.hands.p1);
+  assert.equal(p1View.hands.p2, undefined);
+  assert.deepEqual(p1View.handCounts, { p1: 1, p2: 2, p3: 3, p4: 4 });
+
+  const publicView = getPublicGameState(room);
+  assert.deepEqual(publicView.hands, {});
+  assert.deepEqual(publicView.handCounts, { p1: 1, p2: 2, p3: 3, p4: 4 });
+});
+
+test('quick Guandan room timeout auto-passes instead of stalling at zero', () => {
+  const room = makeGuandanRoom();
+  room.id = 'room-timeout';
+  room.mode = 'quick';
+  room.gameState.currentPlayer = 'p1';
+  room.gameState.lastLeadPlayer = 'p4';
+  room.gameState.lastPattern = { type: 'single', mainValue: 12, length: 1 };
+  room.gameState.lastPlay = { playerId: 'p4', cards: [room.gameState.hands.p4[3]], pattern: room.gameState.lastPattern };
+  room.gameState.timer = 1;
+  room.gameState.timerStarted = Date.now() - 2000;
+
+  handleActionTimeout(room);
+
+  assert.deepEqual(room.gameState.passedPlayers, ['p1']);
+  assert.equal(room.gameState.currentPlayer, 'p2');
+});
+
+test('Guandan rematch waits for all players and starts a new match from 2', () => {
+  const room = makeGuandanRoom();
+  room.id = 'room-rematch';
+  room.status = 'finished';
+  room.visibility = 'private';
+  room.gameState.phase = 'finished';
+  room.gameState.settlement = { nextLevel: '5', winningPlayers: ['p1', 'p3'] };
+
+  room.players.forEach(pid => {
+    const player = store.getPlayer(pid);
+    player.currentRoom = room.id;
+    store.savePlayer(player);
+  });
+
+  const first = prepareRoomRematch(room, 'p1');
+  assert.equal(first.success, true);
+  assert.equal(room.status, 'readying');
+  assert.equal(room.ready.p1, true);
+  assert.equal(room.ready.p2, false);
+
+  prepareRoomRematch(room, 'p2');
+  prepareRoomRematch(room, 'p3');
+  prepareRoomRematch(room, 'p4');
+
+  assert.equal(room.status, 'playing');
+  assert.equal(room.gameState.phase, 'play');
+  assert.equal(room.gameState.level, '2');
+});
+
+test('guess number hides the secret until the game finishes', () => {
+  const room = {
+    id: 'room-guess',
+    gameType: 'guess_number',
+    status: 'playing',
+    players: ['p1', 'p2'],
+    gameState: {
+      phase: 'guess',
+      secret: 42,
+      range: { low: 1, high: 100 },
+      currentPlayer: 'p1',
+      players: ['p1', 'p2'],
+      guesses: []
+    }
+  };
+
+  const playingView = getPlayerGameState(room, 'p1');
+  assert.equal(Object.prototype.hasOwnProperty.call(playingView, 'secret'), false);
+
+  room.gameState.phase = 'finished';
+  const finishedView = getPlayerGameState(room, 'p1');
+  assert.equal(finishedView.secret, 42);
+});
+
+test('quiz hides answer fields while preserving reveal results', () => {
+  const question = { q: '1+1=?', options: ['1', '2', '3', '4'], answer: 1 };
+  const room = {
+    id: 'room-quiz',
+    gameType: 'quiz',
+    status: 'playing',
+    players: ['p1', 'p2'],
+    gameState: {
+      phase: 'question',
+      players: ['p1', 'p2'],
+      questions: [question],
+      currentQuestion: question,
+      answers: { p1: 1 },
+      answeredPlayers: ['p1'],
+      roundResult: null
+    }
+  };
+
+  const p1QuestionView = getPlayerGameState(room, 'p1');
+  assert.equal(Object.prototype.hasOwnProperty.call(p1QuestionView.currentQuestion, 'answer'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(p1QuestionView.questions[0], 'answer'), false);
+  assert.deepEqual(p1QuestionView.answers, { p1: 1 });
+
+  const p2QuestionView = getPlayerGameState(room, 'p2');
+  assert.deepEqual(p2QuestionView.answers, {});
+
+  room.gameState.phase = 'answer';
+  room.gameState.roundResult = {
+    question,
+    correct: 1,
+    answers: { p1: 1, p2: 0 },
+    correctPlayers: ['p1']
+  };
+
+  const answerView = getPlayerGameState(room, 'p2');
+  assert.equal(Object.prototype.hasOwnProperty.call(answerView.currentQuestion, 'answer'), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(answerView.roundResult.question, 'answer'), false);
+  assert.equal(answerView.roundResult.correct, 1);
+});
