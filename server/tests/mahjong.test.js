@@ -60,7 +60,7 @@ test('红中推倒胡 - 不能胡的牌判定为false', () => {
 
 // ============ 番型计算 ============
 
-test('红中推倒胡 - 平胡+自摸', () => {
+test('红中推倒胡 - 平胡自摸不额外加番', () => {
   const hand = [
     tile('wan', 1), tile('wan', 1), tile('wan', 1),
     tile('wan', 2), tile('wan', 3), tile('wan', 4),
@@ -69,10 +69,9 @@ test('红中推倒胡 - 平胡+自摸', () => {
     tile('zhong', 'zhong'), tile('zhong', 'zhong')
   ];
   const result = evaluateFan(hand, [], tile('wan', 1), 'zimo');
-  assert.equal(result.fan >= 2, true);
+  assert.equal(result.fan, 1);
   const names = result.detail.map(d => d.name);
   assert.equal(names.includes('平胡'), true);
-  assert.equal(names.includes('自摸'), true);
 });
 
 test('红中推倒胡 - 清一色', () => {
@@ -86,6 +85,8 @@ test('红中推倒胡 - 清一色', () => {
   const result = evaluateFan(hand, [], tile('wan', 9), 'dianpao');
   const names = result.detail.map(d => d.name);
   assert.equal(names.includes('清一色'), true);
+  assert.equal(names.includes('杀鬼(无红中)'), true);
+  assert.equal(result.fan, 6);
 });
 
 test('红中推倒胡 - 七对', () => {
@@ -101,6 +102,8 @@ test('红中推倒胡 - 七对', () => {
   const result = evaluateFan(hand, [], tile('tiao', 9), 'zimo');
   const names = result.detail.map(d => d.name);
   assert.equal(names.includes('七对'), true);
+  assert.equal(names.includes('杀鬼(无红中)'), true);
+  assert.equal(result.fan, 6);
 });
 
 test('红中推倒胡 - 杀鬼(无红中胡)番数翻倍', () => {
@@ -114,8 +117,7 @@ test('红中推倒胡 - 杀鬼(无红中胡)番数翻倍', () => {
   const result = evaluateFan(hand, [], tile('tiao', 9), 'dianpao');
   const names = result.detail.map(d => d.name);
   assert.equal(names.includes('杀鬼(无红中)'), true);
-  // 平胡基础=1, 杀鬼翻倍 => 至少=2
-  assert.equal(result.fan >= 2, true);
+  assert.equal(result.fan, 2);
 });
 
 test('红中推倒胡 - 四红中', () => {
@@ -130,6 +132,25 @@ test('红中推倒胡 - 四红中', () => {
   const result = evaluateFan(smallHand, fulu, tile('tong', 2), 'zimo');
   const names = result.detail.map(d => d.name);
   assert.equal(names.includes('四红中'), true);
+  assert.equal(result.fan, 4);
+});
+
+test('红中推倒胡 - 天胡和地胡番数', () => {
+  const hand = [
+    tile('wan', 1), tile('wan', 1), tile('wan', 1),
+    tile('wan', 2), tile('wan', 3), tile('wan', 4),
+    tile('wan', 5), tile('wan', 6), tile('wan', 7),
+    tile('tong', 2), tile('tong', 3), tile('tong', 4),
+    tile('zhong', 'zhong'), tile('zhong', 'zhong')
+  ];
+
+  const tianhu = evaluateFan(hand, [], tile('zhong', 'zhong'), 'tianhu');
+  const dihu = evaluateFan(hand, [], tile('zhong', 'zhong'), 'dihu');
+
+  assert.equal(tianhu.fan, 5);
+  assert.equal(tianhu.detail.map(d => d.name).includes('天胡'), true);
+  assert.equal(dihu.fan, 4);
+  assert.equal(dihu.detail.map(d => d.name).includes('地胡'), true);
 });
 
 // ============ 引擎流程 ============
@@ -164,4 +185,36 @@ test('红中推倒胡 - 出牌后手牌减少', () => {
   state = engine.update(state, { type: 'discard', card }, 'p1');
   assert.equal(state.hands['p1'].length, 13);
   assert.equal(state.discards['p1'].length, 1);
+});
+
+test('红中推倒胡 - 无红中杠上开花清一色按12倍结算', () => {
+  const engine = new MahjongEngine();
+  let state = engine.init(null, ['p1', 'p2', 'p3', 'p4']);
+  state.phase = 'response';
+  state.currentPlayer = 'p1';
+  state.dealer = 'p1';
+  state.scores = { p1: 0, p2: 0, p3: 0, p4: 0 };
+  state.fulu = { p1: [], p2: [], p3: [], p4: [] };
+  state.hands.p1 = [
+    tile('wan', 1), tile('wan', 1), tile('wan', 1),
+    tile('wan', 2), tile('wan', 3), tile('wan', 4),
+    tile('wan', 5), tile('wan', 6), tile('wan', 7),
+    tile('wan', 7), tile('wan', 8), tile('wan', 9),
+    tile('wan', 9), tile('wan', 9)
+  ];
+  state.lastDraw = { playerId: 'p1', tile: state.hands.p1[13], viaGang: true };
+  state.pendingAction = {
+    type: 'self',
+    playerId: 'p1',
+    options: [{ action: 'hu' }]
+  };
+
+  state = engine.update(state, { type: 'hu' }, 'p1');
+
+  assert.equal(state.winInfo.winType, 'gangshanghua');
+  assert.equal(state.winInfo.fan, 12);
+  assert.equal(state.scores.p1, 1800);
+  assert.equal(state.scores.p2, -600);
+  assert.equal(state.scores.p3, -600);
+  assert.equal(state.scores.p4, -600);
 });

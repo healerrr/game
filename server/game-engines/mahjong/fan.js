@@ -8,7 +8,7 @@ const { checkSevenPairs, buildCounts } = require('./hule');
  * @param {Array} hand - 完整手牌（含胡的那张牌）
  * @param {Array} fulu - 副露数组
  * @param {object} winTile - 胡的那张牌
- * @param {string} winType - 胡牌方式: 'zimo'|'dianpao'|'gangshanghua'|'qianggang'
+ * @param {string} winType - 胡牌方式: 'zimo'|'dianpao'|'gangshanghua'|'qianggang'|'tianhu'|'dihu'
  * @returns {{ fan: number, detail: Array<{name: string, fan: number}> }}
  */
 function evaluateFan(hand, fulu = [], winTile = null, winType = 'dianpao') {
@@ -19,47 +19,50 @@ function evaluateFan(hand, fulu = [], winTile = null, winType = 'dianpao') {
     return { fan: 1, detail: [{ name: '平胡', fan: 1 }] };
   }
 
+  let totalFan = 1;
+  const addMultiplier = (name, fan) => {
+    totalFan *= fan;
+    detail.push({ name, fan });
+  };
+
   // 1. 基础平胡 = 1番
   detail.push({ name: '平胡', fan: 1 });
 
-  // 2. 自摸 +1
-  if (winType === 'zimo' || winType === 'gangshanghua') {
-    detail.push({ name: '自摸', fan: 1 });
+  // 2. 天胡/地胡
+  if (winType === 'tianhu') {
+    addMultiplier('天胡', 5);
+  }
+  if (winType === 'dihu') {
+    addMultiplier('地胡', 4);
   }
 
   // 3. 对对胡(碰碰胡) = 2番 - 所有面子都是刻子/杠，无顺子
   if (isAllPong(allTiles, fulu)) {
-    detail.push({ name: '对对胡', fan: 2 });
+    addMultiplier('对对胡', 2);
   }
 
-  // 4. 清一色 = 4番（仅一种花色的数字牌，红中不计入花色判断）
+  // 4. 清一色 = 3番（仅一种花色的数字牌，红中不计入花色判断）
   const nonZhongHand = allTiles.filter(t => !isZhong(t));
   const fuluTiles = fulu.flatMap(f => f.cards || []).filter(t => !isZhong(t));
   const allNonZhong = [...nonZhongHand, ...fuluTiles];
   if (allNonZhong.length > 0) {
     const suits = new Set(allNonZhong.map(t => t.suit));
     if (suits.size === 1) {
-      detail.push({ name: '清一色', fan: 4 });
+      addMultiplier('清一色', 3);
     }
   }
 
-  // 5. 七对 = 4番 / 豪华七对 = 8番
+  // 5. 七对 = 3番
   if (fulu.length === 0 && allTiles.length === 14 && checkSevenPairs(allTiles)) {
-    const counts = buildCounts(allTiles.filter(t => !isZhong(t)));
-    const hasFour = Object.values(counts).some(v => v >= 4);
-    if (hasFour) {
-      detail.push({ name: '豪华七对', fan: 8 });
-    } else {
-      detail.push({ name: '七对', fan: 4 });
-    }
+    addMultiplier('七对', 3);
     // 七对不计平胡
     const idx = detail.findIndex(d => d.name === '平胡');
     if (idx >= 0) detail.splice(idx, 1);
   }
 
-  // 6. 杠上开花 +1
+  // 6. 杠上开花 = 2番
   if (winType === 'gangshanghua') {
-    detail.push({ name: '杠上开花', fan: 1 });
+    addMultiplier('杠上开花', 2);
   }
 
   // 7. 抢杠胡 +1
@@ -77,17 +80,12 @@ function evaluateFan(hand, fulu = [], winTile = null, winType = 'dianpao') {
   const fuluZhongCount = fulu.flatMap(f => f.cards || []).filter(t => isZhong(t)).length;
   const totalZhong = zhongCount + fuluZhongCount;
   if (totalZhong >= 4) {
-    detail.push({ name: '四红中', fan: 4 });
+    addMultiplier('四红中', 4);
   }
 
-  // 计算总番
-  let totalFan = detail.reduce((s, d) => s + d.fan, 0);
-
-  // 10. 无红中胡(杀鬼) = 总番翻倍
+  // 10. 无红中胡(杀鬼) = 2番
   if (zhongCount === 0 && fuluZhongCount === 0) {
-    const baseFan = totalFan;
-    totalFan *= 2;
-    detail.push({ name: '杀鬼(无红中)', fan: baseFan });
+    addMultiplier('杀鬼(无红中)', 2);
   }
 
   return { fan: Math.max(1, totalFan), detail };

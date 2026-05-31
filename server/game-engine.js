@@ -138,8 +138,10 @@ class ZhaJinHua {
     this.SUITS = ['spade', 'heart', 'club', 'diamond'];
     this.RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
     this.RANK_VALUES = { '2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,'J':11,'Q':12,'K':13,'A':14 };
-    this.BASE_BET = 10;
-    this.RAISE_STEP = 10;
+    this.BASE_BET = 20;
+    this.RAISE_STEP = 20;
+    this.BLIND_BET_LIMIT = 50;
+    this.LOOKED_BET_LIMIT = 100;
   }
 
   createDeck() {
@@ -178,7 +180,10 @@ class ZhaJinHua {
       currentPlayer: players[0],
       currentBet: this.BASE_BET,
       baseBet: this.BASE_BET,
+      baseScore: this.BASE_BET,
       raiseStep: this.RAISE_STEP,
+      blindBetLimit: this.BLIND_BET_LIMIT,
+      lookedBetLimit: this.LOOKED_BET_LIMIT,
       pot: 0,
       playerBets: Object.fromEntries(players.map(p => [p, 0])),
       actedThisRound: [],
@@ -229,7 +234,7 @@ class ZhaJinHua {
         state.playerBets[playerId] = state.currentBet;
         state.pot += toPay;
       } else if (action.type === 'raise') {
-        state.currentBet += 10;
+        state.currentBet += state.raiseStep || this.RAISE_STEP;
         const toPay = state.currentBet - (state.playerBets[playerId] || 0);
         state.playerBets[playerId] = state.currentBet;
         state.pot += toPay;
@@ -470,7 +475,7 @@ class ZhaJinHua {
   }
 
   getBetMultiplier(state, playerId) {
-    return this.isLooked(state, playerId) ? 1 : 2;
+    return this.isLooked(state, playerId) ? 2 : 1;
   }
 
   getCallAmount(state, playerId) {
@@ -1520,7 +1525,7 @@ const GAME_CONFIG = {
   },
   zha_jin_hua: {
     name: '炸金花',
-    entryFee: 50,
+    entryFee: 20,
     category: 'card',
     minPlayers: 2,
     maxPlayers: 5,
@@ -1536,7 +1541,7 @@ const GAME_CONFIG = {
   },
   doudizhu: {
     name: '斗地主',
-    entryFee: 60,
+    entryFee: 50,
     category: 'card',
     minPlayers: 3,
     maxPlayers: 3,
@@ -1544,7 +1549,7 @@ const GAME_CONFIG = {
   },
   mahjong: {
     name: '南京麻将',
-    entryFee: 100,
+    entryFee: 50,
     category: 'card',
     minPlayers: 4,
     maxPlayers: 4,

@@ -18,6 +18,7 @@ const {
   serializeRoom
 } = require('./room-view');
 const { getLevelScore } = require('./game-engines/guandan');
+const { getDoudizhuScoreUnit } = require('./game-engines/doudizhu');
 
 const app = express();
 const server = http.createServer(app);
@@ -167,10 +168,11 @@ io.on('connection', (socket) => {
 
   // 注册/登录玩家
   socket.on('player:register', ({ nickname, busNumber }, callback) => {
-    if (!nickname || !busNumber) {
+    const normalizedNickname = String(nickname || '').trim();
+    if (!normalizedNickname || !busNumber) {
       return callback({ error: '昵称和大巴号不能为空' });
     }
-    const player = store.createPlayer(nickname, busNumber);
+    const player = store.findPlayerByNickname(normalizedNickname) || store.createPlayer(normalizedNickname, busNumber);
     player.online = true;
     player.socketId = socket.id;
     player.lastSeenAt = Date.now();
@@ -182,9 +184,19 @@ io.on('connection', (socket) => {
     socket.join(`player:${player.id}`);
     // 加入大巴房间（用于大巴广播）
     socket.join(`bus:${player.busNumber}`);
+
+    const room = store.getPlayerRoom(player.id);
+    const currentRoom = room && room.status !== 'finished' ? serializeRoom(room, player.id) : null;
+    if (currentRoom) {
+      markSeatConnection(room, player.id, 'online', { intent: 'active', disconnectedAt: null });
+      store.saveRoom(room);
+      socket.join(`room:${room.id}`);
+      emitRoomUpdate(room);
+    }
+
     emitPendingRoomInvites(player.id);
 
-    callback({ player });
+    callback({ player, currentRoom });
     broadcastUpdate();
   });
 
@@ -1050,6 +1062,14 @@ function getAutoGuandanAction(state, playerId) {
 
 function getAutoDoudizhuAction(state, playerId) {
   if (state.currentPlayer !== playerId) return null;
+
+  if (state.phase === 'bid') {
+    if (!state.currentBid && Number(state.bidTurnCount || 0) >= (state.players?.length || 1) - 1) {
+      return { type: 'bid', score: 1 };
+    }
+    return { type: 'pass' };
+  }
+
   if (state.lastPattern && state.lastLeadPlayer !== playerId) {
     return { type: 'pass' };
   }
@@ -1402,6 +1422,8 @@ function settleGuandan(room, winningPlayers) {
 function settleDoudizhu(room, winningPlayers) {
   const config = getGameConfig(room.gameType);
   const entryFee = config.entryFee;
+  const bombCount = Math.max(0, Number(room.gameState?.bombCount || 0));
+  const scoreUnit = getDoudizhuScoreUnit(room.gameState, entryFee);
   const landlordId = room.gameState.landlord;
   const landlordWon = winningPlayers.includes(landlordId);
 
@@ -1409,12 +1431,14 @@ function settleDoudizhu(room, winningPlayers) {
     const isWinner = winningPlayers.includes(pid);
     store.recordGame(pid, isWinner);
     const delta = landlordWon
-      ? (pid === landlordId ? entryFee * 2 : -entryFee)
-      : (pid === landlordId ? -entryFee * 2 : entryFee);
+      ? (pid === landlordId ? scoreUnit * 2 : -scoreUnit)
+      : (pid === landlordId ? -scoreUnit * 2 : scoreUnit);
     store.updatePoints(pid, delta, 'game_settlement', {
       roomId: room.id,
       gameType: room.gameType,
-      won: isWinner
+      won: isWinner,
+      bombCount,
+      scoreUnit
     });
   });
 }

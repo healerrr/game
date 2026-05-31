@@ -51,7 +51,28 @@ function findPlayableSets(hand, lastPattern) {
     });
 }
 
+function estimateBidScore(hand) {
+  const groups = [...groupByRank(hand).values()];
+  const highCards = hand.filter((card) => ['2', 'SJ', 'BJ', 'A', 'K'].includes(card.rank)).length;
+  const bombs = groups.filter((group) => group.length === 4).length;
+  const hasRocket = hand.filter((card) => card.suit === 'joker').length === 2;
+  const triples = groups.filter((group) => group.length >= 3).length;
+  const score = highCards + bombs * 3 + (hasRocket ? 4 : 0) + triples;
+
+  if (score >= 10) return 3;
+  if (score >= 7) return 2;
+  if (score >= 5) return 1;
+  return 0;
+}
+
 function doudizhuStrategy(state, botId) {
+  if (state.phase === 'bid') {
+    if (state.currentPlayer !== botId) return null;
+    const desired = estimateBidScore(state.hands?.[botId] || []);
+    if (desired > Number(state.currentBid || 0)) return { type: 'bid', score: desired };
+    return { type: 'pass' };
+  }
+
   if (state.currentPlayer !== botId || state.phase !== 'play') return null;
   const hand = state.hands[botId] || [];
   if (!hand.length) return null;

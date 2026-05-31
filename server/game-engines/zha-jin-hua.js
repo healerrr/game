@@ -1,8 +1,10 @@
 const { createStandardDeck, shuffle, DEFAULT_RANK_VALUES } = require('./shared/cards');
 const store = require('../store');
 
-const BASE_BET = 10;
-const RAISE_STEP = 10;
+const BASE_BET = 20;
+const RAISE_STEP = 20;
+const BLIND_BET_LIMIT = 50;
+const LOOKED_BET_LIMIT = 100;
 
 function buildSeats(players) {
   return players.map((playerId, index) => ({
@@ -29,7 +31,7 @@ function isLooked(state, playerId) {
 }
 
 function blindMultiplier(state, playerId) {
-  return isLooked(state, playerId) ? 1 : 2;
+  return isLooked(state, playerId) ? 2 : 1;
 }
 
 function evaluateHand(hand) {
@@ -162,6 +164,14 @@ function getCompareAmount(state, playerId) {
   return getCallAmount(state, playerId) * 2;
 }
 
+function getBetLimit(state, playerId) {
+  return isLooked(state, playerId) ? LOOKED_BET_LIMIT : BLIND_BET_LIMIT;
+}
+
+function isWithinBetLimit(state, playerId, amount) {
+  return Number(amount) <= getBetLimit(state, playerId);
+}
+
 function getInitialBalance(room, playerId) {
   const explicit = room?.playerBalances?.[playerId];
   const playerPoints = store.getPlayer(playerId)?.points;
@@ -178,6 +188,10 @@ function getRemainingBalance(state, playerId) {
 
 function canAfford(state, playerId, amount) {
   return Number(amount) <= getRemainingBalance(state, playerId);
+}
+
+function canPayBet(state, playerId, amount) {
+  return isWithinBetLimit(state, playerId, amount) && canAfford(state, playerId, amount);
 }
 
 function applyCost(state, playerId, amount) {
@@ -222,7 +236,11 @@ class ZhaJinHuaEngine {
       lookedPlayers: [],
       currentPlayer: players[0],
       currentBet: BASE_BET,
+      baseBet: BASE_BET,
+      baseScore: BASE_BET,
       raiseStep: RAISE_STEP,
+      blindBetLimit: BLIND_BET_LIMIT,
+      lookedBetLimit: LOOKED_BET_LIMIT,
       pot: 0,
       playerBalances: Object.fromEntries(players.map((playerId) => [playerId, getInitialBalance(room, playerId)])),
       playerBets: Object.fromEntries(players.map((playerId) => [playerId, 0])),
@@ -293,14 +311,15 @@ class ZhaJinHuaEngine {
       }
     } else if (action.type === 'call') {
       const amount = getCallAmount(state, playerId);
-      if (!applyCost(state, playerId, amount)) return state;
+      if (!canPayBet(state, playerId, amount)) return state;
+      applyCost(state, playerId, amount);
       if (!state.actedThisRound.includes(playerId)) {
         state.actedThisRound.push(playerId);
       }
       recordAction(state, { type: 'call', playerId, amount });
     } else if (action.type === 'raise') {
       const amount = getRaiseAmount(state, playerId);
-      if (!canAfford(state, playerId, amount)) return state;
+      if (!canPayBet(state, playerId, amount)) return state;
       state.currentBet += state.raiseStep;
       applyCost(state, playerId, amount);
       state.actedThisRound = [playerId];
@@ -387,6 +406,9 @@ module.exports = {
   getCallAmount,
   getRaiseAmount,
   getCompareAmount,
+  getBetLimit,
+  isWithinBetLimit,
   getRemainingBalance,
-  canAfford
+  canAfford,
+  canPayBet
 };

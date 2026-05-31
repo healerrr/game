@@ -5,7 +5,7 @@ const { canHu, getWaitTiles } = require('./hule');
 const { evaluateFan } = require('./fan');
 
 const SEAT_ORDER = ['south', 'west', 'north', 'east'];
-const BASE_SCORE = 1; // 底分
+const BASE_SCORE = 50; // 底分
 const LIUJU_THRESHOLD = 4; // 牌山剩余<=4张时流局
 
 function buildSeats(players) {
@@ -31,6 +31,10 @@ function hydrateShan(state) {
 function syncRemaining(state, shan) {
   state.shan = serializeShan(shan);
   state.remainingTiles = shan.remaining();
+}
+
+function isSelfDrawWinType(winType) {
+  return ['zimo', 'gangshanghua', 'sizhong', 'tianhu'].includes(winType);
 }
 
 function updateTingInfo(state) {
@@ -107,7 +111,7 @@ function settleGangScore(state, gangPlayerId, gangType, fromPlayerId) {
 function settleHuScore(state, winnerId, sourcePlayerId, winType, fan) {
   const players = state.players;
 
-  if (winType === 'zimo' || winType === 'gangshanghua' || winType === 'sizhong') {
+  if (isSelfDrawWinType(winType)) {
     // 自摸/杠上花/四红中：三家各赔 fan × 底分
     for (const pid of players) {
       if (pid !== winnerId) {
@@ -149,8 +153,8 @@ function resolveHu(state, winnerId, sourcePlayerId, winTile, winType) {
   settleHuScore(state, winnerId, sourcePlayerId, winType, fan);
 
   state.scoreInfo = {
-    type: winType === 'zimo' || winType === 'gangshanghua' || winType === 'sizhong' ? 'self_draw' : 'discard',
-    payerIds: winType === 'zimo' || winType === 'gangshanghua' || winType === 'sizhong'
+    type: isSelfDrawWinType(winType) ? 'self_draw' : 'discard',
+    payerIds: isSelfDrawWinType(winType)
       ? state.players.filter((id) => id !== winnerId)
       : [sourcePlayerId]
   };
@@ -279,6 +283,7 @@ class MahjongEngine {
       remainingTiles: shan.remaining(),
       lastDraw: null,
       lastDiscard: null,
+      discardCount: 0,
       pendingAction: null,
       winInfo: null,
       scoreInfo: null,
@@ -288,7 +293,7 @@ class MahjongEngine {
     };
 
     updateTingInfo(state);
-    return enterDrawTurn(state, players[0]);
+    return enterDrawTurn(state, players[0], { openingDraw: true });
   }
 
   update(state, action, playerId) {
@@ -322,7 +327,8 @@ class MahjongEngine {
 
     state.hands[playerId] = nextHand;
     state.discards[playerId].push(card);
-    state.lastDiscard = { playerId, card };
+    state.discardCount = Number(state.discardCount || 0) + 1;
+    state.lastDiscard = { playerId, card, discardIndex: state.discardCount };
     updateTingInfo(state);
 
     const queue = getDiscardResponses(state, playerId, card);
@@ -349,7 +355,9 @@ class MahjongEngine {
       if (playerId !== pending.playerId) return state;
 
       if (action.type === 'hu') {
-        const winType = state.lastDraw?.viaGang ? 'gangshanghua' : 'zimo';
+        const winType = state.lastDraw?.openingDraw && playerId === state.dealer
+          ? 'tianhu'
+          : state.lastDraw?.viaGang ? 'gangshanghua' : 'zimo';
         resolveHu(state, playerId, playerId, state.lastDraw?.tile || null, winType);
         return state;
       }
@@ -469,7 +477,12 @@ class MahjongEngine {
 
       if (action.type === 'hu' && current.action === 'hu') {
         state.hands[playerId] = addTile(state.hands[playerId], card);
-        resolveHu(state, playerId, pending.sourcePlayerId, card, 'dianpao');
+        const winType = Number(state.discardCount || 0) === 1
+          && pending.sourcePlayerId === state.dealer
+          && playerId !== state.dealer
+          ? 'dihu'
+          : 'dianpao';
+        resolveHu(state, playerId, pending.sourcePlayerId, card, winType);
         return state;
       }
 

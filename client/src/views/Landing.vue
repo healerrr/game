@@ -194,6 +194,10 @@
           return
         }
         if (res?.player) {
+          if (res.currentRoom) {
+            resumeRoom(res.player, res.currentRoom)
+            return
+          }
           toLobby(res.player, mode)
           return
         }

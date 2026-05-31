@@ -10,13 +10,15 @@
         <span class="info-item landlord-label">地主: <b>{{ landlordName }}</b></span>
         <span class="info-sep">|</span>
         <span class="info-item farmers-label">农民: <b>{{ farmersLabel }}</b></span>
+        <span class="info-sep">|</span>
+        <span class="info-item">炸弹 {{ gs.bombCount || 0 }} · 底分 {{ gs.scoreUnit || 50 }}</span>
       </header>
 
       <div class="canvas-area" ref="canvasWrapRef">
         <canvas ref="canvasRef" class="game-canvas"></canvas>
       </div>
 
-      <div class="bottom-zone" v-if="gs.phase === 'play'">
+      <div class="bottom-zone" v-if="gs.phase !== 'finished'">
         <div class="my-info">
           <div class="my-avatar" :class="{ landlord: isLandlord(player?.id) }" :style="avatarStyle(player?.id)">
             {{ playerInitial(player?.id) }}
@@ -28,9 +30,29 @@
         </div>
 
         <div class="hand-stage">
-          <div class="action-buttons">
+          <div v-if="isBidding" class="action-buttons bidding-actions">
+            <button class="btn-pass" type="button" :disabled="!isMyBidTurn" @click="bidLandlord(0)">{{ bidPassLabel }}</button>
+            <button
+              v-for="score in [1, 2, 3]"
+              :key="score"
+              class="btn-bid"
+              type="button"
+              :disabled="!canBidScore(score)"
+              @click="bidLandlord(score)"
+            >
+              {{ score }}分
+            </button>
+            <div class="timer-circle" :class="{ urgent: countdown <= 5 }">
+              <svg viewBox="0 0 60 60" width="42" height="42">
+                <circle cx="30" cy="30" r="25" fill="rgba(0,0,0,0.28)" stroke="rgba(255,255,255,0.18)" stroke-width="3"/>
+                <circle cx="30" cy="30" r="25" fill="none" stroke="#ffd45a" stroke-width="3" stroke-linecap="round" :stroke-dasharray="timerDash" transform="rotate(-90 30 30)"/>
+              </svg>
+              <span>{{ countdown }}</span>
+            </div>
+          </div>
+
+          <div v-else class="action-buttons">
             <button class="btn-pass" type="button" :disabled="!canPass" @click="onPass">不出</button>
-            <button class="btn-hint" type="button" :disabled="!hints.length || !isMyTurn" @click="nextHint">提示</button>
             <div class="timer-circle" :class="{ urgent: countdown <= 5 }">
               <svg viewBox="0 0 60 60" width="42" height="42">
                 <circle cx="30" cy="30" r="25" fill="rgba(0,0,0,0.28)" stroke="rgba(255,255,255,0.18)" stroke-width="3"/>
@@ -109,7 +131,6 @@ const canvasRef = ref(null)
 const canvasWrapRef = ref(null)
 const handRef = ref(null)
 const countdown = ref(30)
-const hintIndex = ref(-1)
 const isPortrait = ref(false)
 
 let renderer = null
@@ -130,8 +151,10 @@ const SUIT_ORDER = { diamond: 0, club: 1, heart: 2, spade: 3, joker: 4 }
 
 const rawMyHand = computed(() => props.gs.hands?.[props.player?.id] || [])
 const myHand = computed(() => sortHandDesc(rawMyHand.value))
-const hints = computed(() => props.gs.currentHints || [])
+const isBidding = computed(() => props.gs.phase === 'bid')
+const isPlaying = computed(() => props.gs.phase === 'play')
 const isMyTurn = computed(() => props.gs.currentPlayer === props.player?.id)
+const isMyBidTurn = computed(() => isBidding.value && isMyTurn.value)
 const seats = computed(() => props.gs.seats || [])
 
 const mySeat = computed(() => {
@@ -159,6 +182,7 @@ const selectedPattern = computed(() => {
 })
 
 const canPlay = computed(() => {
+  if (!isPlaying.value) return false
   if (!isMyTurn.value) return false
   if (!selectedPattern.value || selectedPattern.value.type === 'invalid') return false
   if (props.gs.lastPattern) return comparePattern(selectedPattern.value, props.gs.lastPattern) > 0
@@ -166,14 +190,23 @@ const canPlay = computed(() => {
 })
 
 const canPass = computed(() => {
+  if (!isPlaying.value) return false
   if (!isMyTurn.value) return false
   return Boolean(props.gs.lastPattern && props.gs.lastLeadPlayer !== props.player?.id)
 })
 
 const landlordName = computed(() => getPlayerName(props.gs.landlord) || '待定')
 const farmersLabel = computed(() => (props.gs.farmers || []).map(getPlayerName).join('+') || '待定')
-const myRoleLabel = computed(() => isLandlord(props.player?.id) ? '地主' : '农民')
+const myRoleLabel = computed(() => {
+  if (isBidding.value || !props.gs.landlord) return '抢地主'
+  return isLandlord(props.player?.id) ? '地主' : '农民'
+})
+const bidPassLabel = computed(() => Number(props.gs.currentBid || 0) > 0 ? '不抢' : '不叫')
 const turnHintText = computed(() => {
+  if (isBidding.value) {
+    if (isMyBidTurn.value) return Number(props.gs.currentBid || 0) > 0 ? '请选择更高叫分或不抢' : '请选择叫地主分数'
+    return `等待 ${getPlayerName(props.gs.currentPlayer)} 抢地主`
+  }
   if (!isMyTurn.value) return `等待 ${getPlayerName(props.gs.currentPlayer)}`
   return props.gs.lastPattern ? '请选择可压牌型' : '请选择要出的牌'
 })
@@ -234,10 +267,20 @@ function getSelectedCards() {
 
 function clearSelection() {
   selectedCards.value = new Set()
-  hintIndex.value = -1
+}
+
+function canBidScore(score) {
+  return isMyBidTurn.value && score > Number(props.gs.currentBid || 0)
+}
+
+function bidLandlord(score) {
+  if (!isMyBidTurn.value) return
+  if (score > 0 && !canBidScore(score)) return
+  emit('action', score > 0 ? { type: 'bid', score } : { type: 'pass' })
 }
 
 function onHandPointerDown(event) {
+  if (!isPlaying.value) return
   const index = getHandHitIndex(event)
   if (index < 0) return
   event.preventDefault()
@@ -286,15 +329,6 @@ function applyDragSelection(index) {
     else next.add(key)
   }
   selectedCards.value = next
-}
-
-function nextHint() {
-  if (!hints.value.length) {
-    showToast('暂无可用提示')
-    return
-  }
-  hintIndex.value = (hintIndex.value + 1) % hints.value.length
-  selectedCards.value = new Set((hints.value[hintIndex.value]?.cards || []).map(cardKey))
 }
 
 function playCards() {
@@ -553,12 +587,13 @@ function drawTable() {
 function drawOpponent(seat, seatX, seatY, side) {
   if (!seat) return
   const pid = seat.playerId
+  const hasLandlord = Boolean(props.gs.landlord)
   renderer.drawSeatInfo(seatX, seatY, {
     name: getPlayerName(pid),
     count: getCardCount(pid),
     isCurrentTurn: props.gs.currentPlayer === pid
   })
-  drawRoleBadge(seatX + 20, seatY - 8, isLandlord(pid) ? '地主' : '农民', isLandlord(pid))
+  drawRoleBadge(seatX + 20, seatY - 8, hasLandlord ? (isLandlord(pid) ? '地主' : '农民') : '抢地主', isLandlord(pid))
 
   const backW = 26
   const backH = 17
@@ -584,25 +619,50 @@ function drawRoleBadge(x, y, text, landlord) {
 
 function drawBottomCards(centerX, y) {
   const cards = props.gs.bottomCards || []
+  const isHidden = isBidding.value || cards.length === 0
   const cardW = 28
   const cardH = cardW * 1.42
   const gap = 5
-  const totalW = cards.length * (cardW + gap) - gap
+  const displayCount = isHidden ? 3 : cards.length
+  const totalW = displayCount * (cardW + gap) - gap
   const panelW = Math.max(124, totalW + 34)
   renderer.drawRoundRect(centerX - panelW / 2, y - 24, panelW, cardH + 44, 16, 'rgba(6, 44, 28, 0.32)', 'rgba(255,255,255,0.2)', 1)
-  renderer.drawText('地主底牌', centerX, y - 10, {
+  renderer.drawText(isHidden ? '底牌待揭晓' : '地主底牌', centerX, y - 10, {
     font: 'bold 12px sans-serif',
     color: 'rgba(255,255,255,0.9)',
     align: 'center',
     baseline: 'middle'
   })
   const startX = centerX - totalW / 2
-  cards.forEach((card, index) => {
-    renderer._drawCardFace(startX + index * (cardW + gap), y + 4, cardW, cardH, card)
-  })
+  for (let index = 0; index < displayCount; index += 1) {
+    const x = startX + index * (cardW + gap)
+    if (isHidden) renderer.drawCardBack(x, y + 4, cardW, cardH)
+    else renderer._drawCardFace(x, y + 4, cardW, cardH, cards[index])
+  }
 }
 
 function drawCenterPlay(W, H) {
+  if (isBidding.value) {
+    const bidder = getPlayerName(props.gs.currentBidder)
+    const title = props.gs.currentBid > 0 ? `当前 ${props.gs.currentBid} 分 ${bidder}` : '正在抢地主'
+    const subtitle = `${getPlayerName(props.gs.currentPlayer)} 行动`
+    const waitY = H * 0.6
+    renderer.drawRoundRect(W / 2 - 92, waitY - 30, 184, 60, 18, 'rgba(255,255,255,0.12)', 'rgba(255,255,255,0.24)', 1)
+    renderer.drawText(title, W / 2, waitY - 8, {
+      font: 'bold 14px sans-serif',
+      color: '#fff8e6',
+      align: 'center',
+      baseline: 'middle'
+    })
+    renderer.drawText(subtitle, W / 2, waitY + 14, {
+      font: '12px sans-serif',
+      color: 'rgba(255,255,255,0.82)',
+      align: 'center',
+      baseline: 'middle'
+    })
+    return
+  }
+
   const lastPlay = props.gs.lastPlay
   const lastCards = (lastPlay?.cards || []).slice(0, 16)
   if (lastCards.length) {
@@ -730,7 +790,6 @@ onBeforeUnmount(() => {
 
 watch(() => props.gs, () => {
   scheduleDraw()
-  hintIndex.value = -1
 }, { deep: true })
 
 watch(() => rawMyHand.value.map(cardKey).sort().join('|'), () => {
@@ -927,9 +986,13 @@ watch(() => props.gs?.currentPlayer, () => {
   width: min(720px, 100%);
   justify-self: center;
   display: grid;
-  grid-template-columns: minmax(72px, 0.8fr) minmax(72px, 0.8fr) 42px minmax(94px, 1fr);
+  grid-template-columns: minmax(92px, 0.9fr) 42px minmax(110px, 1fr);
   align-items: center;
   gap: 7px;
+}
+
+.bidding-actions {
+  grid-template-columns: minmax(72px, 0.8fr) repeat(3, minmax(64px, 0.8fr)) 42px;
 }
 
 .action-buttons button,
@@ -958,11 +1021,11 @@ watch(() => props.gs?.currentPlayer, () => {
     0 8px 16px rgba(193, 91, 10, 0.34);
 }
 
-.btn-hint {
-  background: linear-gradient(180deg, #54d4ff, #1788e8);
+.btn-bid {
+  background: linear-gradient(180deg, #ffdf78, #d99313);
   box-shadow:
     inset 0 2px 0 rgba(255,255,255,0.35),
-    0 8px 16px rgba(23, 136, 232, 0.34);
+    0 8px 16px rgba(190, 124, 12, 0.34);
 }
 
 .btn-play {
@@ -1209,8 +1272,12 @@ watch(() => props.gs?.currentPlayer, () => {
   }
 
   .action-buttons {
-    grid-template-columns: minmax(64px, 0.8fr) minmax(64px, 0.8fr) 36px minmax(82px, 1fr);
+    grid-template-columns: minmax(70px, 0.9fr) 36px minmax(86px, 1fr);
     gap: 5px;
+  }
+
+  .bidding-actions {
+    grid-template-columns: minmax(58px, 0.8fr) repeat(3, minmax(48px, 0.8fr)) 36px;
   }
 
   .action-buttons button {

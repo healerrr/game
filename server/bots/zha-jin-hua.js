@@ -3,7 +3,8 @@ const {
   getCallAmount,
   getRaiseAmount,
   getCompareAmount,
-  canAfford
+  canAfford,
+  canPayBet
 } = require('../game-engines/zha-jin-hua');
 
 function zhaJinHuaStrategy(state, botId) {
@@ -21,8 +22,8 @@ function zhaJinHuaStrategy(state, botId) {
   const callCost = getCallAmount(state, botId);
   const raiseCost = getRaiseAmount(state, botId);
   const compareCost = getCompareAmount(state, botId);
-  const canCall = canAfford(state, botId, callCost);
-  const canRaise = canAfford(state, botId, raiseCost);
+  const canCall = canPayBet(state, botId, callCost);
+  const canRaise = canPayBet(state, botId, raiseCost);
   const canCompare = canAfford(state, botId, compareCost);
 
   if (!canCall) return { type: 'fold' };

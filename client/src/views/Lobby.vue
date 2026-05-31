@@ -23,7 +23,7 @@
               <strong>{{ player?.nickname || '游客' }}</strong>
               <span class="bus-tag">{{ player?.busNumber || '-' }}号车</span>
             </div>
-            <p>轻松开局，实时积分，随时和机器人来一局。</p>
+            <p>轻松开局，实时积分，团建互娱。</p>
           </div>
         </div>
 
@@ -77,8 +77,6 @@
           </div>
         </button>
       </section>
-
-      <p class="footer-tip">积极参与，赢取积分，兑换丰厚好礼。</p>
 
       <transition name="fade">
         <div v-if="matching" class="overlay" @click="cancelMatch">
@@ -183,10 +181,10 @@ const gameCards = [
   { key: 'quiz', name: '快问快答', image: cardQuickQa, tag: '知识竞速', entryFee: 20 },
   { key: 'gomoku', name: '五子棋', image: cardGomoku, tag: '经典棋盘', entryFee: 30 },
   { key: 'chess', name: '象棋', image: cardChineseChess, tag: '残局博弈', entryFee: 50 },
-  { key: 'doudizhu', name: '斗地主', image: cardDoudizhu, tag: '经典扑克', entryFee: 60 },
+  { key: 'doudizhu', name: '斗地主', image: cardDoudizhu, tag: '经典扑克', entryFee: 50 },
   { key: 'guandan', name: '掼蛋', image: cardEggSmash, tag: '牌桌欢乐', entryFee: 100 },
-  { key: 'zha_jin_hua', name: '炸金花', image: cardGoldenFlower, tag: '运气对决', entryFee: 50 },
-  { key: 'mahjong', name: '红中麻将', image: cardMahjong, tag: '休闲搓牌', entryFee: 100 }
+  { key: 'zha_jin_hua', name: '炸金花', image: cardGoldenFlower, tag: '运气对决', entryFee: 20 },
+  { key: 'mahjong', name: '红中麻将', image: cardMahjong, tag: '休闲搓牌', entryFee: 50 }
 ]
 
 const utilities = [

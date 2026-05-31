@@ -122,6 +122,19 @@ class Store {
     return normalized;
   }
 
+  normalizeNicknameKey(nickname) {
+    return String(nickname || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase();
+  }
+
+  findPlayerByNickname(nickname) {
+    const key = this.normalizeNicknameKey(nickname);
+    if (!key) return null;
+
+    return Array.from(this.players.values()).find((player) => (
+      !player.isBot && this.normalizeNicknameKey(player.nickname) === key
+    )) || null;
+  }
+
   removePlayer(playerId) {
     this.players.delete(playerId);
     this.runAsync(async () => {
@@ -204,9 +217,13 @@ class Store {
   }
 
   createPlayer(nickname, busNumber) {
+    const trimmedNickname = String(nickname || '').trim();
+    const existingPlayer = this.findPlayerByNickname(trimmedNickname);
+    if (existingPlayer) return existingPlayer;
+
     return this.addPlayer({
       id: this.makeId('p'),
-      nickname,
+      nickname: trimmedNickname,
       busNumber,
       points: 1000,
       totalGames: 0,

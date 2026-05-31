@@ -234,8 +234,10 @@ const activeOpponents = computed(() => {
   return (props.gs.activePlayers || []).filter(pid => pid !== props.player?.id)
 })
 
-const callCost = computed(() => (props.gs.currentBet || 0) * (myLooked.value ? 1 : 2))
-const raiseCost = computed(() => ((props.gs.currentBet || 0) + (props.gs.raiseStep || 10)) * (myLooked.value ? 1 : 2))
+const betMultiplier = computed(() => (myLooked.value ? 2 : 1))
+const betLimit = computed(() => myLooked.value ? (props.gs.lookedBetLimit || 100) : (props.gs.blindBetLimit || 50))
+const callCost = computed(() => (props.gs.currentBet || 0) * betMultiplier.value)
+const raiseCost = computed(() => ((props.gs.currentBet || 0) + (props.gs.raiseStep || 20)) * betMultiplier.value)
 const compareCost = computed(() => callCost.value * 2)
 const playerBalance = computed(() => {
   const value = props.gs.playerBalances?.[myId.value] ?? props.player?.points
@@ -244,8 +246,8 @@ const playerBalance = computed(() => {
 })
 const committedBet = computed(() => Number(props.gs.playerBets?.[myId.value] || 0))
 const remainingPoints = computed(() => Math.max(0, playerBalance.value - committedBet.value))
-const canCall = computed(() => callCost.value <= remainingPoints.value)
-const canRaise = computed(() => raiseCost.value <= remainingPoints.value)
+const canCall = computed(() => callCost.value <= remainingPoints.value && callCost.value <= betLimit.value)
+const canRaise = computed(() => raiseCost.value <= remainingPoints.value && raiseCost.value <= betLimit.value)
 const canCompare = computed(() => compareCost.value <= remainingPoints.value)
 
 const phaseText = computed(() => {

@@ -1,6 +1,7 @@
 const { createStandardDeck, shuffle } = require('./shared/cards');
 
 const SEAT_ORDER = ['south', 'east', 'west'];
+const BASE_SCORE = 50;
 const RANK_VALUES = {
   '3': 3,
   '4': 4,
@@ -265,6 +266,95 @@ function syncHandCounts(state) {
   state.handCounts = getHandCounts(state);
 }
 
+function getDoudizhuScoreUnit(state, baseScore = BASE_SCORE) {
+  const base = Number(baseScore || BASE_SCORE);
+  const bombCount = Math.max(0, Number(state?.bombCount || 0));
+  return base + (base * bombCount);
+}
+
+function recordBombIfNeeded(state, pattern) {
+  if (!['bomb', 'rocket'].includes(pattern?.type)) return;
+  state.bombCount = Number(state.bombCount || 0) + 1;
+  state.scoreUnit = getDoudizhuScoreUnit(state, state.baseScore || BASE_SCORE);
+}
+
+function createBiddingDeal(players, round = 1, redealCount = 0) {
+  const deck = createDeck();
+  const hands = {};
+
+  players.forEach((playerId) => {
+    hands[playerId] = sortHand(deck.splice(0, 17));
+  });
+
+  return {
+    phase: 'bid',
+    stage: 'bid',
+    gameMode: 'doudizhu',
+    round,
+    redealCount,
+    players,
+    seats: buildSeats(players),
+    seatMap: getSeatMap(players),
+    landlord: null,
+    landlordSeat: null,
+    farmers: [],
+    bottomCards: sortHand(deck.splice(0, 3)),
+    hands,
+    currentPlayer: players[0],
+    currentBid: 0,
+    currentBidder: null,
+    baseScore: BASE_SCORE,
+    bombCount: 0,
+    scoreUnit: BASE_SCORE,
+    bidHistory: [],
+    bidTurnCount: 0,
+    consecutivePasses: 0,
+    lastPlay: null,
+    lastPattern: null,
+    lastLeadPlayer: null,
+    passedPlayers: [],
+    finishedOrder: [],
+    roundWinner: null,
+    winningPlayers: [],
+    timer: 30,
+    timerStarted: Date.now(),
+    handCounts: Object.fromEntries(players.map((pid) => [pid, hands[pid].length])),
+    currentHints: []
+  };
+}
+
+function resetBiddingDeal(state) {
+  const next = createBiddingDeal(state.players || [], state.round || 1, Number(state.redealCount || 0) + 1);
+  Object.keys(state).forEach((key) => delete state[key]);
+  Object.assign(state, next);
+  return state;
+}
+
+function getNextSeatPlayer(players, currentPlayer) {
+  if (!players.length) return null;
+  const currentIndex = players.indexOf(currentPlayer);
+  if (currentIndex === -1) return players[0];
+  return players[(currentIndex + 1) % players.length];
+}
+
+function finishBidding(state) {
+  const landlord = state.currentBidder || state.players?.[0];
+  state.phase = 'play';
+  state.stage = 'play';
+  state.landlord = landlord;
+  state.landlordSeat = state.seatMap?.[landlord] || null;
+  state.farmers = (state.players || []).filter((playerId) => playerId !== landlord);
+  state.hands[landlord] = sortHand([...(state.hands[landlord] || []), ...(state.bottomCards || [])]);
+  state.currentPlayer = landlord;
+  state.lastPlay = null;
+  state.lastPattern = null;
+  state.lastLeadPlayer = null;
+  state.passedPlayers = [];
+  state.timerStarted = Date.now();
+  syncHandCounts(state);
+  return state;
+}
+
 function getWinningPlayers(state, winnerId) {
   if (!winnerId) return [];
   if (winnerId === state.landlord) return [winnerId];
@@ -321,49 +411,63 @@ function getHints(hand, lastPattern = null) {
 
 class DoudizhuEngine {
   init(room, players) {
-    const deck = createDeck();
-    const hands = {};
-
-    players.forEach((playerId) => {
-      hands[playerId] = sortHand(deck.splice(0, 17));
-    });
-
-    const bottomCards = sortHand(deck.splice(0, 3));
-    const landlord = players[0];
-    hands[landlord] = sortHand([...hands[landlord], ...bottomCards]);
-    const farmers = players.filter((playerId) => playerId !== landlord);
-
-    const state = {
-      phase: 'play',
-      stage: 'play',
-      gameMode: 'doudizhu',
-      round: 1,
-      players,
-      seats: buildSeats(players),
-      seatMap: getSeatMap(players),
-      landlord,
-      landlordSeat: 'south',
-      farmers,
-      bottomCards,
-      hands,
-      currentPlayer: landlord,
-      lastPlay: null,
-      lastPattern: null,
-      lastLeadPlayer: null,
-      passedPlayers: [],
-      finishedOrder: [],
-      roundWinner: null,
-      winningPlayers: [],
-      timer: 30,
-      timerStarted: Date.now(),
-      handCounts: Object.fromEntries(players.map((pid) => [pid, hands[pid].length])),
-      currentHints: []
-    };
-    this._updateHints(state);
-    return state;
+    return createBiddingDeal(players);
   }
 
   update(state, action, playerId) {
+    if (!action) return state;
+
+    if (state.phase === 'bid') {
+      if (playerId !== state.currentPlayer) return state;
+
+      const score = action.type === 'bid' ? Number(action.score) : action.type === 'pass' ? 0 : null;
+      if (score === null || !Number.isInteger(score) || score < 0 || score > 3) return state;
+      if (score > 0 && score <= Number(state.currentBid || 0)) return state;
+
+      state.bidHistory = Array.isArray(state.bidHistory) ? state.bidHistory : [];
+      state.bidHistory.push({
+        playerId,
+        score,
+        action: score > 0 ? (state.currentBid > 0 ? 'rob' : 'bid') : 'pass'
+      });
+      state.bidTurnCount = Number(state.bidTurnCount || 0) + 1;
+
+      if (score > 0) {
+        state.currentBid = score;
+        state.currentBidder = playerId;
+        state.consecutivePasses = 0;
+      } else {
+        state.consecutivePasses = Number(state.consecutivePasses || 0) + 1;
+      }
+
+      if (score === 3) {
+        finishBidding(state);
+        this._updateHints(state);
+        return state;
+      }
+
+      if (!state.currentBidder && state.bidTurnCount >= state.players.length) {
+        resetBiddingDeal(state);
+        return state;
+      }
+
+      if (
+        state.currentBidder &&
+        state.bidTurnCount >= state.players.length &&
+        Number(state.consecutivePasses || 0) >= state.players.length - 1
+      ) {
+        finishBidding(state);
+        this._updateHints(state);
+        return state;
+      }
+
+      state.currentPlayer = getNextSeatPlayer(state.players || [], playerId);
+      state.timerStarted = Date.now();
+      state.currentHints = [];
+      syncHandCounts(state);
+      return state;
+    }
+
     if (state.phase !== 'play' || playerId !== state.currentPlayer) return state;
     if (state.finishedOrder.includes(playerId)) return state;
 
@@ -377,6 +481,7 @@ class DoudizhuEngine {
       if (!nextHand) return state;
 
       state.hands[playerId] = sortHand(nextHand);
+      recordBombIfNeeded(state, pattern);
       state.lastPlay = { playerId, cards: selected, pattern };
       state.lastPattern = pattern;
       state.lastLeadPlayer = playerId;
@@ -443,12 +548,23 @@ class DoudizhuEngine {
     const view = {
       ...state,
       handCounts: getHandCounts(state),
+      bottomCards: state.phase === 'bid' ? [] : (state.bottomCards || []),
       hands: {
         [playerId]: state.hands?.[playerId] || []
       }
     };
     if (playerId !== state.currentPlayer) view.currentHints = [];
     return view;
+  }
+
+  getPublicView(state) {
+    return {
+      ...state,
+      handCounts: getHandCounts(state),
+      bottomCards: state.phase === 'bid' ? [] : (state.bottomCards || []),
+      hands: {},
+      currentHints: []
+    };
   }
 
   nextRound(state) {
@@ -467,5 +583,6 @@ module.exports = {
   sortHandDesc,
   identifyPattern,
   comparePattern,
-  getHints
+  getHints,
+  getDoudizhuScoreUnit
 };

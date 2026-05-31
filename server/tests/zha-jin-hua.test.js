@@ -6,6 +6,9 @@ const {
   evaluateHand,
   compareHands,
   blindMultiplier,
+  getCallAmount,
+  getRaiseAmount,
+  getBetLimit,
   getRemainingBalance
 } = require('../game-engines/zha-jin-hua');
 
@@ -19,12 +22,19 @@ test('炸金花牌型比较按豹子高于同花顺', () => {
   assert.equal(compareHands(leopard, straightFlush) > 0, true);
 });
 
-test('炸金花暗牌倍率为 2，明牌倍率为 1', () => {
+test('炸金花看牌消费为闷牌 2 倍', () => {
   const engine = new ZhaJinHuaEngine();
   const state = engine.init(null, ['p1', 'p2']);
-  assert.equal(blindMultiplier(state, 'p1'), 2);
-  state.lookedPlayers.push('p1');
   assert.equal(blindMultiplier(state, 'p1'), 1);
+  assert.equal(getCallAmount(state, 'p1'), 20);
+  assert.equal(getRaiseAmount(state, 'p1'), 40);
+  assert.equal(getBetLimit(state, 'p1'), 50);
+
+  state.lookedPlayers.push('p1');
+  assert.equal(blindMultiplier(state, 'p1'), 2);
+  assert.equal(getCallAmount(state, 'p1'), 40);
+  assert.equal(getRaiseAmount(state, 'p1'), 80);
+  assert.equal(getBetLimit(state, 'p1'), 100);
 });
 
 test('炸金花房间准备完成后直接进入下注阶段', () => {
@@ -33,6 +43,8 @@ test('炸金花房间准备完成后直接进入下注阶段', () => {
 
   assert.equal(state.phase, 'bet');
   assert.equal(state.currentPlayer, 'p1');
+  assert.equal(state.currentBet, 20);
+  assert.equal(state.raiseStep, 20);
   assert.deepEqual(state.actedThisRound, []);
 });
 
@@ -61,47 +73,69 @@ test('炸金花比牌会淘汰失败玩家并结束', () => {
 
 test('炸金花跟注不能超过玩家剩余积分', () => {
   const engine = new ZhaJinHuaEngine();
-  const state = engine.init({ playerBalances: { p1: 15, p2: 100 } }, ['p1', 'p2']);
+  const state = engine.init({ playerBalances: { p1: 50, p2: 100 } }, ['p1', 'p2']);
   state.lookedPlayers = ['p1'];
 
   engine.update(state, { type: 'call' }, 'p1');
-  assert.equal(state.playerBets.p1, 10);
-  assert.equal(state.pot, 10);
-  assert.equal(getRemainingBalance(state, 'p1'), 5);
+  assert.equal(state.playerBets.p1, 40);
+  assert.equal(state.pot, 40);
+  assert.equal(getRemainingBalance(state, 'p1'), 10);
 
   state.currentPlayer = 'p1';
   engine.update(state, { type: 'call' }, 'p1');
-  assert.equal(state.playerBets.p1, 10);
-  assert.equal(state.pot, 10);
+  assert.equal(state.playerBets.p1, 40);
+  assert.equal(state.pot, 40);
   assert.equal(state.currentPlayer, 'p1');
 });
 
 test('炸金花加注不能超过玩家剩余积分', () => {
   const engine = new ZhaJinHuaEngine();
-  const state = engine.init({ playerBalances: { p1: 15, p2: 100 } }, ['p1', 'p2']);
+  const state = engine.init({ playerBalances: { p1: 60, p2: 100 } }, ['p1', 'p2']);
   state.lookedPlayers = ['p1', 'p2'];
 
   engine.update(state, { type: 'raise' }, 'p1');
-  assert.equal(state.currentBet, 10);
+  assert.equal(state.currentBet, 20);
   assert.equal(state.playerBets.p1, 0);
   assert.equal(state.pot, 0);
   assert.equal(state.currentPlayer, 'p1');
 });
 
+test('炸金花闷牌和看牌加注有单次上限', () => {
+  const engine = new ZhaJinHuaEngine();
+  const blindState = engine.init({ playerBalances: { p1: 500, p2: 500 } }, ['p1', 'p2']);
+
+  engine.update(blindState, { type: 'raise' }, 'p1');
+  assert.equal(blindState.currentBet, 40);
+  assert.equal(blindState.playerBets.p1, 40);
+
+  blindState.currentPlayer = 'p1';
+  engine.update(blindState, { type: 'raise' }, 'p1');
+  assert.equal(blindState.currentBet, 40);
+  assert.equal(blindState.playerBets.p1, 40);
+
+  const lookedState = engine.init({ playerBalances: { p1: 500, p2: 500 } }, ['p1', 'p2']);
+  lookedState.lookedPlayers = ['p1'];
+  lookedState.currentBet = 40;
+
+  engine.update(lookedState, { type: 'raise' }, 'p1');
+  assert.equal(lookedState.currentBet, 40);
+  assert.equal(lookedState.playerBets.p1, 0);
+});
+
 test('炸金花比牌不能超过玩家剩余积分', () => {
   const engine = new ZhaJinHuaEngine();
-  const state = engine.init({ playerBalances: { p1: 25, p2: 100 } }, ['p1', 'p2']);
+  const state = engine.init({ playerBalances: { p1: 90, p2: 100 } }, ['p1', 'p2']);
   state.lookedPlayers = ['p1', 'p2'];
 
   engine.update(state, { type: 'compare', targetId: 'p2' }, 'p1');
-  assert.equal(state.playerBets.p1, 20);
-  assert.equal(state.pot, 20);
+  assert.equal(state.playerBets.p1, 80);
+  assert.equal(state.pot, 80);
 
   state.phase = 'bet';
   state.currentPlayer = 'p1';
   state.activePlayers = ['p1', 'p2'];
   engine.update(state, { type: 'compare', targetId: 'p2' }, 'p1');
-  assert.equal(state.playerBets.p1, 20);
-  assert.equal(state.pot, 20);
+  assert.equal(state.playerBets.p1, 80);
+  assert.equal(state.pot, 80);
   assert.equal(state.currentPlayer, 'p1');
 });
