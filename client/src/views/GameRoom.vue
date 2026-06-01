@@ -55,8 +55,17 @@
       </div>
 
       <div v-if="showInvitePanel" class="invite-panel">
+        <label class="invite-search">
+          <span>搜索玩家</span>
+          <input
+            v-model.trim="inviteSearchText"
+            type="search"
+            placeholder="输入玩家名称"
+            autocomplete="off"
+          >
+        </label>
         <button
-          v-for="candidate in inviteCandidates"
+          v-for="candidate in filteredInviteCandidates"
           :key="candidate.id"
           type="button"
           :disabled="candidate.busy || candidate.invited"
@@ -65,7 +74,9 @@
           <span>{{ candidate.nickname }} · {{ candidate.busNumber }}号车</span>
           <strong>{{ inviteCandidateStatus(candidate) }}</strong>
         </button>
-        <p v-if="!inviteCandidates.length">{{ inviteLoading ? '正在加载...' : '暂无可邀请玩家' }}</p>
+        <p v-if="!filteredInviteCandidates.length">
+          {{ inviteLoading ? '正在加载...' : (inviteSearchText ? '未找到匹配玩家' : '暂无可邀请玩家') }}
+        </p>
       </div>
     </section>
 
@@ -423,6 +434,7 @@ const readySubmitting = ref(false)
 const showInvitePanel = ref(false)
 const inviteCandidates = ref([])
 const inviteLoading = ref(false)
+const inviteSearchText = ref('')
 const confirmDialog = ref({ visible: false, title: '确认操作', message: '' })
 
 let timerInterval = null
@@ -453,6 +465,13 @@ const readyButtonText = computed(() => {
 })
 const emptySeatCount = computed(() => Math.max(0, Number(currentRoom.value?.maxPlayers || roomPlayers.value.length) - roomPlayers.value.length))
 const canInvitePlayers = computed(() => isReadyRoom.value && currentRoom.value?.visibility === 'private' && currentRoom.value?.ownerId === player.value?.id && emptySeatCount.value > 0)
+const filteredInviteCandidates = computed(() => {
+  const keyword = inviteSearchText.value.trim().toLowerCase()
+  if (!keyword) return inviteCandidates.value
+  return inviteCandidates.value.filter((candidate) => (
+    String(candidate.nickname || '').toLowerCase().includes(keyword)
+  ))
+})
 
 const gameLabel = computed(() => {
   const labels = {
@@ -676,6 +695,10 @@ function applyLocalReady(ready) {
 
 function toggleInvitePanel() {
   showInvitePanel.value = !showInvitePanel.value
+  if (!showInvitePanel.value) {
+    inviteSearchText.value = ''
+    return
+  }
   if (showInvitePanel.value) {
     loadInvitePlayers()
   }
@@ -1775,6 +1798,40 @@ watch(() => roomId.value, () => {
   gap: 8px;
   max-height: 230px;
   overflow: auto;
+}
+
+.invite-search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding-bottom: 2px;
+  display: grid;
+  gap: 6px;
+  background: #f7fbff;
+}
+
+.invite-search span {
+  color: #6b82ac;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.invite-search input {
+  width: 100%;
+  min-height: 42px;
+  border: 1px solid #d9e8fb;
+  border-radius: 12px;
+  padding: 0 12px;
+  background: #fff;
+  color: #17315d;
+  font-size: 14px;
+  font-weight: 800;
+  outline: none;
+}
+
+.invite-search input:focus {
+  border-color: #8fb5f4;
+  box-shadow: 0 0 0 3px rgba(31, 107, 255, 0.12);
 }
 
 .invite-panel button {

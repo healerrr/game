@@ -1,0 +1,689 @@
+{
+  "runId": "20260601090341",
+  "server": "http://127.0.0.1:3457",
+  "startedAt": "2026-06-01T09:03:41.602Z",
+  "botProfiles": [
+    {
+      "nickname": "QA手机机器人-甲-20260601090341",
+      "busNumber": 1
+    },
+    {
+      "nickname": "QA手机机器人-乙-20260601090341",
+      "busNumber": 2
+    },
+    {
+      "nickname": "QA手机机器人-丙-20260601090341",
+      "busNumber": 3
+    },
+    {
+      "nickname": "QA手机机器人-丁-20260601090341",
+      "busNumber": 4
+    }
+  ],
+  "games": [
+    {
+      "game": "guandan",
+      "name": "掼蛋",
+      "roomId": "r_46d1b400-05f8-41d5-bc55-35d5df7fa838",
+      "participantCount": 4,
+      "participants": [
+        {
+          "id": "p_f84d1e29-c339-4d88-a7a7-e28cb2dc927b",
+          "nickname": "QA手机机器人-甲-20260601090341-guandan",
+          "busNumber": 1
+        },
+        {
+          "id": "p_679cb2e6-2340-4b4f-800f-a273837c6215",
+          "nickname": "QA手机机器人-乙-20260601090341-guandan",
+          "busNumber": 2
+        },
+        {
+          "id": "p_228b303c-4b53-451d-b708-7b19c6ac01eb",
+          "nickname": "QA手机机器人-丙-20260601090341-guandan",
+          "busNumber": 3
+        },
+        {
+          "id": "p_38d9e492-b761-4f78-a9f8-bd321e427760",
+          "nickname": "QA手机机器人-丁-20260601090341-guandan",
+          "busNumber": 4
+        }
+      ],
+      "finished": false,
+      "actions": 603,
+      "stalls": 0,
+      "durationMs": 90639,
+      "finalPhase": "play",
+      "winners": [],
+      "pointSummary": {
+        "deltas": {
+          "p_f84d1e29-c339-4d88-a7a7-e28cb2dc927b": {
+            "nickname": "QA手机机器人-甲-20260601090341-guandan",
+            "before": 1000,
+            "after": 1000,
+            "delta": 0
+          },
+          "p_679cb2e6-2340-4b4f-800f-a273837c6215": {
+            "nickname": "QA手机机器人-乙-20260601090341-guandan",
+            "before": 1000,
+            "after": 1000,
+            "delta": 0
+          },
+          "p_228b303c-4b53-451d-b708-7b19c6ac01eb": {
+            "nickname": "QA手机机器人-丙-20260601090341-guandan",
+            "before": 1000,
+            "after": 1000,
+            "delta": 0
+          },
+          "p_38d9e492-b761-4f78-a9f8-bd321e427760": {
+            "nickname": "QA手机机器人-丁-20260601090341-guandan",
+            "before": 1000,
+            "after": 1000,
+            "delta": 0
+          }
+        },
+        "totalDelta": 0
+      },
+      "stateTrace": [
+        {
+          "t": 0,
+          "phase": "play",
+          "currentPlayer": "p_f84d1e29-c339-4d88-a7a7-e28cb2dc927b",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 188,
+          "phase": "play",
+          "currentPlayer": "p_679cb2e6-2340-4b4f-800f-a273837c6215",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 341,
+          "phase": "play",
+          "currentPlayer": "p_228b303c-4b53-451d-b708-7b19c6ac01eb",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 494,
+          "phase": "play",
+          "currentPlayer": "p_38d9e492-b761-4f78-a9f8-bd321e427760",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 649,
+          "phase": "play",
+          "currentPlayer": "p_f84d1e29-c339-4d88-a7a7-e28cb2dc927b",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 799,
+          "phase": "play",
+          "currentPlayer": "p_679cb2e6-2340-4b4f-800f-a273837c6215",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 952,
+          "phase": "play",
+          "currentPlayer": "p_228b303c-4b53-451d-b708-7b19c6ac01eb",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 1117,
+          "phase": "play",
+          "currentPlayer": "p_38d9e492-b761-4f78-a9f8-bd321e427760",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 1270,
+          "phase": "play",
+          "currentPlayer": "p_f84d1e29-c339-4d88-a7a7-e28cb2dc927b",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 1412,
+          "phase": "play",
+          "currentPlayer": "p_679cb2e6-2340-4b4f-800f-a273837c6215",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 1585,
+          "phase": "play",
+          "currentPlayer": "p_228b303c-4b53-451d-b708-7b19c6ac01eb",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 1777,
+          "phase": "play",
+          "currentPlayer": "p_38d9e492-b761-4f78-a9f8-bd321e427760",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 1920,
+          "phase": "play",
+          "currentPlayer": "p_f84d1e29-c339-4d88-a7a7-e28cb2dc927b",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 2072,
+          "phase": "play",
+          "currentPlayer": "p_679cb2e6-2340-4b4f-800f-a273837c6215",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 2220,
+          "phase": "play",
+          "currentPlayer": "p_228b303c-4b53-451d-b708-7b19c6ac01eb",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 2371,
+          "phase": "play",
+          "currentPlayer": "p_38d9e492-b761-4f78-a9f8-bd321e427760",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 2521,
+          "phase": "play",
+          "currentPlayer": "p_f84d1e29-c339-4d88-a7a7-e28cb2dc927b",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 2673,
+          "phase": "play",
+          "currentPlayer": "p_679cb2e6-2340-4b4f-800f-a273837c6215",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 2827,
+          "phase": "play",
+          "currentPlayer": "p_228b303c-4b53-451d-b708-7b19c6ac01eb",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 2976,
+          "phase": "play",
+          "currentPlayer": "p_38d9e492-b761-4f78-a9f8-bd321e427760",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 3131,
+          "phase": "play",
+          "currentPlayer": "p_f84d1e29-c339-4d88-a7a7-e28cb2dc927b",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 3280,
+          "phase": "play",
+          "currentPlayer": "p_679cb2e6-2340-4b4f-800f-a273837c6215",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 3425,
+          "phase": "play",
+          "currentPlayer": "p_228b303c-4b53-451d-b708-7b19c6ac01eb",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 3579,
+          "phase": "play",
+          "currentPlayer": "p_38d9e492-b761-4f78-a9f8-bd321e427760",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 3729,
+          "phase": "play",
+          "currentPlayer": "p_f84d1e29-c339-4d88-a7a7-e28cb2dc927b",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 3882,
+          "phase": "play",
+          "currentPlayer": "p_679cb2e6-2340-4b4f-800f-a273837c6215",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 4037,
+          "phase": "play",
+          "currentPlayer": "p_228b303c-4b53-451d-b708-7b19c6ac01eb",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 4178,
+          "phase": "play",
+          "currentPlayer": "p_38d9e492-b761-4f78-a9f8-bd321e427760",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 4331,
+          "phase": "play",
+          "currentPlayer": "p_f84d1e29-c339-4d88-a7a7-e28cb2dc927b",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 4481,
+          "phase": "play",
+          "currentPlayer": "p_679cb2e6-2340-4b4f-800f-a273837c6215",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 4629,
+          "phase": "play",
+          "currentPlayer": "p_228b303c-4b53-451d-b708-7b19c6ac01eb",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 4770,
+          "phase": "play",
+          "currentPlayer": "p_38d9e492-b761-4f78-a9f8-bd321e427760",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 4913,
+          "phase": "play",
+          "currentPlayer": "p_f84d1e29-c339-4d88-a7a7-e28cb2dc927b",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 5067,
+          "phase": "play",
+          "currentPlayer": "p_679cb2e6-2340-4b4f-800f-a273837c6215",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 5210,
+          "phase": "play",
+          "currentPlayer": "p_228b303c-4b53-451d-b708-7b19c6ac01eb",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 5358,
+          "phase": "play",
+          "currentPlayer": "p_38d9e492-b761-4f78-a9f8-bd321e427760",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 5500,
+          "phase": "play",
+          "currentPlayer": "p_f84d1e29-c339-4d88-a7a7-e28cb2dc927b",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 5645,
+          "phase": "play",
+          "currentPlayer": "p_679cb2e6-2340-4b4f-800f-a273837c6215",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 5796,
+          "phase": "play",
+          "currentPlayer": "p_228b303c-4b53-451d-b708-7b19c6ac01eb",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 5939,
+          "phase": "play",
+          "currentPlayer": "p_38d9e492-b761-4f78-a9f8-bd321e427760",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 6104,
+          "phase": "play",
+          "currentPlayer": "p_f84d1e29-c339-4d88-a7a7-e28cb2dc927b",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 6265,
+          "phase": "play",
+          "currentPlayer": "p_679cb2e6-2340-4b4f-800f-a273837c6215",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 6410,
+          "phase": "play",
+          "currentPlayer": "p_228b303c-4b53-451d-b708-7b19c6ac01eb",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 6565,
+          "phase": "play",
+          "currentPlayer": "p_38d9e492-b761-4f78-a9f8-bd321e427760",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 6713,
+          "phase": "play",
+          "currentPlayer": "p_f84d1e29-c339-4d88-a7a7-e28cb2dc927b",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 6862,
+          "phase": "play",
+          "currentPlayer": "p_679cb2e6-2340-4b4f-800f-a273837c6215",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 7007,
+          "phase": "play",
+          "currentPlayer": "p_228b303c-4b53-451d-b708-7b19c6ac01eb",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 7150,
+          "phase": "play",
+          "currentPlayer": "p_38d9e492-b761-4f78-a9f8-bd321e427760",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 7291,
+          "phase": "play",
+          "currentPlayer": "p_f84d1e29-c339-4d88-a7a7-e28cb2dc927b",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 7441,
+          "phase": "play",
+          "currentPlayer": "p_679cb2e6-2340-4b4f-800f-a273837c6215",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 7582,
+          "phase": "play",
+          "currentPlayer": "p_228b303c-4b53-451d-b708-7b19c6ac01eb",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 7731,
+          "phase": "play",
+          "currentPlayer": "p_38d9e492-b761-4f78-a9f8-bd321e427760",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 7881,
+          "phase": "play",
+          "currentPlayer": "p_f84d1e29-c339-4d88-a7a7-e28cb2dc927b",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 8031,
+          "phase": "play",
+          "currentPlayer": "p_679cb2e6-2340-4b4f-800f-a273837c6215",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 8184,
+          "phase": "play",
+          "currentPlayer": "p_228b303c-4b53-451d-b708-7b19c6ac01eb",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 8335,
+          "phase": "play",
+          "currentPlayer": "p_38d9e492-b761-4f78-a9f8-bd321e427760",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 8482,
+          "phase": "play",
+          "currentPlayer": "p_f84d1e29-c339-4d88-a7a7-e28cb2dc927b",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 8627,
+          "phase": "play",
+          "currentPlayer": "p_679cb2e6-2340-4b4f-800f-a273837c6215",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 8775,
+          "phase": "play",
+          "currentPlayer": "p_228b303c-4b53-451d-b708-7b19c6ac01eb",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 8924,
+          "phase": "play",
+          "currentPlayer": "p_38d9e492-b761-4f78-a9f8-bd321e427760",
+          "round": 1,
+          "pot": null
+        }
+      ],
+      "spectatorEvents": [
+        {
+          "event": "spectator:join",
+          "phase": null,
+          "playerCount": 4
+        }
+      ],
+      "socketErrors": [],
+      "notes": [
+        "90 秒或 700 步内未完成，当前 phase=play"
+      ]
+    },
+    {
+      "game": "zha_jin_hua",
+      "name": "炸金花",
+      "roomId": "r_b225dbd4-b165-4fef-aaea-07687bb8bcc2",
+      "participantCount": 5,
+      "participants": [
+        {
+          "id": "p_84d36e29-f851-49b6-84b2-697db6105273",
+          "nickname": "QA手机机器人-甲-20260601090341-zha_jin_hua",
+          "busNumber": 1
+        },
+        {
+          "id": "p_7fde732c-46f1-4523-84a4-e631a240a20d",
+          "nickname": "QA手机机器人-乙-20260601090341-zha_jin_hua",
+          "busNumber": 2
+        },
+        {
+          "id": "p_b907195c-36be-477b-a9be-76362203cbe1",
+          "nickname": "QA手机机器人-丙-20260601090341-zha_jin_hua",
+          "busNumber": 3
+        },
+        {
+          "id": "p_a4d5b02c-2062-438c-bab3-d51e8f5798b0",
+          "nickname": "QA手机机器人-丁-20260601090341-zha_jin_hua",
+          "busNumber": 4
+        },
+        {
+          "id": "p_f14b8ebf-aa56-4429-8c83-9806e6f97d25",
+          "nickname": "QA手机机器人-补位5-20260601090341-zha_jin_hua",
+          "busNumber": 5
+        }
+      ],
+      "finished": true,
+      "actions": 15,
+      "stalls": 0,
+      "durationMs": 2765,
+      "finalPhase": "finished",
+      "winners": [
+        "p_a4d5b02c-2062-438c-bab3-d51e8f5798b0"
+      ],
+      "pointSummary": {
+        "deltas": {
+          "p_84d36e29-f851-49b6-84b2-697db6105273": {
+            "nickname": "QA手机机器人-甲-20260601090341-zha_jin_hua",
+            "before": 1000,
+            "after": 980,
+            "delta": -20
+          },
+          "p_7fde732c-46f1-4523-84a4-e631a240a20d": {
+            "nickname": "QA手机机器人-乙-20260601090341-zha_jin_hua",
+            "before": 1000,
+            "after": 980,
+            "delta": -20
+          },
+          "p_b907195c-36be-477b-a9be-76362203cbe1": {
+            "nickname": "QA手机机器人-丙-20260601090341-zha_jin_hua",
+            "before": 1000,
+            "after": 960,
+            "delta": -40
+          },
+          "p_a4d5b02c-2062-438c-bab3-d51e8f5798b0": {
+            "nickname": "QA手机机器人-丁-20260601090341-zha_jin_hua",
+            "before": 1000,
+            "after": 1140,
+            "delta": 140
+          },
+          "p_f14b8ebf-aa56-4429-8c83-9806e6f97d25": {
+            "nickname": "QA手机机器人-补位5-20260601090341-zha_jin_hua",
+            "before": 1000,
+            "after": 920,
+            "delta": -80
+          }
+        },
+        "totalDelta": -20
+      },
+      "stateTrace": [
+        {
+          "t": 0,
+          "phase": "bet",
+          "currentPlayer": "p_84d36e29-f851-49b6-84b2-697db6105273",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 303,
+          "phase": "bet",
+          "currentPlayer": "p_7fde732c-46f1-4523-84a4-e631a240a20d",
+          "round": 1,
+          "pot": null
+        },
+        {
+          "t": 449,
+          "phase": "bet",
+          "currentPlayer": "p_b907195c-36be-477b-a9be-76362203cbe1",
+          "round": 1,
+          "pot": 20
+        },
+        {
+          "t": 759,
+          "phase": "bet",
+          "currentPlayer": "p_a4d5b02c-2062-438c-bab3-d51e8f5798b0",
+          "round": 1,
+          "pot": 60
+        },
+        {
+          "t": 907,
+          "phase": "bet",
+          "currentPlayer": "p_f14b8ebf-aa56-4429-8c83-9806e6f97d25",
+          "round": 1,
+          "pot": 100
+        },
+        {
+          "t": 1058,
+          "phase": "bet",
+          "currentPlayer": "p_7fde732c-46f1-4523-84a4-e631a240a20d",
+          "round": 1,
+          "pot": 140
+        },
+        {
+          "t": 1351,
+          "phase": "bet",
+          "currentPlayer": "p_b907195c-36be-477b-a9be-76362203cbe1",
+          "round": 1,
+          "pot": 140
+        },
+        {
+          "t": 1499,
+          "phase": "bet",
+          "currentPlayer": "p_a4d5b02c-2062-438c-bab3-d51e8f5798b0",
+          "round": 2,
+          "pot": 140
+        },
+        {
+          "t": 1648,
+          "phase": "bet",
+          "currentPlayer": "p_f14b8ebf-aa56-4429-8c83-9806e6f97d25",
+          "round": 2,
+          "pot": 180
+        },
+        {
+          "t": 1791,
+          "phase": "bet",
+          "currentPlayer": "p_a4d5b02c-2062-438c-bab3-d51e8f5798b0",
+          "round": 3,
+          "pot": 220
+        },
+        {
+          "t": 1950,
+          "phase": "bet",
+          "currentPlayer": "p_f14b8ebf-aa56-4429-8c83-9806e6f97d25",
+          "round": 3,
+          "pot": 260
+        }
+      ],
+      "spectatorEvents": [
+        {
+          "event": "spectator:join",
+          "phase": null,
+          "playerCount": 5
+        }
+      ],
+      "socketErrors": [],
+      "notes": [
+        "积分非零和：合计变化 -20"
+      ]
+    }
+  ],
+  "fatalErrors": [],
+  "finishedAt": "2026-06-01T09:05:17.235Z"
+}
