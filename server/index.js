@@ -1,5 +1,5 @@
 // 团建大巴游戏平台 - 主服务器
-require('dotenv').config();
+require('dotenv').config({ quiet: true });
 
 const express = require('express');
 const http = require('http');
@@ -1495,7 +1495,8 @@ function handleGameEnd(room) {
   broadcastUpdate();
 
   // 10分钟后清理房间
-  setTimeout(() => store.removeRoom(room.id), 600000);
+  const cleanupTimer = setTimeout(() => store.removeRoom(room.id), 600000);
+  cleanupTimer.unref?.();
 }
 
 // 1v1 游戏结算（零和转移）

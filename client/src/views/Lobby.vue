@@ -90,17 +90,6 @@
       </transition>
 
       <transition name="fade">
-        <div v-if="showRules" class="overlay" @click="showRules = false">
-          <div class="dialog dialog--left" @click.stop>
-            <h3>活动规则</h3>
-            <p>点击任意游戏即可和机器人快速开局，结算后积分会同步更新。</p>
-            <p>排行榜实时刷新，积分记录、我的战绩和兑奖区保留入口，后续可继续扩展。</p>
-            <button type="button" class="dialog-btn" @click="showRules = false">知道了</button>
-          </div>
-        </div>
-      </transition>
-
-      <transition name="fade">
         <div v-if="showCreateRoom" class="overlay" @click="showCreateRoom = false">
           <div class="dialog dialog--left" @click.stop>
             <h3>创建房间</h3>
@@ -116,26 +105,6 @@
                 <strong>{{ game.entryFee }}分</strong>
               </button>
             </div>
-          </div>
-        </div>
-      </transition>
-
-      <transition name="fade">
-        <div v-if="showReward" class="overlay" @click="showReward = false">
-          <div class="dialog" @click.stop>
-            <h3>奖励中心</h3>
-            <p>今日继续参与游戏可累计更多积分，用于后续兑奖。</p>
-            <div class="reward-stats">
-              <div>
-                <span>当前积分</span>
-                <strong>{{ player?.points ?? 0 }}</strong>
-              </div>
-              <div>
-                <span>今日目标</span>
-                <strong>2000</strong>
-              </div>
-            </div>
-            <button type="button" class="dialog-btn" @click="showReward = false">继续加油</button>
           </div>
         </div>
       </transition>
@@ -166,8 +135,6 @@ const route = useRoute()
 const player = computed(() => getPlayer())
 const matching = ref(false)
 const selectedGameKey = ref('')
-const showReward = ref(false)
-const showRules = ref(false)
 const showCreateRoom = ref(false)
 const toastMessage = ref('')
 
@@ -367,22 +334,6 @@ function handleUtility(item) {
     router.push('/results')
     return
   }
-
-  if (item.key === 'create') {
-    openCreateRoom()
-    return
-  }
-
-  if (item.key === 'reward') {
-    showReward.value = true
-    return
-  }
-
-  const messages = {
-    record: '积分记录功能即将开放',
-    results: '我的战绩功能即将开放'
-  }
-  showToast(messages[item.key] || `${item.label} 即将开放`)
 }
 </script>
 
@@ -778,34 +729,6 @@ function handleUtility(item) {
   background: linear-gradient(180deg, #2e8dff, #0a59ef);
   font-size: 15px;
   font-weight: 800;
-}
-
-.reward-stats {
-  margin-top: 14px;
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.reward-stats div {
-  border-radius: 14px;
-  border: 1px solid #d9e8fb;
-  background: #fff;
-  padding: 12px 8px;
-}
-
-.reward-stats span {
-  display: block;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.reward-stats strong {
-  display: block;
-  margin-top: 6px;
-  font-size: 24px;
-  color: #0f5de8;
 }
 
 .create-game-list {

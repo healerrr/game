@@ -406,16 +406,17 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { gameState, getPlayer, getPlayMode, socket } from '../socket'
-import UndercoverGame from '../components/UndercoverGame.vue'
-import ZhaJinHuaBoard from '../components/games/ZhaJinHuaBoard.vue'
-import GuandanBoard from '../components/games/GuandanBoard.vue'
-import DoudizhuBoard from '../components/games/DoudizhuBoard.vue'
-import MahjongBoard from '../components/games/MahjongBoard.vue'
-import GomokuBoard from '../components/games/GomokuBoard.vue'
-import ChessBoard from '../components/games/ChessBoard.vue'
+
+const UndercoverGame = defineAsyncComponent(() => import('../components/UndercoverGame.vue'))
+const ZhaJinHuaBoard = defineAsyncComponent(() => import('../components/games/ZhaJinHuaBoard.vue'))
+const GuandanBoard = defineAsyncComponent(() => import('../components/games/GuandanBoard.vue'))
+const DoudizhuBoard = defineAsyncComponent(() => import('../components/games/DoudizhuBoard.vue'))
+const MahjongBoard = defineAsyncComponent(() => import('../components/games/MahjongBoard.vue'))
+const GomokuBoard = defineAsyncComponent(() => import('../components/games/GomokuBoard.vue'))
+const ChessBoard = defineAsyncComponent(() => import('../components/games/ChessBoard.vue'))
 
 const route = useRoute()
 const router = useRouter()

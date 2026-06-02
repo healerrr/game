@@ -1,6 +1,9 @@
 client/node_modules/
 server/node_modules/
 client/dist/
+server/.env
+dump.rdb
+test-artifacts/
 *.log
 *.out.log
 *.err.log

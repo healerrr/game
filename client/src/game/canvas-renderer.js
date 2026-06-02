@@ -181,9 +181,10 @@ class CanvasRenderer {
     ctx.strokeStyle = 'rgba(0,0,0,0.1)'
     ctx.lineWidth = 0.5
     for (let i = 0; i < h; i += 4) {
+      const wobble = Math.sin((i + w + h) * 0.08) * 0.8
       ctx.beginPath()
       ctx.moveTo(x, y + i)
-      ctx.lineTo(x + w, y + i + (Math.random() - 0.5) * 2)
+      ctx.lineTo(x + w, y + i + wobble)
       ctx.stroke()
     }
     // 内部绿色区域
@@ -192,7 +193,6 @@ class CanvasRenderer {
     // 内框阴影
     ctx.shadowColor = 'rgba(0,0,0,0.5)'
     ctx.shadowBlur = 6
-    ctx.shadowInset = true
     ctx.strokeStyle = 'rgba(0,0,0,0.3)'
     ctx.lineWidth = 2
     ctx.strokeRect(x + inner, y + inner, w - inner * 2, h - inner * 2)
@@ -214,13 +214,14 @@ class CanvasRenderer {
     grad.addColorStop(1, '#0d4d2a')
     ctx.fillStyle = grad
     ctx.fillRect(x, y, w, h)
-    // 毡面纹理：随机噪点模拟
-    ctx.globalAlpha = 0.03
-    for (let i = 0; i < 200; i++) {
-      const px = x + Math.random() * w
-      const py = y + Math.random() * h
-      ctx.fillStyle = Math.random() > 0.5 ? '#fff' : '#000'
-      ctx.fillRect(px, py, 1, 1)
+    ctx.globalAlpha = 0.025
+    ctx.fillStyle = '#fff'
+    for (let py = y + 3; py < y + h; py += 18) {
+      ctx.fillRect(x, py, w, 1)
+    }
+    ctx.fillStyle = '#000'
+    for (let px = x + 7; px < x + w; px += 24) {
+      ctx.fillRect(px, y, 1, h)
     }
     ctx.restore()
   }
