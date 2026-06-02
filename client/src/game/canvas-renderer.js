@@ -333,7 +333,7 @@ class CanvasRenderer {
   drawSeatInfo(x, y, options = {}) {
     const ctx = this._ctx
     ctx.save()
-    const { avatar, name = '', count, score, direction = 'bottom', isCurrentTurn = false } = options
+    const { avatar, name = '', count, score, direction = 'bottom', isCurrentTurn = false, status = '' } = options
     const avatarSize = 40
     const labelPadX = 8
     const labelPadY = 4
@@ -384,6 +384,19 @@ class CanvasRenderer {
       this.drawText(infoText, x + avatarSize / 2, infoY, {
         font: '11px sans-serif',
         color: '#ccc',
+        align: 'center',
+        baseline: 'top'
+      })
+    }
+    if (status) {
+      const statusY = infoY + (infoText ? 16 : 0)
+      ctx.font = 'bold 10px sans-serif'
+      const statusW = Math.max(ctx.measureText(status).width + 12, 34)
+      const statusX = x + (avatarSize - statusW) / 2
+      this.drawRoundRect(statusX, statusY, statusW, 16, 8, 'rgba(255, 87, 87, 0.92)', 'rgba(255,255,255,0.42)', 1)
+      this.drawText(status, x + avatarSize / 2, statusY + 3, {
+        font: 'bold 10px sans-serif',
+        color: '#fff',
         align: 'center',
         baseline: 'top'
       })

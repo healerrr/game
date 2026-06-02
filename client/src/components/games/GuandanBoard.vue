@@ -31,6 +31,7 @@
         <div class="my-meta">
           <strong>{{ getPlayerName(props.player?.id) || '我' }}</strong>
           <span>剩余 {{ myHand.length }} 张</span>
+          <span v-if="getPlayerStatusLabel(props.player?.id)" class="connection-pill offline">{{ getPlayerStatusLabel(props.player?.id) }}</span>
           <span v-if="teammateCountText" class="team-count">{{ teammateCountText }}</span>
         </div>
       </div>
@@ -495,6 +496,18 @@ function showToast(text) {
 
 function getPlayerName(pid) {
   return (props.roomPlayers || []).find(i => i.id === pid)?.nickname || (pid ? '玩家' : '')
+}
+
+function getPlayerSummary(pid) {
+  return (props.roomPlayers || []).find(i => i.id === pid) || null
+}
+
+function getPlayerStatusLabel(pid) {
+  const summary = getPlayerSummary(pid)
+  if (!summary) return ''
+  if (summary.intent === 'abandoned') return '托管'
+  if (summary.connection === 'offline') return '掉线'
+  return ''
 }
 
 function playerInitial(pid) {
@@ -1059,7 +1072,8 @@ function drawTable() {
     renderer.drawSeatInfo(seatX, seatY, {
       name: getPlayerName(rs.top.playerId),
       count: getCardCount(rs.top.playerId),
-      isCurrentTurn: props.gs.currentPlayer === rs.top.playerId
+      isCurrentTurn: props.gs.currentPlayer === rs.top.playerId,
+      status: getPlayerStatusLabel(rs.top.playerId)
     })
     const backW = Math.max(16, Math.min(22, W * 0.022))
     const backH = backW * 1.42
@@ -1078,7 +1092,8 @@ function drawTable() {
     renderer.drawSeatInfo(seatX, seatY, {
       name: getPlayerName(rs.left.playerId),
       count: getCardCount(rs.left.playerId),
-      isCurrentTurn: props.gs.currentPlayer === rs.left.playerId
+      isCurrentTurn: props.gs.currentPlayer === rs.left.playerId,
+      status: getPlayerStatusLabel(rs.left.playerId)
     })
     const backW = 26, backH = 17, gap = 3
     const total = Math.min(getCardCount(rs.left.playerId) || 7, 6)
@@ -1094,7 +1109,8 @@ function drawTable() {
     renderer.drawSeatInfo(seatX, seatY, {
       name: getPlayerName(rs.right.playerId),
       count: getCardCount(rs.right.playerId),
-      isCurrentTurn: props.gs.currentPlayer === rs.right.playerId
+      isCurrentTurn: props.gs.currentPlayer === rs.right.playerId,
+      status: getPlayerStatusLabel(rs.right.playerId)
     })
     const backW = 26, backH = 17, gap = 3
     const total = Math.min(getCardCount(rs.right.playerId) || 7, 6)
@@ -1401,6 +1417,21 @@ watch(() => props.gs?.currentPlayer, () => {
 .my-meta { text-align: center; line-height: 1.2; }
 .my-meta strong { display: block; font-size: 12px; color: #e0e0e0; }
 .my-meta span { font-size: 10px; color: #8fbc8f; }
+.my-meta .connection-pill {
+  display: inline-block;
+  width: fit-content;
+  margin-top: 3px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+.my-meta .connection-pill.offline {
+  background: rgba(255, 105, 96, 0.18);
+  color: #ffb3ad;
+  border: 1px solid rgba(255, 105, 96, 0.42);
+}
 .my-meta .team-count {
   display: inline-block;
   margin-top: 3px;

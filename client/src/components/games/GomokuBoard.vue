@@ -48,12 +48,11 @@
                 :key="`${cell.x}-${cell.y}`"
                 type="button"
                 class="intersection"
-                :class="{ disabled: !canPlace(cell), pending: isPendingCell(cell) }"
+                :class="{ disabled: !canPlace(cell) }"
                 :style="pointStyle(cell)"
                 :disabled="!canPlace(cell)"
               >
                 <span v-if="cell.value === 0 && isStarCell(cell)" class="star-dot"></span>
-                <span v-if="isPendingCell(cell)" class="pending-piece" :class="myPiece === 1 ? 'black' : 'white'"></span>
                 <span v-if="cell.value !== 0" class="piece" :class="cell.value === 1 ? 'black' : 'white'"></span>
                 <span v-if="isLastMoveCell(cell)" class="last-dot"></span>
               </button>
@@ -104,7 +103,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 
 const props = defineProps({
   gs: { type: Object, default: () => ({}) },
@@ -114,10 +113,9 @@ const props = defineProps({
 
 const emit = defineEmits(['action', 'back', 'forfeit', 'rematch'])
 
-const BOARD_SIZE = 15
-const STAR_POINTS = new Set(['3,3', '3,7', '3,11', '7,3', '7,7', '7,11', '11,3', '11,7', '11,11'])
+const BOARD_SIZE = 14
+const STAR_POINTS = new Set(['3,3', '3,10', '10,3', '10,10'])
 const toast = ref('')
-const pendingCell = ref(null)
 
 let toastTimer = null
 
@@ -175,8 +173,7 @@ const resultDetail = computed(() => {
 })
 
 const boardAssistLabel = computed(() => {
-  if (pendingCell.value) return `待落 ${toCoord(pendingCell.value.x, pendingCell.value.y)} · 再点确认`
-  return '轻点预览，再点确认'
+  return '点击空位直接落子'
 })
 
 const cells = computed(() => {
@@ -198,16 +195,6 @@ onBeforeUnmount(() => {
     clearTimeout(toastTimer)
   }
 })
-
-watch(
-  () => [props.gs?.currentPlayer, moveCount.value, props.gs?.phase],
-  () => {
-    if (!pendingCell.value) return
-    if (!isMyTurn.value || cellValue(pendingCell.value.x, pendingCell.value.y) !== 0) {
-      pendingCell.value = null
-    }
-  }
-)
 
 function toCoord(x, y) {
   return `${String.fromCharCode(65 + x)}${y + 1}`
@@ -239,24 +226,6 @@ function placeAt(cell) {
     return
   }
 
-  if (!pendingCell.value || pendingCell.value.x !== cell.x || pendingCell.value.y !== cell.y) {
-    pendingCell.value = { x: cell.x, y: cell.y }
-    showToast(`已选 ${toCoord(cell.x, cell.y)}，再次点击确认`)
-    return
-  }
-
-  confirmPendingMove()
-}
-
-function confirmPendingMove() {
-  if (!pendingCell.value) return
-  const cell = { ...pendingCell.value }
-  if (!canPlace(cell)) {
-    pendingCell.value = null
-    return
-  }
-
-  pendingCell.value = null
   emit('action', { type: 'place', x: cell.x, y: cell.y })
 }
 
@@ -276,11 +245,6 @@ function handleBoardPointer(event) {
 function isLastMoveCell(cell) {
   if (!lastMove.value) return false
   return lastMove.value.x === cell.x && lastMove.value.y === cell.y
-}
-
-function isPendingCell(cell) {
-  if (!pendingCell.value) return false
-  return pendingCell.value.x === cell.x && pendingCell.value.y === cell.y
 }
 
 function isStarCell(cell) {
@@ -502,8 +466,8 @@ function showToast(text) {
   inset: var(--grid-pad);
   overflow: visible;
   background:
-    linear-gradient(to right, rgba(139, 103, 42, 0.72) 0 1px, transparent 1px) 0 0 / calc(100% / 14) 100% repeat-x,
-    linear-gradient(to bottom, rgba(139, 103, 42, 0.72) 0 1px, transparent 1px) 0 0 / 100% calc(100% / 14) repeat-y;
+    linear-gradient(to right, rgba(139, 103, 42, 0.72) 0 1px, transparent 1px) 0 0 / calc(100% / 13) 100% repeat-x,
+    linear-gradient(to bottom, rgba(139, 103, 42, 0.72) 0 1px, transparent 1px) 0 0 / 100% calc(100% / 13) repeat-y;
   border: 1px solid rgba(139, 103, 42, 0.72);
   cursor: pointer;
   touch-action: manipulation;
@@ -530,7 +494,6 @@ function showToast(text) {
 
 .piece,
 .star-dot,
-.pending-piece,
 .last-dot {
   position: absolute;
   top: 50%;
@@ -550,25 +513,6 @@ function showToast(text) {
 }
 
 .piece.white {
-  background: radial-gradient(circle at 30% 30%, #ffffff, #dadada 72%);
-  border: 1px solid rgba(168, 168, 168, 0.9);
-}
-
-.pending-piece {
-  width: 62%;
-  height: 62%;
-  border-radius: 50%;
-  opacity: 0.48;
-  box-shadow:
-    0 0 0 3px rgba(31, 107, 255, 0.26),
-    0 4px 10px rgba(8, 58, 140, 0.2);
-}
-
-.pending-piece.black {
-  background: radial-gradient(circle at 30% 30%, #666, #1a1a1a 72%);
-}
-
-.pending-piece.white {
   background: radial-gradient(circle at 30% 30%, #ffffff, #dadada 72%);
   border: 1px solid rgba(168, 168, 168, 0.9);
 }

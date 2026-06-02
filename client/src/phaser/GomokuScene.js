@@ -4,7 +4,7 @@ import { PhaserGameScene, BoardGraphics, PieceGraphics, AnimationUtils } from '.
 export class GomokuScene extends PhaserGameScene {
   constructor() {
     super({ key: 'GomokuScene' })
-    this.boardSize = 15
+    this.boardSize = 14
     this.cellSize = 34
     this.boardOffset = { x: 0, y: 0 }
     this.pieces = []
@@ -86,7 +86,7 @@ export class GomokuScene extends PhaserGameScene {
       graphics.lineBetween(offset.x, offset.y + i * cellSize, offset.x + (this.boardSize - 1) * cellSize, offset.y + i * cellSize)
     }
     
-    const starPoints = [3, 7, 11]
+    const starPoints = [3, 10]
     graphics.fillStyle(0x8B7355, 0.8)
     for (const x of starPoints) {
       for (const y of starPoints) {

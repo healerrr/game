@@ -114,7 +114,7 @@ export class CardGraphics {
 }
 
 export class BoardGraphics {
-  static createGomokuBoardTexture(scene, size = 480, gridSize = 15) {
+  static createGomokuBoardTexture(scene, size = 480, gridSize = 14) {
     const textureKey = 'gomoku_board'
     
     if (scene.textures.exists(textureKey)) {
@@ -135,7 +135,7 @@ export class BoardGraphics {
       graphics.lineBetween(0, pos, size, pos)
     }
     
-    const starPoints = [3, 7, 11]
+    const starPoints = [3, 10]
     graphics.fillStyle(0x8B6914, 1)
     for (const x of starPoints) {
       for (const y of starPoints) {

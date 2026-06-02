@@ -120,3 +120,39 @@ test('象棋忽略悔棋动作', () => {
   assert.equal(state.moveHistory.length, 1);
   assert.equal(state.currentPlayer, COLORS.BLACK);
 });
+
+test('chess draw offer finishes as draw when opponent accepts', () => {
+  const engine = new ChessEngine();
+  const state = engine.init(null, ['p1', 'p2']);
+
+  engine.update(state, { type: 'offer_draw' }, 'p1');
+
+  assert.equal(state.phase, 'playing');
+  assert.equal(state.drawOffer.playerId, 'p1');
+  assert.equal(state.drawOffer.color, COLORS.RED);
+
+  engine.update(state, { type: 'offer_draw' }, 'p2');
+
+  assert.equal(state.phase, 'finished');
+  assert.equal(state.winner, 'draw');
+  assert.equal(state.finalWinner, 'draw');
+  assert.deepEqual(state.winningPlayers, []);
+  assert.equal(state.drawOffer, null);
+});
+
+test('chess winner keeps color display and player id settlement winner', () => {
+  const engine = new ChessEngine();
+  const state = engine.init(null, ['p1', 'p2']);
+  state.board = emptyChessBoard();
+  state.board[9][4] = { type: PIECE_TYPES.KING, color: COLORS.RED };
+  state.board[1][4] = { type: PIECE_TYPES.ROOK, color: COLORS.RED };
+  state.board[0][4] = { type: PIECE_TYPES.KING, color: COLORS.BLACK };
+  state.currentPlayer = COLORS.RED;
+
+  engine.update(state, { type: 'move', fromRow: 1, fromCol: 4, row: 0, col: 4 }, 'p1');
+
+  assert.equal(state.phase, 'finished');
+  assert.equal(state.winner, COLORS.RED);
+  assert.equal(state.finalWinner, 'p1');
+  assert.deepEqual(state.winningPlayers, ['p1']);
+});

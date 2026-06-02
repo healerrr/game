@@ -289,6 +289,10 @@ class ChessEngine {
       lastMove: null,
       capturedPieces: { [COLORS.RED]: [], [COLORS.BLACK]: [] },
       winner: null,
+      finalWinner: null,
+      winningPlayers: [],
+      drawOffer: null,
+      drawAgreed: null,
       moveHistory: [],
       timer: 60,
       timerStarted: Date.now()
@@ -302,6 +306,34 @@ class ChessEngine {
     const playerIndex = state.players.indexOf(playerId);
     if (playerIndex === -1) return state;
     const playerColor = playerIndex === 0 ? COLORS.RED : COLORS.BLACK;
+
+    if (action.type === 'offer_draw') {
+      if (state.drawOffer?.playerId && state.drawOffer.playerId !== playerId) {
+        state.phase = 'finished';
+        state.winner = 'draw';
+        state.finalWinner = 'draw';
+        state.winningPlayers = [];
+        state.drawAgreed = {
+          offeredBy: state.drawOffer.playerId,
+          offeredColor: state.drawOffer.color,
+          acceptedBy: playerId,
+          acceptedColor: playerColor,
+          acceptedAt: Date.now()
+        };
+        state.drawOffer = null;
+        state.selectedPiece = null;
+      } else {
+        state.drawOffer = { playerId, color: playerColor, offeredAt: Date.now() };
+      }
+      return state;
+    }
+
+    if (action.type === 'decline_draw') {
+      if (state.drawOffer?.playerId && state.drawOffer.playerId !== playerId) {
+        state.drawOffer = null;
+      }
+      return state;
+    }
 
     // Only allow current player's color to move
     if (state.currentPlayer !== playerColor) return state;
@@ -340,6 +372,8 @@ class ChessEngine {
         if (captured.type === PIECE_TYPES.KING) {
           state.phase = 'finished';
           state.winner = playerColor;
+          state.finalWinner = playerId;
+          state.winningPlayers = [playerId];
         }
       }
       
@@ -354,6 +388,7 @@ class ChessEngine {
         color: playerColor
       });
       state.selectedPiece = null;
+      state.drawOffer = null;
       
       if (state.phase === 'playing') {
         state.currentPlayer = playerColor === COLORS.RED ? COLORS.BLACK : COLORS.RED;
@@ -361,6 +396,8 @@ class ChessEngine {
         if (!hasAnyLegalMove(state.board, state.currentPlayer)) {
           state.phase = 'finished';
           state.winner = playerColor;
+          state.finalWinner = playerId;
+          state.winningPlayers = [playerId];
         }
       }
       

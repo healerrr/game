@@ -1,4 +1,4 @@
-const BOARD_SIZE = 15;
+const BOARD_SIZE = 14;
 const EMPTY = 0;
 const BLACK = 1;
 const WHITE = 2;

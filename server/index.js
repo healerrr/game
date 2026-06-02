@@ -846,6 +846,21 @@ function isPlayerOfflinePastGrace(room, playerId) {
   return Date.now() - disconnectedAt >= DISCONNECT_GRACE_MS;
 }
 
+function isPlayerAutoManaged(room, playerId) {
+  const player = store.getPlayer(playerId);
+  const seat = room?.seatStates?.[playerId] || {};
+  return seat.intent === 'abandoned' || seat.connection === 'offline' || player?.online === false;
+}
+
+function getUncontrolledGuandanPlayers(room) {
+  if (room?.gameType !== 'guandan') return [];
+  return room.players.filter((pid) => {
+    const player = store.getPlayer(pid);
+    if (player?.isBot) return false;
+    return isPlayerAutoManaged(room, pid);
+  });
+}
+
 function getUnavailablePlayerIds(room) {
   const result = new Set();
   for (const pid of room.players) {
@@ -872,6 +887,7 @@ function getNextAvailablePlayer(players, currentPlayer, unavailable, finishedOrd
 
 function skipUnavailableTurns(room) {
   if (!isTwoVsTwoRoom(room) || room.status !== 'playing' || !room.gameState) return false;
+  if (room.gameType === 'guandan') return false;
 
   const state = room.gameState;
   const unavailable = getUnavailablePlayerIds(room);
@@ -997,6 +1013,11 @@ function hasStateTimerExpired(state) {
 }
 
 function persistRoomProgress(room) {
+  if (finalizeGuandanDisconnectedRound(room)) {
+    handleGameEnd(room);
+    return;
+  }
+
   if (room.gameState?.phase === 'finished') {
     handleGameEnd(room);
     return;
@@ -1007,6 +1028,11 @@ function persistRoomProgress(room) {
 
 function maybeAdvanceTimedPhase(room) {
   const state = room.gameState;
+  if (finalizeGuandanDisconnectedRound(room)) {
+    handleGameEnd(room);
+    return true;
+  }
+
   if (!hasStateTimerExpired(state)) return false;
 
   const engine = getEngine(room.gameType);
@@ -1052,12 +1078,31 @@ function getAutoMahjongAction(state, playerId) {
 
 function getAutoGuandanAction(state, playerId) {
   if (state.currentPlayer !== playerId) return null;
-  if (state.lastPattern && state.lastLeadPlayer !== playerId) {
-    return { type: 'pass' };
-  }
+  const strategyAction = BotStrategy.guandan(state, playerId);
+  if (strategyAction) return strategyAction;
 
   const hand = state.hands?.[playerId] || [];
   return hand[0] ? { type: 'play', cards: [hand[0]] } : null;
+}
+
+function finalizeGuandanDisconnectedRound(room) {
+  const state = room?.gameState;
+  if (room?.gameType !== 'guandan' || room.status !== 'playing' || state?.phase !== 'round_finished') {
+    return false;
+  }
+
+  const offlinePlayers = getUncontrolledGuandanPlayers(room);
+  if (offlinePlayers.length === 0) return false;
+
+  state.phase = 'finished';
+  state.stage = 'settlement';
+  state.offlineSettlement = {
+    reason: 'offline_after_round',
+    offlinePlayers,
+    settledAt: Date.now()
+  };
+  state.timerStarted = Date.now();
+  return true;
 }
 
 function getAutoDoudizhuAction(state, playerId) {
@@ -1153,7 +1198,8 @@ function handleActionTimeout(room) {
 
   const timeoutExpired = hasStateTimerExpired(state);
   const offlineExpired = isPlayerOfflinePastGrace(room, loserId);
-  if (!timeoutExpired && !offlineExpired) return;
+  const autoManagedNow = room.gameType === 'guandan' && isPlayerAutoManaged(room, loserId);
+  if (!timeoutExpired && !offlineExpired && !autoManagedNow) return;
 
   if (room.players.length === 2 && shouldForfeitOnTimeout(room.gameType)) {
     forfeitPlayer(room, loserId, offlineExpired ? 'disconnect_timeout' : 'action_timeout');
@@ -1411,7 +1457,7 @@ function settleGuandan(room, winningPlayers) {
   const loserTeam = Object.keys(teams).find(key => key !== winnerTeam);
   const winnerLevel = room.gameState?.teamLevels?.[winnerTeam] || room.gameState?.settlement?.nextLevel || '1';
   const loserLevel = room.gameState?.teamLevels?.[loserTeam] || '2';
-  const levelBonus = Math.max(0, getLevelScore(winnerLevel) - getLevelScore(loserLevel)) * 10;
+  const levelBonus = Math.max(0, getLevelScore(winnerLevel) - getLevelScore(loserLevel)) * 20;
   const payoutDelta = entryFee + levelBonus;
 
   room.players.forEach(pid => {

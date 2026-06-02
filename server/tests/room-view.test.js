@@ -76,6 +76,84 @@ test('quick Guandan room timeout auto-passes instead of stalling at zero', () =>
   assert.equal(room.gameState.currentPlayer, 'p2');
 });
 
+test('offline Guandan player is auto-managed immediately', () => {
+  const room = makeGuandanRoom();
+  room.id = 'room-offline-auto';
+  room.mode = 'normal';
+  room.gameState.currentPlayer = 'p1';
+  room.gameState.lastLeadPlayer = 'p4';
+  room.gameState.lastPattern = { type: 'single', mainValue: 12, length: 1 };
+  room.gameState.lastPlay = { playerId: 'p4', cards: [room.gameState.hands.p4[3]], pattern: room.gameState.lastPattern };
+  room.gameState.timer = 30;
+  room.gameState.timerStarted = Date.now();
+  room.seatStates.p1 = { connection: 'offline', intent: 'active', disconnectedAt: Date.now() };
+  const p1 = store.getPlayer('p1');
+  p1.online = false;
+  p1.currentRoom = room.id;
+  store.savePlayer(p1);
+
+  handleActionTimeout(room);
+
+  assert.deepEqual(room.gameState.passedPlayers, ['p1']);
+  assert.equal(room.gameState.currentPlayer, 'p2');
+});
+
+test('offline Guandan room settles after current hand with level gap x20', () => {
+  const room = makeGuandanRoom();
+  room.id = 'room-offline-settle';
+  room.mode = 'normal';
+  room.status = 'playing';
+  room.seatStates = Object.fromEntries(room.players.map(pid => [pid, { connection: 'online', intent: 'active' }]));
+  room.players.forEach((pid, index) => {
+    const player = store.getPlayer(pid);
+    Object.assign(player, {
+      online: true,
+      currentRoom: room.id,
+      points: 1000,
+      totalGames: 0,
+      wins: 0,
+      winStreak: 0,
+      lossStreak: 0,
+      busNumber: index + 1
+    });
+    store.savePlayer(player);
+  });
+
+  room.gameState.hands = {
+    p1: [],
+    p2: [],
+    p3: [card('3', 'spade', 3)],
+    p4: [card('4', 'spade', 4), card('5', 'spade', 5)]
+  };
+  room.gameState.handCounts = { p1: 0, p2: 0, p3: 1, p4: 2 };
+  room.gameState.finishedOrder = ['p1', 'p2'];
+  room.gameState.currentPlayer = 'p3';
+  room.gameState.teamLevels = { south_north: '5', east_west: '3' };
+  room.gameState.level = '5';
+  room.gameState.lastPlay = null;
+  room.gameState.lastPattern = null;
+  room.gameState.lastLeadPlayer = null;
+  room.gameState.timer = 30;
+  room.gameState.timerStarted = Date.now();
+  room.seatStates.p3 = { connection: 'offline', intent: 'active', disconnectedAt: Date.now() };
+  const p3 = store.getPlayer('p3');
+  p3.online = false;
+  p3.currentRoom = room.id;
+  store.savePlayer(p3);
+  store.saveRoom(room);
+
+  handleActionTimeout(room);
+
+  assert.equal(room.status, 'finished');
+  assert.equal(room.gameState.phase, 'finished');
+  assert.deepEqual(room.gameState.winningPlayers, ['p1', 'p3']);
+  assert.equal(room.gameState.offlineSettlement.reason, 'offline_after_round');
+  assert.equal(store.getPlayer('p1').points, 1180);
+  assert.equal(store.getPlayer('p3').points, 1180);
+  assert.equal(store.getPlayer('p2').points, 820);
+  assert.equal(store.getPlayer('p4').points, 820);
+});
+
 test('Guandan rematch waits for all players and starts a new match from 2', () => {
   const room = makeGuandanRoom();
   room.id = 'room-rematch';
