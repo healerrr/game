@@ -629,6 +629,9 @@ function getLegalMoves(stateBoard, row, col) {
 
 <style scoped>
 .chess-board {
+  width: min(100%, 940px);
+  margin: 0 auto;
+  padding-bottom: calc(18px + env(safe-area-inset-bottom));
   display: flex;
   flex-direction: column;
   gap: 12px;

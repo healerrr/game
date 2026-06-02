@@ -113,59 +113,62 @@
         </div>
       </section>
 
-      <div class="zjh-toolbar">
-        <button class="tool-pill">游戏规则</button>
-        <button class="tool-pill">排行榜</button>
-        <button class="tool-pill">聊天</button>
-        <button class="tool-pill" @click="$emit('back')">退出游戏</button>
-      </div>
-
       <!-- 操作按钮区域 -->
       <div v-if="gs.phase === 'look'" class="action-bar">
         <div class="waiting-text">正在进入下注阶段...</div>
       </div>
 
       <div v-else-if="gs.phase === 'bet'" class="action-bar">
-        <div class="cost-display">
-          <span>跟注 {{ callCost }}</span>
-          <span>加注 {{ raiseCost }}</span>
-          <span>比牌 {{ compareCost }}</span>
-          <span>剩余 {{ remainingPoints }}</span>
+        <div v-if="hasFolded" class="folded-out-panel">
+          <strong>你已弃牌</strong>
+          <span>本局输分已结算，可以直接重新匹配或返回大厅</span>
+          <div class="folded-actions">
+            <button class="btn btn-primary" @click="$emit('rematch')">再来一局</button>
+            <button class="btn btn-secondary" @click="$emit('back')">返回大厅</button>
+          </div>
         </div>
-        
-        <div v-if="gs.currentPlayer === player?.id && !gs.foldedPlayers?.includes(player?.id)" class="action-buttons">
-          <button v-if="canPeekNow" class="btn btn-peek" :disabled="peekPending" @click="peekMyCards">
-            {{ peekPending ? '看牌中' : '看牌' }}
-          </button>
-          <button class="btn btn-fold" @click="$emit('action', { type: 'fold' })">
-            弃牌
-          </button>
-          <button class="btn btn-call" :disabled="!canCall" @click="$emit('action', { type: 'call' })">
-            {{ canCall ? '跟注' : '积分不足' }}
-          </button>
-          <button class="btn btn-raise" :disabled="!canRaise" @click="$emit('action', { type: 'raise' })">
-            {{ canRaise ? '加注' : '不能加注' }}
-          </button>
-          <button class="btn btn-compare" :disabled="!canCompare || !activeOpponents.length" @click="showCompare = !showCompare">
-            {{ canCompare ? '比牌' : '积分不足' }}
-          </button>
-        </div>
-        
-        <div v-else class="waiting-text">
-          {{ gs.foldedPlayers?.includes(player?.id) ? '你已弃牌' : `等待 ${getPlayerName(gs.currentPlayer)} 操作...` }}
-        </div>
+        <template v-else>
+          <div class="cost-display">
+            <span>跟注 {{ callCost }}</span>
+            <span>加注 {{ raiseCost }}</span>
+            <span>比牌 {{ compareCost }}</span>
+            <span>剩余 {{ remainingPoints }}</span>
+          </div>
+          
+          <div v-if="gs.currentPlayer === player?.id" class="action-buttons">
+            <button v-if="canPeekNow" class="btn btn-peek" :disabled="peekPending" @click="peekMyCards">
+              {{ peekPending ? '看牌中' : '看牌' }}
+            </button>
+            <button class="btn btn-fold" @click="foldCards">
+              弃牌
+            </button>
+            <button class="btn btn-call" :disabled="!canCall" @click="$emit('action', { type: 'call' })">
+              {{ canCall ? '跟注' : '积分不足' }}
+            </button>
+            <button class="btn btn-raise" :disabled="!canRaise" @click="$emit('action', { type: 'raise' })">
+              {{ canRaise ? '加注' : '不能加注' }}
+            </button>
+            <button class="btn btn-compare" :disabled="!canCompare || !activeOpponents.length" @click="showCompare = !showCompare">
+              {{ canCompare ? '比牌' : '积分不足' }}
+            </button>
+          </div>
+          
+          <div v-else class="waiting-text">
+            {{ `等待 ${getPlayerName(gs.currentPlayer)} 操作...` }}
+          </div>
 
-        <div v-if="showCompare && activeOpponents.length" class="compare-panel">
-          <button
-            v-for="pid in activeOpponents"
-            :key="pid"
-            class="btn btn-compare-target"
-            :disabled="!canCompare"
-            @click="compareWith(pid)"
-          >
-            比 {{ getPlayerName(pid) }}
-          </button>
-        </div>
+          <div v-if="showCompare && activeOpponents.length" class="compare-panel">
+            <button
+              v-for="pid in activeOpponents"
+              :key="pid"
+              class="btn btn-compare-target"
+              :disabled="!canCompare"
+              @click="compareWith(pid)"
+            >
+              比 {{ getPlayerName(pid) }}
+            </button>
+          </div>
+        </template>
       </div>
 
       <!-- 结算面板 -->
@@ -283,6 +286,12 @@ function compareWith(pid) {
   if (!canCompare.value) return
   showCompare.value = false
   emit('action', { type: 'compare', targetId: pid })
+}
+
+function foldCards() {
+  if (hasFolded.value) return
+  showCompare.value = false
+  emit('action', { type: 'fold' })
 }
 
 function peekMyCards() {
@@ -2989,6 +2998,43 @@ const handTypeLabel = computed(() => {
   font-size: 14px;
   font-weight: 900;
   text-align: center;
+}
+
+.folded-out-panel {
+  width: 100%;
+  min-height: 118px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+  place-items: center;
+  border: 1px solid #d8e9fb;
+  border-radius: 18px;
+  background: linear-gradient(180deg, #fffaf0, #f5fbff);
+  color: #35537f;
+  text-align: center;
+}
+
+.folded-out-panel strong {
+  color: #163f8f;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.folded-out-panel span {
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+.folded-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.folded-actions .btn {
+  min-height: 48px;
 }
 
 .result-panel {

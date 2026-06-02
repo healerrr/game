@@ -6,7 +6,8 @@
       'quiz-layout': gameType === 'quiz',
       'rps-layout': gameType === 'rock_paper_scissors',
       'guess-layout': gameType === 'guess_number',
-      'board-layout': ['gomoku', 'chess', 'zha_jin_hua', 'undercover'].includes(gameType)
+      'board-layout': ['gomoku', 'chess', 'zha_jin_hua', 'undercover'].includes(gameType),
+      'chess-layout': gameType === 'chess'
     }"
   >
     <header class="game-header">
@@ -436,6 +437,8 @@ const inviteCandidates = ref([])
 const inviteLoading = ref(false)
 const inviteSearchText = ref('')
 const confirmDialog = ref({ visible: false, title: '确认操作', message: '' })
+const zhaJinHuaFoldedOut = ref(false)
+const zhaJinHuaFoldedGameType = ref('')
 
 let timerInterval = null
 let readyInterval = null
@@ -458,6 +461,7 @@ const isActivePlayingRoom = computed(() => currentRoom.value?.status === 'playin
 const showOpponentDisconnected = computed(() => opponentDisconnected.value && isActivePlayingRoom.value)
 const isFullscreenGame = computed(() => ['guandan', 'doudizhu', 'mahjong'].includes(gameType.value))
 const isReadyRoom = computed(() => currentRoom.value?.status === 'readying' || (!gs.value?.phase && currentRoom.value?.status !== 'playing'))
+const isZhaJinHuaFoldedOut = computed(() => zhaJinHuaFoldedOut.value && (zhaJinHuaFoldedGameType.value || gameType.value) === 'zha_jin_hua')
 const myReady = computed(() => Boolean(currentRoom.value?.ready?.[player.value?.id] || roomPlayers.value.find(item => item.id === player.value?.id)?.ready))
 const readyButtonText = computed(() => {
   if (readySubmitting.value) return myReady.value ? '已准备' : '取消中...'
@@ -631,7 +635,27 @@ function quizNextRound() {
 }
 
 function emitGameAction(action) {
-  socket.emit('game:action', { action })
+  socket.emit('game:action', { action }, (res) => {
+    if (res?.error) {
+      alert(res.error)
+      return
+    }
+
+    if (res?.foldedOut) {
+      zhaJinHuaFoldedOut.value = true
+      zhaJinHuaFoldedGameType.value = res.room?.gameType || gameType.value || 'zha_jin_hua'
+      if (res.room) {
+        gameState.currentRoom = res.room
+      }
+      if (res.gameState) {
+        gameState.currentGame = res.gameState
+        gs.value = res.gameState
+      }
+      if (gameState.player && res.player?.id === gameState.player.id) {
+        gameState.player.points = res.player.points
+      }
+    }
+  })
 }
 
 async function forfeitGame() {
@@ -746,7 +770,23 @@ function enterQuickPlayRoom(data) {
 }
 
 async function rematch() {
-  if (!player.value || !gameType.value) return
+  const activeGameType = zhaJinHuaFoldedGameType.value || gameType.value
+  if (!player.value || !activeGameType) return
+  if (isZhaJinHuaFoldedOut.value && getPlayMode() !== 'test') {
+    const targetGameType = activeGameType || 'zha_jin_hua'
+    socket.emit('match:join', { gameType: targetGameType }, (res) => {
+      if (res?.error) {
+        alert(res.error)
+        return
+      }
+      zhaJinHuaFoldedOut.value = false
+      zhaJinHuaFoldedGameType.value = ''
+      gameState.currentRoom = null
+      gameState.currentGame = null
+      router.push({ path: '/lobby', query: { matching: targetGameType } })
+    })
+    return
+  }
   if (getPlayMode() !== 'test') {
     const targetRoomId = currentRoom.value?.roomId || currentRoom.value?.id || roomId.value
     socket.emit('game:rematch', { roomId: targetRoomId }, (res) => {
@@ -755,7 +795,7 @@ async function rematch() {
         return
       }
       if (res?.requeued) {
-        router.push({ path: '/lobby', query: { matching: res.gameType || gameType.value } })
+        router.push({ path: '/lobby', query: { matching: res.gameType || activeGameType } })
         return
       }
       if (res?.room) {
@@ -807,6 +847,15 @@ function clearOpponentDisconnectedNotice() {
 }
 
 async function backToLobby() {
+  if (isZhaJinHuaFoldedOut.value) {
+    zhaJinHuaFoldedOut.value = false
+    zhaJinHuaFoldedGameType.value = ''
+    gameState.currentRoom = null
+    gameState.currentGame = null
+    router.push('/lobby')
+    return
+  }
+
   const room = currentRoom.value
   if (!room?.roomId) {
     router.push('/lobby')
@@ -868,6 +917,8 @@ onMounted(() => {
   window.addEventListener('room:update', roomUpdateHandler)
 
   roomStartedHandler = (event) => {
+    zhaJinHuaFoldedOut.value = false
+    zhaJinHuaFoldedGameType.value = ''
     gameState.currentRoom = event.detail
     gameState.currentGame = event.detail.gameState
     gs.value = event.detail.gameState || {}
@@ -923,6 +974,8 @@ onMounted(() => {
   window.addEventListener('room:abandoned', abandonedHandler)
 
   matchedHandler = (event) => {
+    zhaJinHuaFoldedOut.value = false
+    zhaJinHuaFoldedGameType.value = ''
     const room = event.detail
     gameState.currentRoom = room
     gameState.currentGame = room.gameState
@@ -989,6 +1042,8 @@ watch(() => gs.value?.phase, (phase) => {
 
 watch(() => roomId.value, () => {
   opponentDisconnected.value = false
+  zhaJinHuaFoldedOut.value = false
+  zhaJinHuaFoldedGameType.value = ''
 })
 </script>
 
@@ -2225,6 +2280,13 @@ watch(() => roomId.value, () => {
   --game-header-space: 54px;
 }
 
+.game-room.chess-layout {
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(18px + env(safe-area-inset-bottom));
+}
+
 .game-room.rps-layout .game-header,
 .game-room.guess-layout .game-header,
 .game-room.quiz-layout .game-header,
@@ -2491,6 +2553,10 @@ watch(() => roomId.value, () => {
   .game-room.guess-layout,
   .game-room.board-layout {
     padding: 0 8px 8px;
+  }
+
+  .game-room.chess-layout {
+    padding-bottom: calc(18px + env(safe-area-inset-bottom));
   }
 
   .game-room.quiz-layout .game-header,

@@ -474,42 +474,59 @@ io.on('connection', (socket) => {
   });
 
   // 游戏操作
-  socket.on('game:action', async ({ action }) => {
-    if (!currentPlayer) return;
+  socket.on('game:action', async ({ action } = {}, callback) => {
+    if (!currentPlayer) return callback?.({ error: '请先注册' });
+    if (!action?.type) return callback?.({ error: '操作无效' });
 
     let room = store.getPlayerRoom(currentPlayer.id);
-    if (!room) return;
+    if (!room) return callback?.({ error: '你不在对局中' });
 
     const lock = await store.acquireLock(`room:${room.id}`, 3000);
-    if (!lock) return;
+    if (!lock) return callback?.({ error: '房间正忙，请稍后再试' });
 
     try {
       room = store.getPlayerRoom(currentPlayer.id) || room;
 
-    const engine = getEngine(room.gameType);
-    if (!engine) return;
-    if (room.status !== 'playing') return;
+      const engine = getEngine(room.gameType);
+      if (!engine) return callback?.({ error: '游戏不可用' });
+      if (room.status !== 'playing') return callback?.({ error: '当前对局尚未开始' });
 
-    markSeatConnection(room, currentPlayer.id, 'online', { intent: 'active' });
+      markSeatConnection(room, currentPlayer.id, 'online', { intent: 'active' });
+      const shouldSettleZhaJinHuaFold = room.gameType === 'zha_jin_hua' && action.type === 'fold';
 
-    // 处理 'next_round' 操作
-    if (action.type === 'next_round') {
-      if (engine.nextRound) {
-        room.gameState = engine.nextRound(room.gameState);
+      // 处理 'next_round' 操作
+      if (action.type === 'next_round') {
+        if (engine.nextRound) {
+          room.gameState = engine.nextRound(room.gameState);
+        }
+      } else if (room.status === 'playing') {
+        room.gameState = engine.update(room.gameState, action, currentPlayer.id);
       }
-    } else if (room.status === 'playing') {
-      room.gameState = engine.update(room.gameState, action, currentPlayer.id);
-    }
-    skipUnavailableTurns(room);
-    store.saveRoom(room);
+      skipUnavailableTurns(room);
+      store.saveRoom(room);
 
-    // 广播游戏状态更新到房间
-    emitGameState(room);
+      // 广播游戏状态更新到房间
+      emitGameState(room);
 
-    // 游戏结束
-    if (room.gameState.phase === 'finished') {
-      handleGameEnd(room);
-    }
+      // 游戏结束
+      if (room.gameState.phase === 'finished') {
+        handleGameEnd(room);
+        callback?.({ success: true });
+        return;
+      }
+
+      if (shouldSettleZhaJinHuaFold && room.gameState?.foldedPlayers?.includes(currentPlayer.id)) {
+        const foldedOut = settleZhaJinHuaFoldedPlayer(room, currentPlayer.id, socket);
+        if (foldedOut) {
+          callback?.({ success: true, foldedOut: true, ...foldedOut });
+          return;
+        }
+      }
+
+      callback?.({ success: true });
+    } catch (error) {
+      console.error('[game:action]', error);
+      callback?.({ error: '操作失败，请稍后重试' });
     } finally {
       await lock.release();
     }
@@ -1229,6 +1246,82 @@ function forfeitPlayer(room, loserId, reason) {
   handleGameEnd(room);
 }
 
+function getZhaJinHuaFoldLoss(room, playerId) {
+  const config = getGameConfig('zha_jin_hua');
+  const entryFee = Number(config?.entryFee || 0);
+  const committed = Number(room.gameState?.playerBets?.[playerId] || 0);
+  const baseScore = Number(room.gameState?.baseScore || room.gameState?.baseBet || room.gameState?.currentBet || 0);
+  const loss = committed || baseScore || entryFee;
+  return Number.isFinite(loss) && loss > 0 ? loss : 0;
+}
+
+function settleZhaJinHuaFoldedPlayer(room, playerId, socket = null) {
+  if (!room || room.gameType !== 'zha_jin_hua' || room.status !== 'playing') return null;
+  if (room.gameState?.phase === 'finished') return null;
+  if (!room.gameState?.foldedPlayers?.includes(playerId)) return null;
+
+  const player = store.getPlayer(playerId);
+  if (!player) return null;
+
+  room.gameState.earlySettledPlayers = room.gameState.earlySettledPlayers || {};
+  const existing = room.gameState.earlySettledPlayers[playerId];
+  if (!existing) {
+    const pointsBefore = Number(player.points || 0);
+    const loss = getZhaJinHuaFoldLoss(room, playerId);
+    room.gameState.earlySettledPlayers[playerId] = {
+      amount: loss,
+      reason: 'fold',
+      settledAt: Date.now()
+    };
+
+    store.recordGame(playerId, false);
+    store.updatePoints(playerId, -loss, 'game_settlement', {
+      roomId: room.id,
+      gameType: room.gameType,
+      won: false,
+      foldedEarly: true
+    });
+
+    const updatedPlayer = store.getPlayer(playerId) || player;
+    store.recordGameRecord({
+      playerId,
+      roomId: room.id,
+      gameType: room.gameType,
+      gameName: getGameConfig(room.gameType)?.name || room.gameType,
+      result: 'loss',
+      scoreDelta: Number(updatedPlayer.points || 0) - pointsBefore,
+      pointsBefore,
+      pointsAfter: Number(updatedPlayer.points || 0),
+      opponents: room.players.filter(pid => pid !== playerId).map(buildBattlePlayerSummary),
+      teammates: [],
+      createdAt: Date.now(),
+      metadata: {
+        foldedEarly: true,
+        entryFee: Number(getGameConfig(room.gameType)?.entryFee || 0),
+        loss
+      }
+    });
+  }
+
+  const updatedRoom = store.removePlayerFromRoom(room.id, playerId) || room;
+  socket?.leave?.(`room:${room.id}`);
+  store.saveRoom(updatedRoom);
+  emitRoomUpdate(updatedRoom);
+  broadcastUpdate();
+
+  const latestPlayer = store.getPlayer(playerId) || player;
+  const foldedRoomView = serializeRoom(updatedRoom, playerId);
+  return {
+    settlement: updatedRoom.gameState.earlySettledPlayers[playerId],
+    room: foldedRoomView,
+    gameState: foldedRoomView?.gameState,
+    player: {
+      id: latestPlayer.id,
+      points: latestPlayer.points
+    }
+  };
+}
+
 function handlePlayerLeaveRoom(room, playerId, { confirmForfeit = false, reason = 'leave' } = {}) {
   if (!room) return { success: true };
 
@@ -1502,11 +1595,14 @@ function settleDoudizhu(room, winningPlayers) {
 function settleGameWithPot(room, winningPlayers) {
   const config = getGameConfig(room.gameType);
   const entryFee = config.entryFee;
-  const totalPot = room.gameState.pot || (entryFee * room.players.length);
+  const earlySettledPlayers = room.gameState.earlySettledPlayers || {};
+  const earlySettledCount = Object.keys(earlySettledPlayers).length;
+  const totalPot = room.gameState.pot || (entryFee * (room.players.length + earlySettledCount));
 
   // 炸金花：赢家获得全部奖池
   if (room.gameType === 'zha_jin_hua') {
     room.players.forEach(pid => {
+      if (earlySettledPlayers[pid]) return;
       const isWinner = winningPlayers.includes(pid);
       const playerBet = room.gameState.playerBets?.[pid] || entryFee;
       store.recordGame(pid, isWinner);
