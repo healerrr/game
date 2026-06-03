@@ -130,6 +130,8 @@ import cardGomoku from '../../img/card_gomoku.png'
 import cardMahjong from '../../img/card_mahjong.png'
 import cardQuickQa from '../../img/card_quick_qa_transparent.png'
 import cardScissorsRockPaper from '../../img/card_scissors_rock_paper.png'
+import cardReactionRace from '../../img/card_reaction_race.svg'
+import cardDiceRoll from '../../img/card_dice_roll.svg'
 
 const router = useRouter()
 const route = useRoute()
@@ -145,6 +147,8 @@ let kickedHandler = null
 let requeuedHandler = null
 
 const gameCards = [
+  { key: 'reaction_race', name: '看谁快', image: cardReactionRace, tag: '手速比拼', entryFee: 10 },
+  { key: 'dice_roll', name: '摇骰子', image: cardDiceRoll, tag: '赢家通赢', entryFee: 10 },
   { key: 'rock_paper_scissors', name: '剪刀石头布', image: cardScissorsRockPaper, tag: '双人对战', entryFee: 10 },
   { key: 'quiz', name: '快问快答', image: cardQuickQa, tag: '知识竞速', entryFee: 20 },
   { key: 'gomoku', name: '五子棋', image: cardGomoku, tag: '经典棋盘', entryFee: 30 },
@@ -161,6 +165,7 @@ const utilities = [
 ]
 
 const isTestMode = computed(() => getPlayMode() === 'test')
+const noBotGameTypes = new Set(['reaction_race', 'dice_roll'])
 
 const selectedGameName = computed(() => {
   return gameCards.find((item) => item.key === selectedGameKey.value)?.name || '游戏对局'
@@ -252,6 +257,12 @@ async function joinGame(gameType) {
 
   selectedGameKey.value = gameType
   matching.value = true
+
+  if (isTestMode.value && noBotGameTypes.has(gameType)) {
+    matching.value = false
+    createRoom(gameType)
+    return
+  }
 
   if (!isTestMode.value) {
     socket.emit('match:join', { gameType }, (res) => {

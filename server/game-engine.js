@@ -133,6 +133,177 @@ class GuessNumber {
 }
 
 // ========== 炸金花 ==========
+// ========== 看谁快 ==========
+class ReactionRace {
+  init(room, players) {
+    const waitMs = randomInt(1800, 4201);
+    return {
+      phase: 'waiting',
+      players,
+      signalAt: Date.now() + waitMs,
+      clicks: {},
+      falseStarts: [],
+      reactionRanking: [],
+      timer: Math.ceil(waitMs / 1000),
+      timerStarted: Date.now()
+    };
+  }
+
+  update(state, action, playerId) {
+    if (!state.players?.includes(playerId)) return state;
+    if (state.phase === 'finished') return state;
+    if (action.type !== 'tap') return state;
+    if (state.clicks[playerId] || state.falseStarts?.includes(playerId)) return state;
+
+    const now = Date.now();
+    if (state.phase === 'waiting' && now < Number(state.signalAt || 0)) {
+      state.falseStarts = [...(state.falseStarts || []), playerId];
+      return this.maybeFinish(state);
+    }
+
+    if (state.phase === 'waiting') {
+      this.startSignal(state, now);
+    }
+
+    if (state.phase === 'go') {
+      const reactionMs = Math.max(0, now - Number(state.signalAt || now));
+      state.clicks[playerId] = { playerId, reactionMs, clickedAt: now };
+      return this.maybeFinish(state);
+    }
+
+    return state;
+  }
+
+  startSignal(state, now = Date.now()) {
+    state.phase = 'go';
+    state.signalAt = Number(state.signalAt || now);
+    state.timer = 5;
+    state.timerStarted = now;
+    return state;
+  }
+
+  nextRound(state) {
+    if (state.phase === 'waiting') return this.startSignal(state);
+    if (state.phase === 'go') return this.finish(state);
+    return state;
+  }
+
+  maybeFinish(state) {
+    const falseStarts = new Set(state.falseStarts || []);
+    const remaining = (state.players || []).filter(pid => !falseStarts.has(pid) && !state.clicks?.[pid]);
+    return remaining.length === 0 ? this.finish(state) : state;
+  }
+
+  finish(state) {
+    const ranking = Object.values(state.clicks || {})
+      .sort((a, b) => a.reactionMs - b.reactionMs || a.clickedAt - b.clickedAt);
+    const winner = ranking[0]?.playerId || null;
+
+    state.phase = 'finished';
+    state.reactionRanking = ranking;
+    state.finalWinner = winner;
+    state.winner = winner;
+    state.winningPlayers = winner ? [winner] : [];
+    state.timer = 0;
+    state.timerStarted = Date.now();
+    return state;
+  }
+}
+
+// ========== 摇骰子 ==========
+class DiceRoll {
+  init(room, players) {
+    return {
+      phase: 'rolling',
+      players,
+      activePlayers: [...players],
+      rollRound: 1,
+      rolls: {},
+      history: [],
+      standings: [],
+      timer: 12,
+      timerStarted: Date.now()
+    };
+  }
+
+  update(state, action, playerId) {
+    if (!['rolling', 'tiebreak'].includes(state.phase)) return state;
+    if (action.type !== 'roll') return state;
+    if (!state.activePlayers?.includes(playerId)) return state;
+    if (state.rolls?.[playerId]) return state;
+
+    const dice = [randomInt(1, 7), randomInt(1, 7)];
+    state.rolls[playerId] = {
+      playerId,
+      dice,
+      total: dice[0] + dice[1],
+      highDie: Math.max(...dice),
+      rolledAt: Date.now(),
+      round: state.rollRound
+    };
+
+    const allRolled = state.activePlayers.every(pid => state.rolls?.[pid]);
+    return allRolled ? this.resolveRound(state) : state;
+  }
+
+  nextRound(state) {
+    if (!['rolling', 'tiebreak'].includes(state.phase)) return state;
+    for (const pid of state.activePlayers || []) {
+      if (!state.rolls?.[pid]) {
+        state.rolls[pid] = {
+          playerId: pid,
+          dice: [0, 0],
+          total: 0,
+          highDie: 0,
+          rolledAt: Date.now(),
+          round: state.rollRound,
+          timeout: true
+        };
+      }
+    }
+    return this.resolveRound(state);
+  }
+
+  resolveRound(state) {
+    const roundRolls = Object.values(state.rolls || {});
+    const sorted = [...roundRolls].sort((a, b) => (
+      b.total - a.total ||
+      b.highDie - a.highDie ||
+      a.rolledAt - b.rolledAt
+    ));
+    const best = sorted[0];
+    if (!best) return state;
+
+    const tied = sorted.filter(item => item.total === best.total && item.highDie === best.highDie);
+    state.history = [
+      ...(state.history || []),
+      {
+        round: state.rollRound,
+        rolls: Object.fromEntries(roundRolls.map(item => [item.playerId, item]))
+      }
+    ];
+    state.standings = sorted;
+
+    if (tied.length > 1) {
+      state.phase = 'tiebreak';
+      state.activePlayers = tied.map(item => item.playerId);
+      state.rollRound += 1;
+      state.rolls = {};
+      state.timer = 12;
+      state.timerStarted = Date.now();
+      return state;
+    }
+
+    state.phase = 'finished';
+    state.finalWinner = best.playerId;
+    state.winner = best.playerId;
+    state.winningPlayers = [best.playerId];
+    state.timer = 0;
+    state.timerStarted = Date.now();
+    return state;
+  }
+}
+
 class ZhaJinHua {
   constructor() {
     this.SUITS = ['spade', 'heart', 'club', 'diamond'];
@@ -1816,6 +1987,8 @@ class MahjongGame {
 const engines = {
   rock_paper_scissors: new RockPaperScissors(),
   guess_number: new GuessNumber(),
+  reaction_race: new ReactionRace(),
+  dice_roll: new DiceRoll(),
   zha_jin_hua: cardEngines.zha_jin_hua,
   blackjack: new Blackjack(),
   undercover: new Undercover(),
@@ -1844,6 +2017,22 @@ const GAME_CONFIG = {
     minPlayers: 2,
     maxPlayers: 2,
     duration: '15秒'
+  },
+  reaction_race: {
+    name: '看谁快',
+    entryFee: 10,
+    category: 'quick',
+    minPlayers: 2,
+    maxPlayers: 6,
+    duration: '10秒'
+  },
+  dice_roll: {
+    name: '摇骰子',
+    entryFee: 10,
+    category: 'quick',
+    minPlayers: 2,
+    maxPlayers: 6,
+    duration: '10秒'
   },
   blackjack: {
     name: '21点对决',

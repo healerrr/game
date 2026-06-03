@@ -654,15 +654,28 @@ function isRoomFull(room) {
 
 function ensureReadyDeadline(room) {
   if (!room || room.status !== 'readying') return;
-  if (isRoomFull(room)) {
+  if (canStartReadyRoom(room)) {
     room.readyDeadline = room.readyDeadline || (Date.now() + READY_TIMEOUT_MS);
   } else {
     room.readyDeadline = null;
   }
 }
 
+function supportsFlexiblePlayerCount(gameType) {
+  return ['reaction_race', 'dice_roll'].includes(gameType);
+}
+
+function canStartReadyRoom(room) {
+  const config = getGameConfig(room?.gameType);
+  if (!config) return false;
+  if (supportsFlexiblePlayerCount(room.gameType)) {
+    return room.players.length >= config.minPlayers && room.players.length <= config.maxPlayers;
+  }
+  return isRoomFull(room);
+}
+
 function areAllRoomPlayersReady(room) {
-  return isRoomFull(room) && room.players.every(pid => room.ready?.[pid]);
+  return canStartReadyRoom(room) && room.players.every(pid => room.ready?.[pid]);
 }
 
 function samePlayerSet(a = [], b = []) {
@@ -1059,6 +1072,8 @@ function maybeAdvanceTimedPhase(room) {
     quiz: ['answer'],
     undercover: ['reveal'],
     rock_paper_scissors: ['reveal'],
+    reaction_race: ['waiting', 'go'],
+    dice_roll: ['rolling', 'tiebreak'],
     guandan: ['round_finished']
   };
   if (!autoAdvancePhases[room.gameType]?.includes(state.phase)) return false;

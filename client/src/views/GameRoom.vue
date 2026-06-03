@@ -6,6 +6,7 @@
       'quiz-layout': gameType === 'quiz',
       'rps-layout': gameType === 'rock_paper_scissors',
       'guess-layout': gameType === 'guess_number',
+      'quick-party-layout': ['reaction_race', 'dice_roll'].includes(gameType),
       'board-layout': ['gomoku', 'chess', 'zha_jin_hua', 'undercover'].includes(gameType),
       'chess-layout': gameType === 'chess'
     }"
@@ -93,6 +94,103 @@
             {{ inviteLoading ? '正在加载...' : (inviteSearchText ? '未找到匹配玩家' : '暂无可邀请玩家') }}
           </p>
         </div>
+      </div>
+    </section>
+
+    <section v-else-if="gameType === 'reaction_race'" class="mode-card party-game-card reaction-race-mode">
+      <div class="party-hero reaction">
+        <div>
+          <span>2-6 人 · 门票 10 分</span>
+          <h2>看谁快</h2>
+          <p>绿灯亮起后立刻点击，最快者通赢奖池。</p>
+        </div>
+        <strong>{{ reactionCountdownLabel }}</strong>
+      </div>
+
+      <div class="reaction-stage" :class="reactionStageClass">
+        <button
+          type="button"
+          class="reaction-target"
+          :disabled="reactionButtonDisabled"
+          @click="tapReactionRace"
+        >
+          <span>{{ reactionButtonTitle }}</span>
+          <small>{{ reactionButtonSubtitle }}</small>
+        </button>
+      </div>
+
+      <div class="party-list">
+        <div
+          v-for="item in reactionPlayerRows"
+          :key="item.id"
+          class="party-row"
+          :class="{ winner: item.winner, muted: item.falseStart }"
+        >
+          <div class="avatar-circle">{{ item.initial }}</div>
+          <div>
+            <strong>{{ item.name }}</strong>
+            <p>{{ item.detail }}</p>
+          </div>
+          <span>{{ item.badge }}</span>
+        </div>
+      </div>
+
+      <div v-if="gs.phase === 'finished'" class="dual-btns">
+        <button class="primary-btn" @click="rematch">再来一局</button>
+        <button class="secondary-btn" @click="backToLobby">返回大厅</button>
+      </div>
+    </section>
+
+    <section v-else-if="gameType === 'dice_roll'" class="mode-card party-game-card dice-roll-mode">
+      <div class="party-hero dice">
+        <div>
+          <span>2-6 人 · 门票 10 分</span>
+          <h2>摇骰子</h2>
+          <p>每人摇两颗骰子，点数最高者通赢奖池。</p>
+        </div>
+        <strong>{{ dicePhaseLabel }}</strong>
+      </div>
+
+      <div class="dice-stage">
+        <div class="dice-pair">
+          <div v-for="(value, index) in myDiceValues" :key="`dice-${index}`" class="dice-face">
+            <span
+              v-for="dot in diceDots(value)"
+              :key="`${index}-${dot}`"
+              :class="`dot dot-${dot}`"
+            ></span>
+          </div>
+        </div>
+        <strong>{{ myDiceTotalLabel }}</strong>
+        <p>{{ diceHintText }}</p>
+      </div>
+
+      <div class="dual-btns" v-if="gs.phase !== 'finished'">
+        <button class="primary-btn" :disabled="!canRollDice" @click="rollDice">
+          {{ canRollDice ? '摇一把' : '等待其他玩家' }}
+        </button>
+        <button class="secondary-btn" @click="backToLobby">返回大厅</button>
+      </div>
+
+      <div class="party-list">
+        <div
+          v-for="item in dicePlayerRows"
+          :key="item.id"
+          class="party-row"
+          :class="{ winner: item.winner, muted: item.timeout }"
+        >
+          <div class="avatar-circle">{{ item.initial }}</div>
+          <div>
+            <strong>{{ item.name }}</strong>
+            <p>{{ item.detail }}</p>
+          </div>
+          <span>{{ item.badge }}</span>
+        </div>
+      </div>
+
+      <div v-if="gs.phase === 'finished'" class="dual-btns">
+        <button class="primary-btn" @click="rematch">再来一局</button>
+        <button class="secondary-btn" @click="backToLobby">返回大厅</button>
       </div>
     </section>
 
@@ -439,6 +537,7 @@ const router = useRouter()
 const roomId = computed(() => route.params.roomId)
 const player = computed(() => getPlayer())
 const gs = ref({})
+const noBotGameTypes = new Set(['reaction_race', 'dice_roll'])
 const opponentDisconnected = ref(false)
 const selectedMove = ref(null)
 const guessNum = ref('')
@@ -495,6 +594,8 @@ const filteredInviteCandidates = computed(() => {
 
 const gameLabel = computed(() => {
   const labels = {
+    reaction_race: '看谁快',
+    dice_roll: '摇骰子',
     rock_paper_scissors: '剪刀石头布',
     guess_number: '猜数字',
     blackjack: '21点',
@@ -569,6 +670,95 @@ const moves = [
 const playerInitial = computed(() => (player.value?.nickname || '团').slice(0, 1))
 const opponentInitial = computed(() => (opponentName.value || '对').slice(0, 1))
 
+const reactionHasTapped = computed(() => Boolean(gs.value?.clicks?.[player.value?.id]))
+const reactionFalseStarted = computed(() => Boolean(gs.value?.falseStarts?.includes(player.value?.id)))
+const reactionStageClass = computed(() => ({
+  waiting: gs.value?.phase === 'waiting',
+  go: gs.value?.phase === 'go',
+  finished: gs.value?.phase === 'finished'
+}))
+const reactionCountdownLabel = computed(() => {
+  if (gs.value?.phase === 'waiting') return `${timeLeft.value}s`
+  if (gs.value?.phase === 'go') return '点击'
+  return '结算'
+})
+const reactionButtonTitle = computed(() => {
+  if (gs.value?.phase === 'waiting') return reactionFalseStarted.value ? '抢跑' : '等绿灯'
+  if (gs.value?.phase === 'go') return reactionHasTapped.value ? '已点击' : '点我'
+  return gs.value?.finalWinner === player.value?.id ? '你最快' : '已结束'
+})
+const reactionButtonSubtitle = computed(() => {
+  if (reactionFalseStarted.value) return '提前点击，本局失去资格'
+  if (reactionHasTapped.value) return `${gs.value?.clicks?.[player.value?.id]?.reactionMs ?? 0} ms`
+  if (gs.value?.phase === 'waiting') return '亮绿前不要点'
+  if (gs.value?.phase === 'go') return '越快越好'
+  return `赢家：${getPlayerName(gs.value?.finalWinner)}`
+})
+const reactionButtonDisabled = computed(() => (
+  gs.value?.phase === 'finished' ||
+  reactionHasTapped.value ||
+  reactionFalseStarted.value
+))
+const reactionPlayerRows = computed(() => {
+  const rankingMap = new Map((gs.value?.reactionRanking || []).map((item, index) => [item.playerId, { ...item, rank: index + 1 }]))
+  const falseStarts = new Set(gs.value?.falseStarts || [])
+  return roomPlayers.value.map((item) => {
+    const rank = rankingMap.get(item.id)
+    const falseStart = falseStarts.has(item.id)
+    const winner = gs.value?.finalWinner === item.id
+    return {
+      id: item.id,
+      name: item.nickname || '玩家',
+      initial: (item.nickname || '玩').slice(0, 1),
+      falseStart,
+      winner,
+      detail: falseStart ? '抢跑失格' : (rank ? `反应 ${rank.reactionMs} ms` : '等待点击'),
+      badge: winner ? '赢家' : (rank ? `#${rank.rank}` : (falseStart ? '失格' : '待定'))
+    }
+  })
+})
+
+const myDiceRoll = computed(() => gs.value?.rolls?.[player.value?.id] || latestDiceRoll(player.value?.id))
+const myDiceValues = computed(() => myDiceRoll.value?.dice || ['?', '?'])
+const myDiceTotalLabel = computed(() => {
+  const roll = myDiceRoll.value
+  if (!roll) return '等待摇骰'
+  return roll.timeout ? '超时 0 点' : `${roll.total} 点`
+})
+const canRollDice = computed(() => (
+  ['rolling', 'tiebreak'].includes(gs.value?.phase) &&
+  gs.value?.activePlayers?.includes(player.value?.id) &&
+  !gs.value?.rolls?.[player.value?.id]
+))
+const dicePhaseLabel = computed(() => {
+  if (gs.value?.phase === 'tiebreak') return `加摇 ${gs.value?.rollRound || 2}`
+  if (gs.value?.phase === 'finished') return '结算'
+  return `第 ${gs.value?.rollRound || 1} 轮`
+})
+const diceHintText = computed(() => {
+  if (gs.value?.phase === 'finished') return `赢家：${getPlayerName(gs.value?.finalWinner)}`
+  if (gs.value?.phase === 'tiebreak') return '最高点并列，进入加摇'
+  return canRollDice.value ? '点击按钮，服务端公平摇点' : '等待其他玩家完成本轮'
+})
+const dicePlayerRows = computed(() => {
+  const standings = new Map((gs.value?.standings || []).map((item, index) => [item.playerId, { ...item, rank: index + 1 }]))
+  return roomPlayers.value.map((item) => {
+    const current = gs.value?.rolls?.[item.id]
+    const previous = standings.get(item.id)
+    const roll = current || previous
+    const winner = gs.value?.finalWinner === item.id
+    return {
+      id: item.id,
+      name: item.nickname || '玩家',
+      initial: (item.nickname || '玩').slice(0, 1),
+      winner,
+      timeout: Boolean(roll?.timeout),
+      detail: roll ? `${roll.dice?.join(' + ')} = ${roll.total}` : '等待摇骰',
+      badge: winner ? '赢家' : (roll ? `${roll.total}点` : '待定')
+    }
+  })
+})
+
 const remainingChances = computed(() => {
   const total = 10
   const used = gs.value?.guesses?.length || 0
@@ -589,6 +779,38 @@ const quizTimerPercent = computed(() => {
 function getPlayerName(playerId) {
   if (!playerId) return '玩家'
   return roomPlayers.value.find((item) => item.id === playerId)?.nickname || '玩家'
+}
+
+function latestDiceRoll(playerId) {
+  if (!playerId) return null
+  const history = gs.value?.history || []
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const roll = history[i]?.rolls?.[playerId]
+    if (roll) return roll
+  }
+  return null
+}
+
+function diceDots(value) {
+  const layouts = {
+    1: [5],
+    2: [1, 9],
+    3: [1, 5, 9],
+    4: [1, 3, 7, 9],
+    5: [1, 3, 5, 7, 9],
+    6: [1, 3, 4, 6, 7, 9]
+  }
+  return layouts[value] || []
+}
+
+function tapReactionRace() {
+  if (reactionButtonDisabled.value) return
+  socket.emit('game:action', { action: { type: 'tap' } })
+}
+
+function rollDice() {
+  if (!canRollDice.value) return
+  socket.emit('game:action', { action: { type: 'roll' } })
 }
 
 function moveIcon(key) {
@@ -812,7 +1034,7 @@ async function rematch() {
     })
     return
   }
-  if (getPlayMode() !== 'test') {
+  if (getPlayMode() !== 'test' || noBotGameTypes.has(activeGameType)) {
     const targetRoomId = currentRoom.value?.roomId || currentRoom.value?.id || roomId.value
     socket.emit('game:rematch', { roomId: targetRoomId }, (res) => {
       if (res?.error) {
@@ -2047,6 +2269,248 @@ watch(() => roomId.value, () => {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+
+.game-room.quick-party-layout {
+  padding: 0 10px 10px;
+}
+
+.game-room.quick-party-layout .game-header {
+  width: min(100%, 520px);
+  margin: 8px auto;
+}
+
+.party-game-card {
+  width: min(100%, 520px);
+  margin: 0 auto;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.party-hero {
+  min-height: 118px;
+  padding: 18px;
+  border-radius: 24px;
+  color: #fff;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  box-shadow: 0 14px 26px rgba(9, 80, 190, 0.16);
+}
+
+.party-hero.reaction {
+  background: linear-gradient(140deg, #136cff, #04a3e8 54%, #20c989);
+}
+
+.party-hero.dice {
+  background: linear-gradient(140deg, #0d63ef, #2f92ff 52%, #ffd56a);
+}
+
+.party-hero span,
+.party-hero p {
+  display: block;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 800;
+}
+
+.party-hero h2 {
+  margin: 6px 0;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 1000;
+}
+
+.party-hero strong {
+  width: 72px;
+  height: 72px;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.18);
+  display: grid;
+  place-items: center;
+  color: #fff2be;
+  font-size: 21px;
+  font-weight: 1000;
+}
+
+.reaction-stage,
+.dice-stage {
+  min-height: 230px;
+  border-radius: 24px;
+  border: 2px solid #dceafb;
+  background: linear-gradient(180deg, #ffffff, #f6fbff);
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  text-align: center;
+}
+
+.reaction-target {
+  width: min(100%, 250px);
+  aspect-ratio: 1;
+  border: none;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #cbd8ea, #91a5c1);
+  color: #fff;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  box-shadow: 0 18px 26px rgba(40, 92, 160, 0.22), inset 0 5px 0 rgba(255, 255, 255, 0.22);
+}
+
+.reaction-stage.go .reaction-target {
+  background: linear-gradient(180deg, #63f2b1, #14b870);
+  box-shadow: 0 18px 30px rgba(25, 176, 111, 0.28), inset 0 5px 0 rgba(255, 255, 255, 0.3);
+}
+
+.reaction-stage.finished .reaction-target {
+  background: linear-gradient(180deg, #ffd86b, #ff9f2f);
+}
+
+.reaction-target:disabled {
+  opacity: 0.78;
+}
+
+.reaction-target span {
+  font-size: 42px;
+  line-height: 1;
+  font-weight: 1000;
+}
+
+.reaction-target small {
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.party-list {
+  display: grid;
+  gap: 8px;
+}
+
+.party-row {
+  min-height: 70px;
+  padding: 10px 12px;
+  border-radius: 20px;
+  border: 2px solid #dceafb;
+  background: #fff;
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.party-row.winner {
+  border-color: #ffd56a;
+  background: linear-gradient(180deg, #fffdf3, #fff6d5);
+}
+
+.party-row.muted {
+  opacity: 0.68;
+}
+
+.party-row strong,
+.party-row p {
+  display: block;
+  margin: 0;
+}
+
+.party-row strong {
+  color: #153260;
+  font-size: 15px;
+  line-height: 1.2;
+  font-weight: 900;
+}
+
+.party-row p {
+  margin-top: 4px;
+  color: #6b82ac;
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 800;
+}
+
+.party-row > span {
+  min-height: 30px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #145bd8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 1000;
+}
+
+.dice-stage {
+  gap: 8px;
+}
+
+.dice-pair {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+}
+
+.dice-face {
+  position: relative;
+  width: 92px;
+  height: 92px;
+  border-radius: 24px;
+  background: linear-gradient(180deg, #fff7d7, #ffd56a);
+  box-shadow: 0 12px 20px rgba(202, 134, 24, 0.18), inset 0 3px 0 rgba(255, 255, 255, 0.55);
+}
+
+.dice-face::after {
+  content: '?';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #153260;
+  font-size: 34px;
+  font-weight: 1000;
+}
+
+.dice-face:has(.dot)::after {
+  content: '';
+}
+
+.dot {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #153260;
+}
+
+.dot-1 { left: 22px; top: 22px; }
+.dot-2 { left: 46px; top: 22px; }
+.dot-3 { right: 22px; top: 22px; }
+.dot-4 { left: 22px; top: 46px; }
+.dot-5 { left: 46px; top: 46px; }
+.dot-6 { right: 22px; top: 46px; }
+.dot-7 { left: 22px; bottom: 22px; }
+.dot-8 { left: 46px; bottom: 22px; }
+.dot-9 { right: 22px; bottom: 22px; }
+
+.dice-stage > strong {
+  color: #153260;
+  font-size: 32px;
+  line-height: 1;
+  font-weight: 1000;
+}
+
+.dice-stage > p {
+  margin: 0;
+  color: #6b82ac;
+  font-size: 14px;
+  font-weight: 800;
 }
 
 @media (max-width: 760px) {
