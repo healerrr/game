@@ -9,8 +9,9 @@
           </div>
 
           <div class="hero-actions">
-            <button type="button" class="icon-action" @click="$router.push('/leaderboard')">
-              <img src="/assets/lobby/feature-ranking.png" alt="今日排行" />
+            <button type="button" class="icon-action rules-action" @click="$router.push('/rules')" aria-label="规则说明">
+              <span class="rules-action__mark">?</span>
+              <span class="rules-action__text">规则说明</span>
             </button>
           </div>
         </div>
@@ -439,6 +440,42 @@ function handleUtility(item) {
   place-items: center;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24);
   padding: 6px;
+}
+
+.rules-action {
+  width: 76px;
+  height: 76px;
+  padding: 8px;
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 28% 18%, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.45) 24%, transparent 25%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0.12));
+  color: #0d65e8;
+  gap: 3px;
+}
+
+.rules-action__mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, #fff8dc, #ffd86b);
+  color: #1365e8;
+  font-size: 26px;
+  line-height: 1;
+  font-weight: 1000;
+  box-shadow: 0 8px 16px rgba(1, 74, 176, 0.16);
+}
+
+.rules-action__text {
+  display: block;
+  font-size: 12px;
+  line-height: 1.1;
+  font-weight: 1000;
+  color: #fff;
+  text-shadow: 0 2px 8px rgba(0, 61, 159, 0.34);
+  white-space: nowrap;
 }
 
 .icon-action img {

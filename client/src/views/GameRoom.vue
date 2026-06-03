@@ -65,19 +65,34 @@
             autocomplete="off"
           >
         </label>
-        <button
-          v-for="candidate in filteredInviteCandidates"
-          :key="candidate.id"
-          type="button"
-          :disabled="candidate.busy || candidate.invited"
-          @click="invitePlayer(candidate)"
-        >
-          <span>{{ candidate.nickname }} · {{ candidate.busNumber }}号车</span>
-          <strong>{{ inviteCandidateStatus(candidate) }}</strong>
-        </button>
-        <p v-if="!filteredInviteCandidates.length">
-          {{ inviteLoading ? '正在加载...' : (inviteSearchText ? '未找到匹配玩家' : '暂无可邀请玩家') }}
-        </p>
+        <div class="invite-results">
+          <div
+            v-for="candidate in filteredInviteCandidates"
+            :key="candidate.id"
+            class="invite-candidate"
+          >
+            <div class="invite-candidate-main">
+              <strong>{{ candidate.nickname }}</strong>
+              <div class="invite-candidate-meta">
+                <span>{{ candidate.busNumber }}号车</span>
+                <span class="invite-presence" :class="inviteCandidatePresenceClass(candidate)">
+                  {{ inviteCandidatePresenceText(candidate) }}
+                </span>
+              </div>
+            </div>
+            <button
+              class="invite-action"
+              type="button"
+              :disabled="candidate.busy || candidate.invited"
+              @click.stop="invitePlayer(candidate)"
+            >
+              {{ inviteCandidateActionText(candidate) }}
+            </button>
+          </div>
+          <p v-if="!filteredInviteCandidates.length" class="invite-empty">
+            {{ inviteLoading ? '正在加载...' : (inviteSearchText ? '未找到匹配玩家' : '暂无可邀请玩家') }}
+          </p>
+        </div>
       </div>
     </section>
 
@@ -741,10 +756,19 @@ function loadInvitePlayers() {
   })
 }
 
-function inviteCandidateStatus(candidate) {
+function inviteCandidatePresenceText(candidate) {
   if (candidate.busy) return '忙碌'
+  return candidate.online ? '在线' : '离线'
+}
+
+function inviteCandidatePresenceClass(candidate) {
+  if (candidate.busy) return 'busy'
+  return candidate.online ? 'online' : 'offline'
+}
+
+function inviteCandidateActionText(candidate) {
   if (candidate.invited) return '已邀请'
-  return candidate.online ? '邀请' : '离线通知'
+  return '邀请'
 }
 
 function invitePlayer(candidate) {
@@ -1850,19 +1874,17 @@ watch(() => roomId.value, () => {
   border: 1px solid #d9e8fb;
   background: #f7fbff;
   padding: 10px;
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  max-height: 230px;
-  overflow: auto;
+  max-height: min(300px, calc(100dvh - 420px));
+  overflow: hidden;
 }
 
 .invite-search {
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  padding-bottom: 2px;
   display: grid;
   gap: 6px;
+  flex: 0 0 auto;
   background: #f7fbff;
 }
 
@@ -1890,27 +1912,105 @@ watch(() => roomId.value, () => {
   box-shadow: 0 0 0 3px rgba(31, 107, 255, 0.12);
 }
 
-.invite-panel button {
-  min-height: 44px;
-  padding: 0 12px;
-  border-radius: 12px;
+.invite-results {
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+  padding-right: 2px;
+}
+
+.invite-candidate {
+  min-height: 58px;
+  padding: 10px 10px 10px 12px;
+  border-radius: 14px;
+  border: 1px solid #e0ecfb;
   background: #fff;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.invite-candidate-main {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.invite-candidate-main strong {
   color: #17315d;
+  font-size: 13px;
+  font-weight: 900;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.invite-candidate-meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+  flex-wrap: wrap;
+  gap: 6px;
+  color: #6b82ac;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.invite-presence {
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  line-height: 1;
+}
+
+.invite-presence.online {
+  background: #e8fbf1;
+  color: #168a4c;
+}
+
+.invite-presence.offline {
+  background: #edf3fb;
+  color: #6b82ac;
+}
+
+.invite-presence.busy {
+  background: #fff2df;
+  color: #b96b09;
+}
+
+.invite-action {
+  min-width: 66px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #2f92ff, #0758ef);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
   font-weight: 900;
+  white-space: nowrap;
+  box-shadow: 0 7px 14px rgba(9, 89, 208, 0.18);
 }
 
-.invite-panel button:disabled {
+.invite-action:disabled {
   opacity: 0.55;
+  background: #edf3fb;
+  color: #6b82ac;
+  box-shadow: none;
 }
 
-.invite-panel p {
+.invite-empty {
+  min-height: 44px;
   margin: 0;
   color: #6b82ac;
   text-align: center;
+  display: grid;
+  place-items: center;
   font-weight: 800;
 }
 

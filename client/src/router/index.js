@@ -7,6 +7,7 @@ const routes = [
   { path: '/game/:roomId', name: 'GameRoom', component: () => import('../views/GameRoom.vue'), meta: { requiresAuth: true } },
   { path: '/spectate/:roomId', name: 'Spectator', component: () => import('../views/Spectator.vue') },
   { path: '/leaderboard', name: 'Leaderboard', component: () => import('../views/Leaderboard.vue') },
+  { path: '/rules', name: 'Rules', component: () => import('../views/Rules.vue') },
   { path: '/results', name: 'Results', component: () => import('../views/Results.vue'), meta: { requiresAuth: true } },
   { path: '/admin', name: 'Admin', component: () => import('../views/Admin.vue') }
 ]
