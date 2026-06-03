@@ -521,7 +521,7 @@
 <script setup>
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { gameState, getPlayer, getPlayMode, socket } from '../socket'
+import { gameState, getPlayer, socket } from '../socket'
 
 const UndercoverGame = defineAsyncComponent(() => import('../components/UndercoverGame.vue'))
 const ZhaJinHuaBoard = defineAsyncComponent(() => import('../components/games/ZhaJinHuaBoard.vue'))
@@ -537,7 +537,6 @@ const router = useRouter()
 const roomId = computed(() => route.params.roomId)
 const player = computed(() => getPlayer())
 const gs = ref({})
-const noBotGameTypes = new Set(['reaction_race', 'dice_roll'])
 const opponentDisconnected = ref(false)
 const selectedMove = ref(null)
 const guessNum = ref('')
@@ -567,7 +566,11 @@ let kickedHandler = null
 let requeuedHandler = null
 let abandonedHandler = null
 let matchedHandler = null
+let forfeitNoticeHandler = null
+let drawOfferHandler = null
+let drawDeclinedHandler = null
 let opponentDisconnectedTimer = null
+let activeDrawOfferKey = ''
 
 const gameType = computed(() => gameState.currentRoom?.gameType)
 const roomPlayers = computed(() => gameState.currentRoom?.players || [])
@@ -1003,23 +1006,10 @@ function invitePlayer(candidate) {
   })
 }
 
-function enterQuickPlayRoom(data) {
-  gameState.currentRoom = {
-    roomId: data.roomId,
-    gameType: data.gameType,
-    players: data.players,
-    gameState: data.gameState
-  }
-  gameState.currentGame = data.gameState
-  gs.value = data.gameState || {}
-  socket.emit('room:join', { roomId: data.roomId })
-  router.push(`/game/${data.roomId}`)
-}
-
 async function rematch() {
   const activeGameType = zhaJinHuaFoldedGameType.value || gameType.value
   if (!player.value || !activeGameType) return
-  if (isZhaJinHuaFoldedOut.value && getPlayMode() !== 'test') {
+  if (isZhaJinHuaFoldedOut.value) {
     const targetGameType = activeGameType || 'zha_jin_hua'
     socket.emit('match:join', { gameType: targetGameType }, (res) => {
       if (res?.error) {
@@ -1034,39 +1024,25 @@ async function rematch() {
     })
     return
   }
-  if (getPlayMode() !== 'test' || noBotGameTypes.has(activeGameType)) {
-    const targetRoomId = currentRoom.value?.roomId || currentRoom.value?.id || roomId.value
-    socket.emit('game:rematch', { roomId: targetRoomId }, (res) => {
-      if (res?.error) {
-        alert(res.error)
-        return
-      }
-      if (res?.requeued) {
-        router.push({ path: '/lobby', query: { matching: res.gameType || activeGameType } })
-        return
-      }
-      if (res?.room) {
-        gameState.currentRoom = res.room
-        gameState.currentGame = res.room.gameState
-        gs.value = res.room.gameState || {}
-        readySubmitting.value = false
-        updateReadyDeadline()
-      }
-    })
-    return
-  }
-  try {
-    const response = await fetch('/api/bots/quick-play', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ playerId: player.value.id, gameType: gameType.value })
-    })
-    const data = await response.json()
-    if (!response.ok || data.error) throw new Error(data.error || '启动失败')
-    enterQuickPlayRoom(data)
-  } catch (error) {
-    alert(error.message || '启动游戏失败')
-  }
+
+  const targetRoomId = currentRoom.value?.roomId || currentRoom.value?.id || roomId.value
+  socket.emit('game:rematch', { roomId: targetRoomId }, (res) => {
+    if (res?.error) {
+      alert(res.error)
+      return
+    }
+    if (res?.requeued) {
+      router.push({ path: '/lobby', query: { matching: res.gameType || activeGameType } })
+      return
+    }
+    if (res?.room) {
+      gameState.currentRoom = res.room
+      gameState.currentGame = res.room.gameState
+      gs.value = res.room.gameState || {}
+      readySubmitting.value = false
+      updateReadyDeadline()
+    }
+  })
 }
 
 function askConfirm(message, title = '确认操作') {
@@ -1180,11 +1156,42 @@ onMounted(() => {
       gameState.currentGame = event.detail.room.gameState
     }
     const { players: resultPlayers, room: resultRoom, ...result } = event.detail
-    gs.value = { ...gs.value, ...result, resultPlayers }
+    gs.value = resultRoom?.gameState
+      ? { ...resultRoom.gameState, resultPlayers }
+      : { ...gs.value, ...result, resultPlayers }
     guessSubmitting.value = false
     clearOpponentDisconnectedNotice()
   }
   window.addEventListener('game:result', resultHandler)
+
+  forfeitNoticeHandler = (event) => {
+    if (event.detail?.roomId && event.detail.roomId !== currentRoom.value?.roomId && event.detail.roomId !== currentRoom.value?.id) return
+    alert(`${event.detail?.nickname || '对方'} 已认输，本局进入结算`)
+  }
+  window.addEventListener('game:forfeit_notice', forfeitNoticeHandler)
+
+  drawOfferHandler = async (event) => {
+    if (gameType.value !== 'chess') return
+    const roomId = currentRoom.value?.roomId || currentRoom.value?.id
+    if (event.detail?.roomId && event.detail.roomId !== roomId) return
+    const offerKey = `${event.detail?.roomId || roomId}:${event.detail?.fromPlayerId || ''}:${event.detail?.offeredAt || ''}`
+    if (activeDrawOfferKey === offerKey) return
+    activeDrawOfferKey = offerKey
+
+    const accepted = await askConfirm(`${event.detail?.fromNickname || '对方'} 请求和棋，是否同意？`, '求和申请')
+    socket.emit('game:action', {
+      action: { type: accepted ? 'offer_draw' : 'decline_draw' }
+    }, (res) => {
+      if (res?.error) alert(res.error)
+    })
+  }
+  window.addEventListener('game:draw_offer', drawOfferHandler)
+
+  drawDeclinedHandler = (event) => {
+    if (event.detail?.roomId && event.detail.roomId !== currentRoom.value?.roomId && event.detail.roomId !== currentRoom.value?.id) return
+    alert(`${event.detail?.byNickname || '对方'} 拒绝了求和，游戏继续`)
+  }
+  window.addEventListener('game:draw_declined', drawDeclinedHandler)
 
   dcHandler = (event) => {
     if (!isActivePlayingRoom.value) {
@@ -1249,6 +1256,9 @@ onUnmounted(() => {
   if (requeuedHandler) window.removeEventListener('match:requeued', requeuedHandler)
   if (abandonedHandler) window.removeEventListener('room:abandoned', abandonedHandler)
   if (matchedHandler) window.removeEventListener('game:matched', matchedHandler)
+  if (forfeitNoticeHandler) window.removeEventListener('game:forfeit_notice', forfeitNoticeHandler)
+  if (drawOfferHandler) window.removeEventListener('game:draw_offer', drawOfferHandler)
+  if (drawDeclinedHandler) window.removeEventListener('game:draw_declined', drawDeclinedHandler)
   settleConfirm(false)
 })
 

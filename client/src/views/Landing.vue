@@ -41,11 +41,6 @@
           <i>›</i>
         </button>
 
-        <button class="test-enter-btn" :disabled="!nickname.trim() || !busNumber || submitting"
-          @click="handleTestSubmit">
-          进入游戏测试平台
-        </button>
-
         <p v-if="submitError" class="submit-error">{{ submitError }}</p>
 
         <p class="reward-note">
@@ -60,7 +55,7 @@
 <script setup>
   import { onMounted, onUnmounted, ref } from 'vue'
   import { useRouter } from 'vue-router'
-  import { gameState, socket, rememberPlayer, restoreSavedPlayer, setPlayMode } from '../socket'
+  import { gameState, socket, rememberPlayer, restoreSavedPlayer } from '../socket'
 
   const router = useRouter()
   const nickname = ref('')
@@ -70,8 +65,7 @@
   const submitting = ref(false)
   const submitError = ref('')
 
-  function toLobby(player, mode = 'normal') {
-    setPlayMode(mode)
+  function toLobby(player) {
     rememberPlayer(player)
     router.push('/lobby')
   }
@@ -90,7 +84,7 @@
         if (res?.player && res?.currentRoom) {
           resumeRoom(res.player, res.currentRoom)
         } else if (res?.player) {
-          toLobby(res.player, localStorage.getItem('bus_game_play_mode') || 'normal')
+          toLobby(res.player)
         }
       })
       .catch(() => null)
@@ -132,14 +126,10 @@
   }
 
   async function handleSubmit() {
-    await handleSubmitWithMode('normal')
+    await handleSubmitWithMode()
   }
 
-  async function handleTestSubmit() {
-    await handleSubmitWithMode('test')
-  }
-
-  async function handleSubmitWithMode(mode) {
+  async function handleSubmitWithMode() {
     if (!nickname.value.trim() || !busNumber.value) return
     if (submitting.value) return
 
@@ -171,7 +161,7 @@
             resumeRoom(res.player, res.currentRoom)
             return
           }
-          toLobby(res.player, mode)
+          toLobby(res.player)
           return
         }
         submitError.value = '进入失败，请稍后重试'
@@ -402,23 +392,6 @@
     cursor: not-allowed;
     box-shadow: none;
     filter: grayscale(0.2);
-  }
-
-  .test-enter-btn {
-    margin-top: 12px;
-    width: 100%;
-    min-height: 48px;
-    border-radius: 18px;
-    border: 1px solid #bcd5fb;
-    background: linear-gradient(180deg, #ffffff, #eef6ff);
-    color: #1764df;
-    font-size: 16px;
-    font-weight: 900;
-  }
-
-  .test-enter-btn:disabled {
-    opacity: 0.52;
-    cursor: not-allowed;
   }
 
   .reward-note {

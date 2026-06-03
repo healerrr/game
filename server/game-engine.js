@@ -52,8 +52,14 @@ class RockPaperScissors {
       state.scores[winner]++;
     }
 
-    state.phase = 'reveal';
     state.result = { winner, choices: { ...state.choices }, round: state.round };
+    if (winner && state.round >= state.maxRounds) {
+      state.phase = 'finished';
+      state.finalWinner = winner;
+      return state;
+    }
+
+    state.phase = 'reveal';
     return state;
   }
 
@@ -1603,6 +1609,20 @@ class QuizGame {
       correctPlayers: [...state.correctPlayers],
       round: state.round
     };
+
+    if (state.round >= state.maxRounds) {
+      state.phase = 'finished';
+      let best = state.players[0];
+      for (const pid of state.players) {
+        if (state.scores[pid] > state.scores[best]) {
+          best = pid;
+        }
+      }
+      state.finalWinner = best;
+      state.showdownResult = { scores: state.scores };
+      return state;
+    }
+
     state.phase = 'answer';
     state.timer = 8;
     state.timerStarted = Date.now();

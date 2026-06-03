@@ -128,6 +128,14 @@
           </span>
         </button>
 
+        <button v-if="hasOpponentDrawOffer" type="button" class="action-btn decline" @click="declineDraw">
+          <span class="action-btn__badge">拒</span>
+          <span class="action-btn__copy">
+            <strong>拒绝</strong>
+            <small>继续对局</small>
+          </span>
+        </button>
+
         <button type="button" class="action-btn back" @click="$emit('back')">
           <span class="action-btn__badge">返</span>
           <span class="action-btn__copy">
@@ -446,6 +454,11 @@ function handlePointTap(cell) {
 function offerDraw() {
   if (!canOfferDraw.value) return
   emit('action', { type: 'offer_draw' })
+}
+
+function declineDraw() {
+  if (!hasOpponentDrawOffer.value) return
+  emit('action', { type: 'decline_draw' })
 }
 
 function isInPalace(row, col, color) {
@@ -992,7 +1005,7 @@ function getLegalMoves(stateBoard, row, col) {
 
 .action-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(86px, 1fr));
   gap: 10px;
 }
 
@@ -1052,6 +1065,10 @@ function getLegalMoves(stateBoard, row, col) {
 
 .action-btn.draw {
   background: linear-gradient(135deg, #23b9a0, #168a77);
+}
+
+.action-btn.decline {
+  background: linear-gradient(135deg, #f6a44d, #dd7a21);
 }
 
 .action-btn.back {

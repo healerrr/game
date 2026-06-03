@@ -120,7 +120,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { gameState, getPlayer, getPlayMode, socket, ensureAuthenticated } from '../socket'
+import { gameState, getPlayer, socket, ensureAuthenticated } from '../socket'
 
 import cardChineseChess from '../../img/card_chinese_chess_transparent.png'
 import cardDoudizhu from '../../img/card_doudizhu.png'
@@ -163,9 +163,6 @@ const utilities = [
   { key: 'leaderboard', label: '排行榜', desc: '实时排名', icon: '/assets/lobby/feature-ranking.png' },
   { key: 'results', label: '我的战绩', desc: '历史成绩', icon: '/assets/lobby/feature-achievement.png' }
 ]
-
-const isTestMode = computed(() => getPlayMode() === 'test')
-const noBotGameTypes = new Set(['reaction_race', 'dice_roll'])
 
 const selectedGameName = computed(() => {
   return gameCards.find((item) => item.key === selectedGameKey.value)?.name || '游戏对局'
@@ -231,18 +228,6 @@ function showToast(message) {
   }, 2200)
 }
 
-function enterQuickPlayRoom(data) {
-  gameState.currentRoom = {
-    roomId: data.roomId,
-    gameType: data.gameType,
-    players: data.players,
-    gameState: data.gameState
-  }
-  gameState.currentGame = data.gameState
-  socket.emit('room:join', { roomId: data.roomId })
-  router.push(`/game/${data.roomId}`)
-}
-
 async function joinGame(gameType) {
   if (matching.value) return
 
@@ -258,46 +243,18 @@ async function joinGame(gameType) {
   selectedGameKey.value = gameType
   matching.value = true
 
-  if (isTestMode.value && noBotGameTypes.has(gameType)) {
-    matching.value = false
-    createRoom(gameType)
-    return
-  }
-
-  if (!isTestMode.value) {
-    socket.emit('match:join', { gameType }, (res) => {
-      if (res?.error) {
-        matching.value = false
-        if (res.currentRoom?.roomId) {
-          gameState.currentRoom = res.currentRoom
-          gameState.currentGame = res.currentRoom.gameState
-          router.push(`/game/${res.currentRoom.roomId}`)
-          return
-        }
-        showToast(res.error)
+  socket.emit('match:join', { gameType }, (res) => {
+    if (res?.error) {
+      matching.value = false
+      if (res.currentRoom?.roomId) {
+        gameState.currentRoom = res.currentRoom
+        gameState.currentGame = res.currentRoom.gameState
+        router.push(`/game/${res.currentRoom.roomId}`)
+        return
       }
-    })
-    return
-  }
-
-  fetch('/api/bots/quick-play', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ playerId: player.value.id, gameType })
+      showToast(res.error)
+    }
   })
-    .then(async (res) => {
-      const data = await res.json()
-      if (!res.ok || data.error) throw new Error(data.error || '启动失败')
-      return data
-    })
-    .then((data) => {
-      matching.value = false
-      enterQuickPlayRoom(data)
-    })
-    .catch((err) => {
-      matching.value = false
-      showToast(err.message || '启动游戏失败')
-    })
 }
 
 async function createRoom(gameType) {

@@ -11,13 +11,12 @@ const store = require('./store');
 const redisStore = require('./persistence/redis');
 const { getEngine, getGameConfig, getAllGameConfigs } = require('./game-engine');
 const { tryMatch } = require('./matchmaker');
-const { BotManager, BotPlayer, BotStrategy } = require('./bots');
 const {
   getPublicGameState,
   getRoomPlayerSummaries,
   serializeRoom
 } = require('./room-view');
-const { getLevelScore } = require('./game-engines/guandan');
+const { getLevelScore, getHints: getGuandanHints } = require('./game-engines/guandan');
 const { getDoudizhuScoreUnit } = require('./game-engines/doudizhu');
 
 const app = express();
@@ -101,9 +100,6 @@ app.post('/api/admin/give-points', express.json(), (req, res) => {
   res.json({ success: true, player: { id: player.id, points: player.points } });
 });
 
-// ========== 机器人管理 API ==========
-const botManager = new BotManager(io);
-
 function readPositiveIntEnv(name, fallback) {
   const value = Number(process.env[name]);
   return Number.isFinite(value) && value > 0 ? value : fallback;
@@ -113,27 +109,7 @@ const READY_TIMEOUT_MS = readPositiveIntEnv('READY_TIMEOUT_MS', 20000);
 const DISCONNECT_GRACE_MS = readPositiveIntEnv('DISCONNECT_GRACE_MS', 45000);
 const ACTION_TIMEOUT_FALLBACK_MS = readPositiveIntEnv('ACTION_TIMEOUT_FALLBACK_MS', 30000);
 
-app.post('/api/bots/start', express.json(), (req, res) => {
-  const { gameType } = req.body;
-  if (!gameType) return res.status(400).json({ error: '游戏类型不能为空' });
-  const result = botManager.start(store, gameType);
-  if (result.error) return res.status(400).json(result);
-  res.json(result);
-});
-
-app.post('/api/bots/stop', express.json(), (req, res) => {
-  const { gameType } = req.body;
-  if (!gameType) return res.status(400).json({ error: '游戏类型不能为空' });
-  const result = botManager.stop(gameType);
-  if (result.error) return res.status(400).json(result);
-  res.json(result);
-});
-
-app.get('/api/bots/list', (req, res) => {
-  res.json({ rooms: botManager.getActiveRooms() });
-});
-
-// 获取活跃房间列表（含机器人房间）
+// 获取活跃房间列表
 app.get('/api/rooms/active', (req, res) => {
   const rooms = [];
   // 普通房间
@@ -500,7 +476,11 @@ io.on('connection', (socket) => {
           room.gameState = engine.nextRound(room.gameState);
         }
       } else if (room.status === 'playing') {
+        const previousDrawOffer = room.gameType === 'chess' ? room.gameState?.drawOffer || null : null;
         room.gameState = engine.update(room.gameState, action, currentPlayer.id);
+        if (room.gameType === 'chess') {
+          emitChessDrawNotice(room, currentPlayer.id, action, previousDrawOffer);
+        }
       }
       skipUnavailableTurns(room);
       store.saveRoom(room);
@@ -1110,10 +1090,18 @@ function getAutoMahjongAction(state, playerId) {
 
 function getAutoGuandanAction(state, playerId) {
   if (state.currentPlayer !== playerId) return null;
-  const strategyAction = BotStrategy.guandan(state, playerId);
-  if (strategyAction) return strategyAction;
 
   const hand = state.hands?.[playerId] || [];
+  if (state.lastPattern && state.lastLeadPlayer !== playerId) {
+    try {
+      const hints = getGuandanHints(hand, { pattern: state.lastPattern }, state.level);
+      const playable = hints.find((item) => Array.isArray(item.cards) && item.cards.length > 0);
+      return playable ? { type: 'play', cards: playable.cards } : { type: 'pass' };
+    } catch {
+      return { type: 'pass' };
+    }
+  }
+
   return hand[0] ? { type: 'play', cards: [hand[0]] } : null;
 }
 
@@ -1249,15 +1237,62 @@ function handleActionTimeout(room) {
   persistRoomProgress(room);
 }
 
+function getChessPlayerColor(room, playerId) {
+  const index = room?.gameState?.players?.indexOf(playerId);
+  if (index === 0) return 'red';
+  if (index === 1) return 'black';
+  return null;
+}
+
+function emitChessDrawNotice(room, actorId, action, previousDrawOffer = null) {
+  if (!room || room.gameType !== 'chess') return;
+
+  if (action.type === 'offer_draw') {
+    const accepted = previousDrawOffer?.playerId && previousDrawOffer.playerId !== actorId;
+    if (accepted) return;
+
+    const opponentId = room.players.find(pid => pid !== actorId);
+    const actor = store.getPlayer(actorId);
+    if (opponentId && room.gameState?.drawOffer?.playerId === actorId) {
+      io.to(`player:${opponentId}`).emit('game:draw_offer', {
+        roomId: room.id,
+        fromPlayerId: actorId,
+        fromNickname: actor?.nickname || '对手',
+        offeredAt: room.gameState.drawOffer.offeredAt
+      });
+    }
+    return;
+  }
+
+  if (action.type === 'decline_draw' && previousDrawOffer?.playerId && previousDrawOffer.playerId !== actorId) {
+    const actor = store.getPlayer(actorId);
+    io.to(`player:${previousDrawOffer.playerId}`).emit('game:draw_declined', {
+      roomId: room.id,
+      byPlayerId: actorId,
+      byNickname: actor?.nickname || '对手'
+    });
+  }
+}
+
 function forfeitPlayer(room, loserId, reason) {
   if (!room || room.status === 'finished') return;
   const winnerId = room.players.find(pid => pid !== loserId) || null;
+  const winnerColor = room.gameType === 'chess' ? getChessPlayerColor(room, winnerId) : null;
+  const loser = store.getPlayer(loserId);
   room.gameState = room.gameState || {};
   room.gameState.phase = 'finished';
   room.gameState.finalWinner = winnerId;
-  room.gameState.winner = winnerId;
+  room.gameState.winner = winnerColor || winnerId;
   room.gameState.forfeit = { playerId: loserId, reason };
   room.gameState.winningPlayers = winnerId ? [winnerId] : [];
+  if (winnerId) {
+    io.to(`player:${winnerId}`).emit('game:forfeit_notice', {
+      roomId: room.id,
+      playerId: loserId,
+      nickname: loser?.nickname || '对手',
+      reason
+    });
+  }
   handleGameEnd(room);
 }
 
@@ -1720,38 +1755,6 @@ function broadcastUpdate() {
   });
 }
 
-function cleanupPlayerBotRooms(playerId) {
-  const rooms = store.getRoomsForPlayer(playerId);
-  const blockingRooms = [];
-
-  rooms.forEach((room) => {
-    const otherHumanIds = room.players.filter(pid => {
-      if (pid === playerId) return false;
-      const p = store.getPlayer(pid);
-      return p && !p.isBot;
-    });
-
-    if (otherHumanIds.length > 0) {
-      blockingRooms.push(room);
-      return;
-    }
-
-    room.players.forEach(pid => {
-      const p = store.getPlayer(pid);
-      if (!p) return;
-      if (p.currentRoom === room.id) {
-        p.currentRoom = null;
-        store.savePlayer(p);
-      }
-      if (p.isBot) store.removePlayer(pid);
-    });
-
-    store.removeRoom(room.id);
-  });
-
-  return blockingRooms;
-}
-
 // ========== 房间状态推送 ==========
 // 当匹配成功后，通知房间玩家
 const originalCreateRoom = store.createRoom.bind(store);
@@ -1768,199 +1771,6 @@ store.createRoom = function(gameType, players, options = {}) {
   notifyRoomPlayers(room, 'game:matched');
   return room;
 };
-
-// ========== 快速游戏 (人机对战：一点即玩) ==========
-const quickPlayRooms = new Map(); // roomId → { timer, bots }
-
-// 获取当前应该行动的机器人玩家ID
-function getCurrentBotPlayer(state, gameType) {
-  if (!state) return null;
-  switch (gameType) {
-    case 'rock_paper_scissors': {
-      const allPlayers = state.players || Object.keys(state.scores || {});
-      const unchosen = allPlayers.filter(p => !state.choices?.[p]);
-      return unchosen.find(p => p.startsWith('bot_')) || null;
-    }
-    case 'guess_number':
-      return state.currentPlayer?.startsWith('bot_') ? state.currentPlayer : null;
-    case 'blackjack':
-      if (state.finishedPlayers?.includes(state.currentPlayer)) return null;
-      return state.currentPlayer?.startsWith('bot_') ? state.currentPlayer : null;
-    case 'zha_jin_hua':
-      if (state.phase === 'look') {
-        return state.activePlayers?.find(p =>
-          p.startsWith('bot_') && !state.actedThisRound?.includes(p)
-        ) || null;
-      }
-      return (state.phase === 'bet' && state.currentPlayer?.startsWith('bot_')) ? state.currentPlayer : null;
-    case 'undercover': {
-      if (state.phase === 'describe') {
-        const desc = state.currentDescriber;
-        if (desc && desc.startsWith('bot_') && !state.eliminatedPlayers?.includes(desc)) return desc;
-      }
-      if (state.phase === 'vote') {
-        const alive = state.players?.filter(p => !state.eliminatedPlayers?.includes(p) && p.startsWith('bot_'));
-        const unvoted = alive?.filter(p => !state.votes?.[p]);
-        return unvoted?.[0] || null;
-      }
-      return null;
-    }
-    case 'quiz':
-      return state.players?.find(p => p.startsWith('bot_') && !state.answeredPlayers?.includes(p)) || null;
-    case 'guandan':
-    case 'doudizhu':
-      return state.currentPlayer?.startsWith('bot_') ? state.currentPlayer : null;
-    case 'mahjong':
-      if (state.phase === 'response') {
-        if (state.pendingAction?.type === 'self') {
-          return state.pendingAction.playerId?.startsWith('bot_') ? state.pendingAction.playerId : null;
-        }
-        const claimant = state.pendingAction?.queue?.[0]?.playerId;
-        return claimant?.startsWith('bot_') ? claimant : null;
-      }
-      return state.currentPlayer?.startsWith('bot_') ? state.currentPlayer : null;
-    case 'gomoku':
-    case 'chess': {
-      // 这些游戏使用颜色作为 currentPlayer，需要映射到玩家 ID
-      const currentColor = state.currentPlayer;
-      if (!currentColor) return null;
-      
-      // players[0] 是红方，players[1] 是黑方
-      const playerIndex = currentColor === 'red' ? 0 : 1;
-      const playerId = state.players?.[playerIndex];
-      
-      return playerId?.startsWith('bot_') ? playerId : null;
-    }
-    default:
-      return null;
-  }
-}
-
-function startQuickPlayLoop(room, bots) {
-  const engine = getEngine(room.gameType);
-  if (!engine) return null;
-
-  const timer = setInterval(() => {
-    // 房间已清理
-    if (!quickPlayRooms.has(room.id)) { clearInterval(timer); return; }
-    if (room.status === 'finished') {
-      clearInterval(timer);
-      setTimeout(() => {
-        quickPlayRooms.delete(room.id);
-        store.removeRoom(room.id);
-        bots.forEach(b => store.removePlayer(b.id));
-      }, 10000);
-      return;
-    }
-
-    const state = room.gameState;
-    if (!state) return;
-
-    const currentPlayer = getCurrentBotPlayer(state, room.gameType);
-    if (!currentPlayer) return;
-
-    const strategy = BotStrategy[room.gameType];
-    if (!strategy) return;
-
-    const action = strategy(state, currentPlayer);
-    if (!action) return;
-
-    if (action.type === 'next_round') {
-      if (engine.nextRound) room.gameState = engine.nextRound(room.gameState);
-    } else {
-      room.gameState = engine.update(room.gameState, action, currentPlayer);
-    }
-    store.saveRoom(room);
-
-    // 广播状态更新
-    emitGameState(room);
-
-    // 游戏结束处理
-    if (room.gameState.phase === 'finished') {
-      handleGameEnd(room);
-      return;
-    }
-  }, 1500);
-
-  return timer;
-}
-
-// POST /api/bots/quick-play - 一点即玩
-app.post('/api/bots/quick-play', express.json(), (req, res) => {
-  const { playerId, gameType } = req.body;
-
-  const player = store.getPlayer(playerId);
-  if (!player) return res.status(404).json({ error: '玩家不存在' });
-
-  const config = getGameConfig(gameType);
-  if (!config) return res.status(400).json({ error: '游戏不存在' });
-
-  const blockingRooms = cleanupPlayerBotRooms(playerId);
-  if (blockingRooms.length > 0) {
-    return res.status(400).json({ error: '你仍在多人房间中，请先结束当前对局' });
-  }
-
-  if (player.currentRoom) {
-    const existingRoom = store.getRoom(player.currentRoom);
-    if (!existingRoom || existingRoom.status === 'finished') {
-      if (existingRoom) store.removeRoom(existingRoom.id);
-      player.currentRoom = null;
-      store.savePlayer(player);
-    } else {
-      return res.status(400).json({ error: '你已在游戏中' });
-    }
-  }
-
-  // 创建机器人填满剩余位置
-  const numBots = (config.maxPlayers || 2) - 1;
-  const bots = [];
-  for (let i = 0; i < numBots; i++) {
-    const bot = new BotPlayer(gameType);
-    bot.points = 5000;
-    bot.totalGames = 0;
-    bot.wins = 0;
-    bot.isBot = true;
-    bot.online = true;
-    bot.currentRoom = null;
-    bot.createdAt = Date.now();
-    bot.busNumber = 99;
-    const savedBot = store.addPlayer(bot);
-    bots.push(savedBot);
-  }
-
-  const allPlayers = [player, ...bots];
-
-  // 使用原始 createRoom（不广播 game:matched）
-  const room = originalCreateRoom(gameType, allPlayers, {
-    mode: 'quick',
-    status: 'playing',
-    visibility: 'quick',
-    ready: Object.fromEntries(allPlayers.map(p => [p.id, true])),
-    seatStates: Object.fromEntries(allPlayers.map(p => [
-      p.id,
-      { ready: true, connection: 'online', intent: 'active' }
-    ]))
-  });
-
-  // 初始化游戏状态
-  const engine = getEngine(gameType);
-  const pids = allPlayers.map(p => p.id);
-  if (engine) room.gameState = engine.init(room, pids);
-  room.status = 'playing';
-  store.saveRoom(room);
-
-  const matchPayload = serializeRoom(room, playerId);
-
-  // 只给真人玩家发送 game:matched
-  io.to(`player:${playerId}`).emit('game:matched', matchPayload);
-
-  // 启动机器人对局循环
-  const timer = startQuickPlayLoop(room, bots);
-  quickPlayRooms.set(room.id, { timer, bots });
-
-  console.log(`🎮 快速游戏: ${room.id} (${config.name}, 真人+${numBots}机器人)`);
-  res.json({ success: true, ...matchPayload });
-});
 
 // ========== 自动匹配循环（每2秒检查一次） ==========
 let matchingTickRunning = false;
@@ -1984,9 +1794,27 @@ function startMatchmakingLoop() {
   }, 2000);
 }
 
+function purgeBotArtifacts() {
+  const botIds = new Set(
+    Array.from(store.players.values())
+      .filter(player => player?.isBot || String(player?.id || '').startsWith('bot_'))
+      .map(player => player.id)
+  );
+
+  for (const room of Array.from(store.rooms.values())) {
+    const hasBotPlayer = room.players?.some(pid => botIds.has(pid));
+    if (hasBotPlayer || room.mode === 'quick' || room.visibility === 'quick') {
+      store.removeRoom(room.id);
+    }
+  }
+
+  botIds.forEach(id => store.removePlayer(id));
+}
+
 // 启动
 async function startServer() {
   await store.init();
+  purgeBotArtifacts();
 
   const socketAdapter = redisStore.getSocketAdapter();
   if (socketAdapter) {

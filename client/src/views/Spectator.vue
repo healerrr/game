@@ -16,7 +16,6 @@
         <div class="player-info">
           <span class="player-name">{{ p.nickname }}</span>
           <span class="player-bus">{{ p.busNumber }}号车</span>
-          <span v-if="p.isBot" class="bot-tag">🤖 机器人</span>
         </div>
       </div>
     </div>
@@ -433,14 +432,6 @@ function backToLobby() {
 .player-bus {
   font-size: 11px;
   color: var(--text-muted);
-}
-
-.bot-tag {
-  font-size: 10px;
-  background: rgba(139, 92, 246, 0.3);
-  color: #c4b5fd;
-  padding: 1px 6px;
-  border-radius: 8px;
 }
 
 .game-display {

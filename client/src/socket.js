@@ -15,7 +15,6 @@ export const socket = io(SOCKET_URL, {
 // 全局游戏状态
 export const gameState = reactive({
   player: null,
-  playMode: localStorage.getItem('bus_game_play_mode') || 'normal',
   personalRank: [],
   busRank: [],
   stats: { totalPlayers: 0, onlinePlayers: 0, activeRooms: 0 },
@@ -214,6 +213,18 @@ socket.on('game:opponent_disconnected', (data) => {
   window.dispatchEvent(new CustomEvent('game:opponent_disconnected', { detail: data }))
 })
 
+socket.on('game:forfeit_notice', (data) => {
+  window.dispatchEvent(new CustomEvent('game:forfeit_notice', { detail: data }))
+})
+
+socket.on('game:draw_offer', (data) => {
+  window.dispatchEvent(new CustomEvent('game:draw_offer', { detail: data }))
+})
+
+socket.on('game:draw_declined', (data) => {
+  window.dispatchEvent(new CustomEvent('game:draw_declined', { detail: data }))
+})
+
 socket.on('room:kicked', (data) => {
   gameState.currentRoom = null
   gameState.currentGame = null
@@ -267,13 +278,4 @@ export function getPlayer() {
 
 export function setPlayer(player) {
   gameState.player = player
-}
-
-export function getPlayMode() {
-  return gameState.playMode
-}
-
-export function setPlayMode(mode) {
-  gameState.playMode = mode
-  localStorage.setItem('bus_game_play_mode', mode)
 }
