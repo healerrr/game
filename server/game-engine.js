@@ -242,6 +242,16 @@ class DiceRoll {
     ];
     state.standings = sorted;
 
+    if (roundRolls.length > 0 && roundRolls.every(item => item.timeout)) {
+      state.phase = 'finished';
+      state.finalWinner = null;
+      state.winner = 'draw';
+      state.winningPlayers = [];
+      state.timer = 0;
+      state.timerStarted = Date.now();
+      return state;
+    }
+
     if (tied.length > 1) {
       state.phase = 'tiebreak';
       state.activePlayers = tied.map(item => item.playerId);

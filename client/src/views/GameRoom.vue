@@ -186,13 +186,16 @@
 
       <div class="dice-stage">
         <div class="dice-pair">
-          <div v-for="(value, index) in myDiceValues" :key="`dice-${index}`" class="dice-face">
-            <span
-              v-for="dot in diceDots(value)"
-              :key="`${index}-${dot}`"
-              :class="`dot dot-${dot}`"
-            ></span>
-          </div>
+          <figure
+            v-for="(value, index) in myDiceDisplayValues"
+            :key="`dice-${index}`"
+            class="dice-face"
+            :class="{ 'is-empty': !diceImage(value), 'is-rolling': diceRollAnimating }"
+            :style="{ '--roll-delay': `${index * 90}ms` }"
+          >
+            <img v-if="diceImage(value)" :src="diceImage(value)" :alt="diceAlt(value)">
+            <span v-else class="dice-placeholder">?</span>
+          </figure>
         </div>
         <strong>{{ myDiceTotalLabel }}</strong>
         <p>{{ diceHintText }}</p>
@@ -238,13 +241,13 @@
       </div>
 
       <div class="dice-stage guess-dice-stage">
-        <div class="dice-face single-dice">
-          <span
-            v-for="dot in diceDots(guessDiceValue)"
-            :key="`guess-dice-${dot}`"
-            :class="`dot dot-${dot}`"
-          ></span>
-        </div>
+        <figure
+          class="dice-face single-dice"
+          :class="{ 'is-empty': !diceImage(guessDiceDisplayValue), 'is-rolling': guessDiceAnimating }"
+        >
+          <img v-if="diceImage(guessDiceDisplayValue)" :src="diceImage(guessDiceDisplayValue)" :alt="diceAlt(guessDiceDisplayValue)">
+          <span v-else class="dice-placeholder">?</span>
+        </figure>
         <strong>{{ guessDiceResultLabel }}</strong>
         <p>{{ guessDiceHintText }}</p>
         <div v-if="gs.phase !== 'finished'" class="guess-dice-options">
@@ -632,6 +635,12 @@
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { gameState, getPlayer, socket } from '../socket'
+import die1Image from '../../img/dice/die-1.webp'
+import die2Image from '../../img/dice/die-2.webp'
+import die3Image from '../../img/dice/die-3.webp'
+import die4Image from '../../img/dice/die-4.webp'
+import die5Image from '../../img/dice/die-5.webp'
+import die6Image from '../../img/dice/die-6.webp'
 
 const ZhaJinHuaBoard = defineAsyncComponent(() => import('../components/games/ZhaJinHuaBoard.vue'))
 const GuandanBoard = defineAsyncComponent(() => import('../components/games/GuandanBoard.vue'))
@@ -639,6 +648,15 @@ const DoudizhuBoard = defineAsyncComponent(() => import('../components/games/Dou
 const MahjongBoard = defineAsyncComponent(() => import('../components/games/MahjongBoard.vue'))
 const GomokuBoard = defineAsyncComponent(() => import('../components/games/GomokuBoard.vue'))
 const ChessBoard = defineAsyncComponent(() => import('../components/games/ChessBoard.vue'))
+
+const DICE_FACE_IMAGES = {
+  1: die1Image,
+  2: die2Image,
+  3: die3Image,
+  4: die4Image,
+  5: die5Image,
+  6: die6Image
+}
 
 const DEFAULT_ROOM_RULE = {
   name: '游戏对局',
@@ -749,6 +767,11 @@ const inviteSearchText = ref('')
 const confirmDialog = ref({ visible: false, title: '确认操作', message: '' })
 const zhaJinHuaFoldedOut = ref(false)
 const zhaJinHuaFoldedGameType = ref('')
+const diceRollAnimating = ref(false)
+const diceRollPreviewValues = ref([1, 6])
+const guessDiceAnimating = ref(false)
+const guessDicePreviewValue = ref(3)
+const lastGuessDiceResultKey = ref('')
 
 let timerInterval = null
 let readyInterval = null
@@ -767,6 +790,10 @@ let drawOfferHandler = null
 let drawDeclinedHandler = null
 let opponentDisconnectedTimer = null
 let activeDrawOfferKey = ''
+let diceRollAnimationTimer = null
+let diceRollPreviewTimer = null
+let guessDiceAnimationTimer = null
+let guessDicePreviewTimer = null
 
 const gameType = computed(() => gameState.currentRoom?.gameType)
 const roomPlayers = computed(() => gameState.currentRoom?.players || [])
@@ -781,7 +808,13 @@ const readyButtonText = computed(() => {
   if (readySubmitting.value) return myReady.value ? '已准备' : '取消中...'
   return myReady.value ? '取消准备' : '准备'
 })
-const emptySeatCount = computed(() => Math.max(0, Number(currentRoom.value?.maxPlayers || roomPlayers.value.length) - roomPlayers.value.length))
+const availableSeatCount = computed(() => Math.max(0, Number(currentRoom.value?.maxPlayers || roomPlayers.value.length) - roomPlayers.value.length))
+const isFixedPlayerRoom = computed(() => {
+  const min = Math.max(1, Number(currentRoom.value?.minPlayers || roomPlayers.value.length || 1))
+  const max = Math.max(min, Number(currentRoom.value?.maxPlayers || min))
+  return min === max
+})
+const emptySeatCount = computed(() => (isFixedPlayerRoom.value ? availableSeatCount.value : 0))
 const readyPlayerRange = computed(() => {
   const min = Math.max(1, Number(currentRoom.value?.minPlayers || roomPlayers.value.length || 1))
   const max = Math.max(min, Number(currentRoom.value?.maxPlayers || min))
@@ -789,7 +822,7 @@ const readyPlayerRange = computed(() => {
 })
 const roomRuleDetails = computed(() => ROOM_RULES[gameType.value] || DEFAULT_ROOM_RULE)
 const canInvitePlayers = computed(() => {
-  if (!isReadyRoom.value || emptySeatCount.value <= 0) return false
+  if (!isReadyRoom.value || availableSeatCount.value <= 0) return false
 
   const room = currentRoom.value
   if (room?.visibility === 'public') {
@@ -943,6 +976,9 @@ const reactionPlayerRows = computed(() => {
 
 const myDiceRoll = computed(() => gs.value?.rolls?.[player.value?.id] || latestDiceRoll(player.value?.id))
 const myDiceValues = computed(() => myDiceRoll.value?.dice || ['?', '?'])
+const myDiceDisplayValues = computed(() => (
+  diceRollAnimating.value ? diceRollPreviewValues.value : myDiceValues.value
+))
 const myDiceTotalLabel = computed(() => {
   const roll = myDiceRoll.value
   if (!roll) return '等待摇骰'
@@ -989,6 +1025,9 @@ const canGuessDice = computed(() => (
   !myDiceGuess.value
 ))
 const guessDiceValue = computed(() => gs.value?.dice || '?')
+const guessDiceDisplayValue = computed(() => (
+  guessDiceAnimating.value ? guessDicePreviewValue.value : guessDiceValue.value
+))
 const guessDicePhaseLabel = computed(() => {
   if (gs.value?.phase === 'finished') return '开奖'
   return myDiceGuess.value ? '已选择' : `${timeLeft.value}s`
@@ -1090,16 +1129,66 @@ function latestDiceRoll(playerId) {
   return null
 }
 
-function diceDots(value) {
-  const layouts = {
-    1: [5],
-    2: [1, 9],
-    3: [1, 5, 9],
-    4: [1, 3, 7, 9],
-    5: [1, 3, 5, 7, 9],
-    6: [1, 3, 4, 6, 7, 9]
+function normalizedDiceValue(value) {
+  const numberValue = Number(value)
+  return Number.isInteger(numberValue) && numberValue >= 1 && numberValue <= 6 ? numberValue : null
+}
+
+function randomDiceValue() {
+  return Math.floor(Math.random() * 6) + 1
+}
+
+function diceImage(value) {
+  return DICE_FACE_IMAGES[normalizedDiceValue(value)] || ''
+}
+
+function diceAlt(value) {
+  const numberValue = normalizedDiceValue(value)
+  return numberValue ? `dice ${numberValue}` : 'dice rolling'
+}
+
+function clearDiceRollAnimation() {
+  if (diceRollAnimationTimer) {
+    clearTimeout(diceRollAnimationTimer)
+    diceRollAnimationTimer = null
   }
-  return layouts[value] || []
+  if (diceRollPreviewTimer) {
+    clearInterval(diceRollPreviewTimer)
+    diceRollPreviewTimer = null
+  }
+  diceRollAnimating.value = false
+}
+
+function startDiceRollAnimation(duration = 1160) {
+  clearDiceRollAnimation()
+  diceRollAnimating.value = true
+  diceRollPreviewValues.value = [randomDiceValue(), randomDiceValue()]
+  diceRollPreviewTimer = setInterval(() => {
+    diceRollPreviewValues.value = [randomDiceValue(), randomDiceValue()]
+  }, 78)
+  diceRollAnimationTimer = setTimeout(clearDiceRollAnimation, duration)
+}
+
+function clearGuessDiceAnimation() {
+  if (guessDiceAnimationTimer) {
+    clearTimeout(guessDiceAnimationTimer)
+    guessDiceAnimationTimer = null
+  }
+  if (guessDicePreviewTimer) {
+    clearInterval(guessDicePreviewTimer)
+    guessDicePreviewTimer = null
+  }
+  guessDiceAnimating.value = false
+}
+
+function startGuessDiceAnimation(duration = 1040) {
+  clearGuessDiceAnimation()
+  guessDiceAnimating.value = true
+  guessDicePreviewValue.value = randomDiceValue()
+  guessDicePreviewTimer = setInterval(() => {
+    guessDicePreviewValue.value = randomDiceValue()
+  }, 78)
+  guessDiceAnimationTimer = setTimeout(clearGuessDiceAnimation, duration)
 }
 
 function blackjackHandValue(cards = []) {
@@ -1135,6 +1224,7 @@ function tapReactionRace() {
 
 function rollDice() {
   if (!canRollDice.value) return
+  startDiceRollAnimation()
   socket.emit('game:action', { action: { type: 'roll' } })
 }
 
@@ -1557,6 +1647,8 @@ onMounted(() => {
 onUnmounted(() => {
   if (timerInterval) clearInterval(timerInterval)
   if (readyInterval) clearInterval(readyInterval)
+  clearDiceRollAnimation()
+  clearGuessDiceAnimation()
   clearOpponentDisconnectedNotice()
   if (stateHandler) window.removeEventListener('game:state', stateHandler)
   if (resultHandler) window.removeEventListener('game:result', resultHandler)
@@ -1608,10 +1700,36 @@ watch(() => gs.value?.phase, (phase) => {
   }
 })
 
+watch(() => [gameType.value, gs.value?.phase, gs.value?.dice, currentRoom.value?.roomId || currentRoom.value?.id], ([type, phase, diceValue, activeRoomId]) => {
+  if (type !== 'guess_dice') {
+    lastGuessDiceResultKey.value = ''
+    clearGuessDiceAnimation()
+    return
+  }
+
+  if (phase !== 'finished') {
+    lastGuessDiceResultKey.value = ''
+    clearGuessDiceAnimation()
+    return
+  }
+
+  const resultValue = normalizedDiceValue(diceValue)
+  if (!resultValue) return
+
+  const resultKey = `${activeRoomId || ''}:${resultValue}`
+  if (lastGuessDiceResultKey.value === resultKey) return
+
+  lastGuessDiceResultKey.value = resultKey
+  startGuessDiceAnimation()
+})
+
 watch(() => roomId.value, () => {
   opponentDisconnected.value = false
   zhaJinHuaFoldedOut.value = false
   zhaJinHuaFoldedGameType.value = ''
+  lastGuessDiceResultKey.value = ''
+  clearDiceRollAnimation()
+  clearGuessDiceAnimation()
 })
 </script>
 
@@ -2915,7 +3033,11 @@ watch(() => roomId.value, () => {
 .dice-pair {
   display: flex;
   justify-content: center;
+  align-items: center;
   gap: 16px;
+  min-height: 110px;
+  perspective: 760px;
+  transform-style: preserve-3d;
 }
 
 .guess-dice-stage {
@@ -2954,46 +3076,117 @@ watch(() => roomId.value, () => {
 }
 
 .dice-face {
+  --dice-size: 96px;
   position: relative;
-  width: 92px;
-  height: 92px;
+  width: var(--dice-size);
+  height: var(--dice-size);
+  margin: 0;
   border-radius: 24px;
-  background: linear-gradient(180deg, #fff7d7, #ffd56a);
-  box-shadow: 0 12px 20px rgba(202, 134, 24, 0.18), inset 0 3px 0 rgba(255, 255, 255, 0.55);
-}
-
-.dice-face::after {
-  content: '?';
-  position: absolute;
-  inset: 0;
   display: grid;
   place-items: center;
+  background: transparent;
+  transform: rotateX(7deg) rotateY(-8deg) translateZ(0);
+  transform-style: preserve-3d;
+  filter: drop-shadow(0 14px 18px rgba(22, 54, 103, 0.18));
+  will-change: transform;
+}
+
+.single-dice {
+  --dice-size: 108px;
+  margin: 0 auto;
+}
+
+.dice-face::before {
+  content: '';
+  position: absolute;
+  inset: 8px 7px 6px 8px;
+  z-index: 0;
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(232, 238, 247, 0.78), rgba(185, 197, 215, 0.58) 58%, rgba(105, 120, 146, 0.5));
+  opacity: 0.55;
+  transform: translate3d(8px, 9px, -14px) skewY(1deg);
+  filter: blur(0.4px);
+}
+
+.dice-face img {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+  transform: translateZ(14px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.dice-face.is-empty {
+  background: linear-gradient(180deg, #fff7d7, #ffd56a);
+  box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.55);
+}
+
+.dice-face.is-empty::before {
+  opacity: 0.2;
+}
+
+.dice-placeholder {
+  position: relative;
+  z-index: 1;
   color: #153260;
   font-size: 34px;
   font-weight: 1000;
+  transform: translateZ(14px);
 }
 
-.dice-face:has(.dot)::after {
-  content: '';
+.dice-face.is-rolling {
+  animation: dice-tumble 1040ms cubic-bezier(0.16, 0.9, 0.28, 1) both;
+  animation-delay: var(--roll-delay, 0ms);
 }
 
-.dot {
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: #153260;
+.dice-face.is-rolling img {
+  animation: dice-face-flash 1040ms ease-in-out both;
+  animation-delay: var(--roll-delay, 0ms);
 }
 
-.dot-1 { left: 22px; top: 22px; }
-.dot-2 { left: 46px; top: 22px; }
-.dot-3 { right: 22px; top: 22px; }
-.dot-4 { left: 22px; top: 46px; }
-.dot-5 { left: 46px; top: 46px; }
-.dot-6 { right: 22px; top: 46px; }
-.dot-7 { left: 22px; bottom: 22px; }
-.dot-8 { left: 46px; bottom: 22px; }
-.dot-9 { right: 22px; bottom: 22px; }
+@keyframes dice-tumble {
+  0% {
+    transform: translate3d(-3px, 0, 0) rotateX(8deg) rotateY(-12deg) rotateZ(-5deg) scale(0.96);
+  }
+  16% {
+    transform: translate3d(8px, -14px, 26px) rotateX(62deg) rotateY(116deg) rotateZ(28deg) scale(1.08);
+  }
+  32% {
+    transform: translate3d(-9px, 5px, 16px) rotateX(142deg) rotateY(218deg) rotateZ(-32deg) scale(1.03);
+  }
+  50% {
+    transform: translate3d(9px, -8px, 30px) rotateX(232deg) rotateY(318deg) rotateZ(18deg) scale(1.1);
+  }
+  68% {
+    transform: translate3d(-5px, 6px, 13px) rotateX(314deg) rotateY(416deg) rotateZ(-14deg) scale(1.02);
+  }
+  84% {
+    transform: translate3d(3px, -2px, 5px) rotateX(372deg) rotateY(352deg) rotateZ(6deg) scale(1.01);
+  }
+  100% {
+    transform: translate3d(0, 0, 0) rotateX(7deg) rotateY(-8deg) rotateZ(0) scale(1);
+  }
+}
+
+@keyframes dice-face-flash {
+  0%, 100% {
+    filter: brightness(1) blur(0);
+  }
+  28%, 72% {
+    filter: brightness(1.08) blur(0.35px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dice-face.is-rolling,
+  .dice-face.is-rolling img {
+    animation: none;
+  }
+}
 
 .dice-stage > strong {
   color: #153260;
