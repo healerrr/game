@@ -1619,9 +1619,11 @@ watch(() => roomId.value, () => {
 .game-room {
   --game-header-space: 60px;
   --game-viewport-height: calc(100dvh - var(--game-header-space));
-  width: 100vw;
-  height: 100dvh;
-  overflow: hidden;
+  width: 100%;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -1631,6 +1633,7 @@ watch(() => roomId.value, () => {
 .game-room.fullscreen-game {
   width: 100vw;
   height: 100dvh;
+  min-height: 0;
   --game-viewport-height: 100dvh;
   overflow: hidden;
   padding: 0;
@@ -1644,7 +1647,8 @@ watch(() => roomId.value, () => {
   overflow-x: hidden;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
-  padding: 0 10px calc(18px + env(safe-area-inset-bottom));
+  padding: 0 10px calc(96px + env(safe-area-inset-bottom));
+  align-items: stretch;
 }
 
 .game-header {
@@ -2373,8 +2377,9 @@ watch(() => roomId.value, () => {
 .ready-room {
   width: min(100%, 520px);
   flex: 0 0 auto;
-  margin: 0 auto 18px;
+  margin: 0 auto;
   padding: 16px;
+  overflow: visible;
 }
 
 .ready-head {
@@ -2727,7 +2732,8 @@ watch(() => roomId.value, () => {
 }
 
 .game-room.quick-party-layout {
-  padding: 0 10px 10px;
+  padding: 0 10px calc(18px + env(safe-area-inset-bottom));
+  align-items: stretch;
 }
 
 .game-room.quick-party-layout .game-header {
@@ -3332,9 +3338,10 @@ watch(() => roomId.value, () => {
 
 /* Quiz compact first-screen layout */
 .game-room.quiz-layout {
-  height: 100dvh;
-  max-height: 100dvh;
-  padding: 0 10px 10px;
+  min-height: 100dvh;
+  height: auto;
+  max-height: none;
+  padding: 0 10px calc(10px + env(safe-area-inset-bottom));
 }
 
 .game-room.quiz-layout .game-header {
@@ -3354,12 +3361,12 @@ watch(() => roomId.value, () => {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
   gap: 10px;
-  min-height: 0;
-  height: calc(100dvh - 72px);
-  max-height: calc(100dvh - 72px);
+  min-height: calc(100dvh - 72px);
+  height: auto;
+  max-height: none;
   padding: 14px;
   border-radius: 28px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .game-room.quiz-layout .quiz-mode .profile-row.compact {
@@ -3524,12 +3531,12 @@ watch(() => roomId.value, () => {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
   gap: 10px;
-  min-height: 0;
-  height: var(--game-viewport-height);
-  max-height: var(--game-viewport-height);
+  min-height: var(--game-viewport-height);
+  height: auto;
+  max-height: none;
   padding: 14px;
   border-radius: 28px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .game-room.rps-layout .profile-row {
@@ -3693,12 +3700,12 @@ watch(() => roomId.value, () => {
   }
 
   .game-room.quiz-layout {
-    padding: 0 8px 8px;
+    padding: 0 8px calc(8px + env(safe-area-inset-bottom));
   }
 
   .game-room.rps-layout,
   .game-room.board-layout {
-    padding: 0 8px 8px;
+    padding: 0 8px calc(8px + env(safe-area-inset-bottom));
   }
 
   .game-room.chess-layout {
@@ -3743,8 +3750,9 @@ watch(() => roomId.value, () => {
 
   .game-room.quiz-layout .mode-card.quiz-mode {
     gap: 8px;
-    height: calc(100dvh - 62px);
-    max-height: calc(100dvh - 62px);
+    min-height: calc(100dvh - 62px);
+    height: auto;
+    max-height: none;
     padding: 12px;
     border-radius: 24px;
   }
@@ -3838,8 +3846,9 @@ watch(() => roomId.value, () => {
 
   .game-room.rps-layout .mode-card.rps-mode {
     gap: 8px;
-    height: calc(100dvh - 62px);
-    max-height: calc(100dvh - 62px);
+    min-height: calc(100dvh - 62px);
+    height: auto;
+    max-height: none;
     padding: 12px;
     border-radius: 24px;
   }
@@ -3929,7 +3938,125 @@ watch(() => roomId.value, () => {
   }
 }
 
+.game-room.ready-layout .game-header {
+  grid-template-columns: 46px minmax(0, 1fr) 46px;
+  min-height: 44px;
+  padding: 4px 6px;
+  margin: 8px auto 12px;
+}
+
+.game-room.ready-layout .game-header h1 {
+  grid-column: 2;
+  justify-self: center;
+  text-align: center;
+  font-size: 18px;
+}
+
+.game-room.ready-layout .point-pill {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .game-room.ready-layout {
+    padding: 0 8px calc(108px + env(safe-area-inset-bottom));
+  }
+
+  .game-room.ready-layout .game-header {
+    width: 100%;
+    border-radius: 14px;
+  }
+
+  .game-room.ready-layout .ready-room {
+    width: 100%;
+    padding: 14px;
+    border-radius: 28px;
+  }
+
+  .game-room.ready-layout .ready-head {
+    align-items: flex-start;
+  }
+
+  .game-room.ready-layout .ready-head h2 {
+    font-size: 28px;
+    line-height: 1.12;
+  }
+
+  .game-room.ready-layout .rules-icon-btn {
+    width: 52px;
+    height: 52px;
+    border-radius: 18px;
+  }
+
+  .game-room.ready-layout .ready-list {
+    gap: 8px;
+  }
+
+  .game-room.ready-layout .ready-player {
+    min-height: 120px;
+    padding: 12px;
+    grid-template-columns: 54px minmax(0, 1fr);
+    gap: 10px 12px;
+    align-items: center;
+  }
+
+  .game-room.ready-layout .ready-player .avatar-circle {
+    width: 54px;
+    height: 54px;
+  }
+
+  .game-room.ready-layout .ready-player strong {
+    font-size: 18px;
+    line-height: 1.15;
+  }
+
+  .game-room.ready-layout .ready-player p {
+    font-size: 13px;
+    line-height: 1.25;
+  }
+
+  .game-room.ready-layout .ready-player-actions {
+    grid-column: 2;
+    justify-self: end;
+    align-self: end;
+    flex-wrap: nowrap;
+  }
+
+  .game-room.ready-layout .ready-status {
+    min-height: 32px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  .game-room.ready-layout .ready-inline-action {
+    min-width: 80px;
+    min-height: 40px;
+    padding: 0 14px;
+    border-radius: 14px;
+    font-size: 14px;
+  }
+
+  .game-room.ready-layout .ready-actions {
+    margin-top: 14px;
+  }
+}
+
 @media (max-width: 360px) {
+  .game-room.ready-layout .ready-player {
+    grid-template-columns: 48px minmax(0, 1fr);
+    padding: 10px;
+  }
+
+  .game-room.ready-layout .ready-player .avatar-circle {
+    width: 48px;
+    height: 48px;
+  }
+
+  .game-room.ready-layout .ready-player-actions {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    justify-content: flex-end;
+  }
+
   .game-room.quiz-layout .quiz-mode .quiz-options {
     grid-template-columns: 1fr;
   }
