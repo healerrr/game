@@ -5,7 +5,6 @@
       'fullscreen-game': isFullscreenGame,
       'quiz-layout': gameType === 'quiz',
       'rps-layout': gameType === 'rock_paper_scissors',
-      'guess-layout': gameType === 'guess_number',
       'quick-party-layout': ['reaction_race', 'dice_roll', 'guess_dice'].includes(gameType),
       'board-layout': ['gomoku', 'chess', 'zha_jin_hua'].includes(gameType),
       'chess-layout': gameType === 'chess'
@@ -22,8 +21,19 @@
         <div>
           <span>候场房间</span>
           <h2>{{ gameLabel }}</h2>
+          <p class="ready-player-range">所需人数 {{ readyPlayerRange }}</p>
         </div>
-        <strong v-if="readyDeadlineLeft > 0">{{ readyDeadlineLeft }}s</strong>
+        <div class="ready-head-actions">
+          <button
+            type="button"
+            class="rules-icon-btn"
+            aria-label="查看玩法规则"
+            @click="showRoomRules = true"
+          >
+            ?
+          </button>
+          <strong v-if="readyDeadlineLeft > 0">{{ readyDeadlineLeft }}s</strong>
+        </div>
       </div>
 
       <div class="ready-list">
@@ -276,6 +286,12 @@
       </section>
 
       <div class="play-zone">
+        <div class="result-line rps-score-line">
+          <span>第 {{ gs.round || 1 }}/{{ gs.maxRounds || 3 }} 局</span>
+          <span>{{ myScore }} : {{ opponentScore }}</span>
+          <span>先到 2 分</span>
+        </div>
+
         <template v-if="gs.phase === 'choose'">
           <div class="ring-wrap">
             <svg viewBox="0 0 100 100">
@@ -295,7 +311,7 @@
             </svg>
             <strong>{{ timeLeft }}s</strong>
           </div>
-          <p class="phase-copy">请选择出拳，一局定胜负</p>
+          <p class="phase-copy">三局两胜，3 秒内快速出拳</p>
           <div class="move-row">
             <button
               v-for="move in moves"
@@ -324,12 +340,7 @@
             </div>
           </div>
           <div class="round-result" :class="roundResult">{{ roundResultText }}</div>
-          <div class="dual-btns">
-            <button class="primary-btn" @click="nextRound">
-              {{ roundResult === 'draw' ? '再来一局' : '查看结算' }}
-            </button>
-            <button class="secondary-btn" @click="backToLobby">返回大厅</button>
-          </div>
+          <p class="phase-copy auto-next-copy">{{ rpsRevealHint }}</p>
         </template>
 
         <template v-else-if="gs.phase === 'finished'">
@@ -341,60 +352,6 @@
             <button class="secondary-btn" @click="backToLobby">返回大厅</button>
           </div>
         </template>
-      </div>
-    </section>
-
-    <section v-else-if="gameType === 'guess_number'" class="mode-card guess-mode">
-      <div class="profile-row compact">
-        <div class="side side-me">
-          <div class="avatar-circle">{{ playerInitial }}</div>
-          <div>
-            <strong>{{ player?.nickname }}</strong>
-            <p>🚌 {{ player?.busNumber }}号车</p>
-          </div>
-        </div>
-        <button class="small-action" @click="$router.push('/leaderboard')">🏆 今日排行</button>
-      </div>
-
-      <div class="hero-strip">猜出 1~100 的神秘数字</div>
-
-      <div class="status-chips">
-        <span>范围 {{ gs.range?.low ?? 1 }} - {{ gs.range?.high ?? 100 }}</span>
-        <span>剩余次数 {{ remainingChances }}</span>
-        <span>上一轮 {{ lastGuessLabel }}</span>
-      </div>
-
-      <div class="number-screen">{{ guessNum || '0' }}</div>
-
-      <div class="num-pad" v-if="gs.phase === 'guess' && gs.currentPlayer === player?.id">
-        <button v-for="n in [1,2,3,4,5,6,7,8,9,0]" :key="`n-${n}`" @click="appendDigit(n)">
-          {{ n }}
-        </button>
-        <button class="erase" @click="removeDigit">⌫</button>
-      </div>
-
-      <div class="hint-line">
-        {{ gs.currentPlayer === player?.id ? '请输入你的数字并提交' : `等待 ${opponentName} 猜测中...` }}
-      </div>
-
-      <div class="dual-btns">
-        <button
-          class="primary-btn"
-          :disabled="!guessNum || guessSubmitting || gs.phase !== 'guess' || gs.currentPlayer !== player?.id"
-          @click="makeGuess"
-        >
-          {{ guessSubmitting ? '提交中...' : '提交答案' }}
-        </button>
-        <button class="secondary-btn" :disabled="guessSubmitting" @click="guessNum = ''">重新输入</button>
-      </div>
-
-      <div v-if="gs.phase === 'finished'" class="final-box">
-        <p>正确答案：<strong>{{ gs.secret }}</strong></p>
-        <p>{{ !gs.winner ? '次数用完，本局无人猜中。' : (gs.winner === player?.id ? '你猜中了，太厉害了！' : `${opponentName} 先一步猜中`) }}</p>
-        <div class="dual-btns">
-          <button class="primary-btn" @click="rematch">再来一局</button>
-          <button class="secondary-btn" @click="backToLobby">返回大厅</button>
-        </div>
       </div>
     </section>
 
@@ -603,6 +560,37 @@
     </transition>
 
     <transition name="fade">
+      <div v-if="showRoomRules" class="rules-overlay" @click="showRoomRules = false">
+        <article class="rules-panel" role="dialog" aria-modal="true" @click.stop>
+          <header class="rules-panel__head">
+            <div>
+              <span>玩法与积分</span>
+              <h3>{{ roomRuleDetails.name }}</h3>
+            </div>
+            <button type="button" class="rules-close-btn" @click="showRoomRules = false">关闭</button>
+          </header>
+
+          <div class="rules-section">
+            <h4>玩法</h4>
+            <p>{{ roomRuleDetails.play }}</p>
+          </div>
+
+          <div class="rules-section">
+            <h4>胜负判定</h4>
+            <p>{{ roomRuleDetails.win }}</p>
+          </div>
+
+          <div class="rules-section">
+            <h4>积分规则</h4>
+            <ul>
+              <li v-for="item in roomRuleDetails.scoring" :key="item">{{ item }}</li>
+            </ul>
+          </div>
+        </article>
+      </div>
+    </transition>
+
+    <transition name="fade">
       <div v-if="confirmDialog.visible" class="confirm-overlay">
         <div class="confirm-panel" role="dialog" aria-modal="true">
           <h3>{{ confirmDialog.title }}</h3>
@@ -629,6 +617,94 @@ const MahjongBoard = defineAsyncComponent(() => import('../components/games/Mahj
 const GomokuBoard = defineAsyncComponent(() => import('../components/games/GomokuBoard.vue'))
 const ChessBoard = defineAsyncComponent(() => import('../components/games/ChessBoard.vue'))
 
+const DEFAULT_ROOM_RULE = {
+  name: '游戏对局',
+  play: '进入候场房后，所有当前玩家准备且人数达到要求，倒计时结束后开始游戏。',
+  win: '按本游戏内的胜负判定结算。',
+  scoring: ['按本游戏门票分和胜负结果结算积分。']
+}
+
+const ROOM_RULES = {
+  reaction_race: {
+    name: '看谁快',
+    play: '2 到 6 人参与。绿灯亮起后立刻点击按钮，比拼反应速度。',
+    win: '最先完成有效点击的玩家获胜；抢点或超时不会获胜。',
+    scoring: ['门票 10 分。获胜者获得本局奖池收益，其他玩家各扣 10 分。']
+  },
+  dice_roll: {
+    name: '摇骰子',
+    play: '2 到 6 人参与。每名玩家摇两颗骰子，比拼点数总和。',
+    win: '点数最高的玩家获胜；若最高点数并列，则并列玩家共同获胜。',
+    scoring: ['门票 10 分。胜者平分奖池收益，未获胜玩家各扣 10 分。']
+  },
+  guess_dice: {
+    name: '猜点数',
+    play: '3 到 6 人参与。每名玩家选择 1 到 6 的一个点数，系统摇一颗骰子作为结果。',
+    win: '猜中骰子点数的玩家获胜；可能多人同时猜中，也可能无人猜中。',
+    scoring: [
+      '门票 10 分。猜中的玩家各加 10 分，猜错的玩家各扣 10 分。',
+      '如果所有玩家都猜中，则所有人都加 10 分；如果无人猜中，则所有人都扣 10 分。'
+    ]
+  },
+  rock_paper_scissors: {
+    name: '剪刀石头布',
+    play: '2 人参与。双方每局同时选择剪刀、石头或布，3 秒内未选择会自动出拳。',
+    win: '三局两胜，先赢 2 局者获胜；平局不计分并立即重开当前局。',
+    scoring: ['门票 10 分。整场胜者加 10 分，败者扣 10 分。']
+  },
+  blackjack: {
+    name: '21点',
+    play: '2 到 4 人参与。每人开局 2 张牌，轮到自己时可以要牌或停牌；A 可按 11 点或 1 点计算。',
+    win: '所有玩家停牌、爆牌或达到 21 点后结算；未爆牌且点数最高者获胜。',
+    scoring: ['门票 30 分。胜者按多人奖池规则获得收益，爆牌玩家无法获胜。']
+  },
+  quiz: {
+    name: '快问快答',
+    play: '2 到 4 人参与，共 3 题。每题限时作答，答对得题内分。',
+    win: '三题结束后，题内得分最高的玩家获胜。',
+    scoring: ['门票 20 分。胜者获得奖池收益，其他玩家各扣 20 分。']
+  },
+  gomoku: {
+    name: '五子棋',
+    play: '2 人参与。双方轮流落子，黑方先手。',
+    win: '任意横、竖、斜方向先连成 5 子者获胜；棋盘下满无五连为平局。',
+    scoring: ['门票 30 分。胜者加 30 分，败者扣 30 分；平局不增减积分。']
+  },
+  chess: {
+    name: '象棋',
+    play: '2 人参与。双方按中国象棋规则轮流走子，红方先行。',
+    win: '吃掉对方将/帅，或让对方无合法走法时获胜；双方同意和棋则为平局。',
+    scoring: ['门票 50 分。胜者加 50 分，败者扣 50 分；和棋不增减积分。']
+  },
+  doudizhu: {
+    name: '斗地主',
+    play: '3 人参与。叫分抢地主后，地主拿底牌并先出，玩家按牌型压牌或过牌。',
+    win: '地主先出完则地主获胜；任意农民先出完则两名农民共同获胜。',
+    scoring: [
+      '基础结算单位为 50 分，每出现炸弹或王炸会提高结算单位。',
+      '地主胜时地主加双倍结算单位，两名农民各扣一个结算单位；农民胜时反向结算。'
+    ]
+  },
+  guandan: {
+    name: '掼蛋',
+    play: '4 人参与，两副牌，南北一队、东西一队，按牌型轮流出牌或过牌。',
+    win: '按出完顺序结算本轮，头游所在队为胜方，并按名次组合升级。',
+    scoring: ['门票 100 分。胜方按等级差获得奖励，负方扣除同等分数。']
+  },
+  zha_jin_hua: {
+    name: '炸金花',
+    play: '2 到 5 人参与。每人 3 张牌，可看牌、跟注、加注、比牌或弃牌。',
+    win: '其他玩家弃牌或比牌出局后，最后留在场上的玩家获胜；也可摊牌比较牌型。',
+    scoring: ['基础下注 20 分。赢家获得当前奖池扣除自己投入后的收益，输家扣除本局实际投入。']
+  },
+  mahjong: {
+    name: '红中麻将',
+    play: '4 人参与。按红中麻将规则摸牌、打牌、碰、杠、胡。',
+    win: '自摸、点炮胡、杠上开花、抢杠胡、天胡、地胡或四红中均可结束对局；流局无人获胜。',
+    scoring: ['底分 50 分。按胡牌方式、番型和杠分直接结算到玩家积分。']
+  }
+}
+
 const route = useRoute()
 const router = useRouter()
 
@@ -637,14 +713,13 @@ const player = computed(() => getPlayer())
 const gs = ref({})
 const opponentDisconnected = ref(false)
 const selectedMove = ref(null)
-const guessNum = ref('')
-const guessSubmitting = ref(false)
 const timeLeft = ref(5)
 const quizAnswer = ref(null)
 const quizTimeLeft = ref(15)
 const readyDeadlineLeft = ref(0)
 const readySubmitting = ref(false)
 const showInvitePanel = ref(false)
+const showRoomRules = ref(false)
 const inviteCandidates = ref([])
 const inviteLoading = ref(false)
 const inviteSearchText = ref('')
@@ -684,7 +759,22 @@ const readyButtonText = computed(() => {
   return myReady.value ? '取消准备' : '准备'
 })
 const emptySeatCount = computed(() => Math.max(0, Number(currentRoom.value?.maxPlayers || roomPlayers.value.length) - roomPlayers.value.length))
-const canInvitePlayers = computed(() => isReadyRoom.value && currentRoom.value?.visibility === 'private' && currentRoom.value?.ownerId === player.value?.id && emptySeatCount.value > 0)
+const readyPlayerRange = computed(() => {
+  const min = Math.max(1, Number(currentRoom.value?.minPlayers || roomPlayers.value.length || 1))
+  const max = Math.max(min, Number(currentRoom.value?.maxPlayers || min))
+  return min === max ? `${min}人` : `${min}-${max}人`
+})
+const roomRuleDetails = computed(() => ROOM_RULES[gameType.value] || DEFAULT_ROOM_RULE)
+const canInvitePlayers = computed(() => {
+  if (!isReadyRoom.value || emptySeatCount.value <= 0) return false
+
+  const room = currentRoom.value
+  if (room?.visibility === 'public') {
+    return roomPlayers.value.some(item => item.id === player.value?.id)
+  }
+
+  return room?.visibility === 'private' && room.ownerId === player.value?.id
+})
 const filteredInviteCandidates = computed(() => {
   const keyword = inviteSearchText.value.trim().toLowerCase()
   if (!keyword) return inviteCandidates.value
@@ -699,7 +789,6 @@ const gameLabel = computed(() => {
     dice_roll: '摇骰子',
     guess_dice: '猜点数',
     rock_paper_scissors: '剪刀石头布',
-    guess_number: '猜数字',
     blackjack: '21点',
     zha_jin_hua: '炸金花',
     quiz: '快问快答',
@@ -758,9 +847,19 @@ const roundResultText = computed(() => {
   if (!gs.value.result.winner) return '平局'
   return gs.value.result.winner === player.value?.id ? '本轮获胜' : '本轮失利'
 })
+const isRpsFinalReveal = computed(() => {
+  const winner = gs.value?.result?.winner
+  if (!winner) return false
+  return Number(gs.value?.scores?.[winner] || 0) >= Number(gs.value?.targetScore || 2)
+})
+const rpsRevealHint = computed(() => {
+  if (roundResult.value === 'draw') return '平局不计分，马上重开本局'
+  return isRpsFinalReveal.value ? '即将结算整场胜负' : '下一局马上开始'
+})
 
-const timerColor = computed(() => timeLeft.value > 2 ? '#2eb87f' : '#ff4e4e')
-const timerOffset = computed(() => 270 * (1 - timeLeft.value / 5))
+const timerTotal = computed(() => Math.max(1, Number(gs.value?.timer || 5)))
+const timerColor = computed(() => timeLeft.value > Math.ceil(timerTotal.value / 2) ? '#2eb87f' : '#ff4e4e')
+const timerOffset = computed(() => 270 * (1 - Math.max(0, timeLeft.value) / timerTotal.value))
 
 const moves = [
   { key: 'rock', icon: '✊', label: '石头' },
@@ -947,17 +1046,6 @@ const blackjackPlayerRows = computed(() => {
   })
 })
 
-const remainingChances = computed(() => {
-  const total = 10
-  const used = gs.value?.guesses?.length || 0
-  return Math.max(0, total - used)
-})
-
-const lastGuessLabel = computed(() => {
-  const latest = gs.value?.guesses?.at?.(-1)
-  return latest ? latest.guess : '--'
-})
-
 const quizTimerPercent = computed(() => {
   const total = gs.value?.phase === 'answer' ? 8 : 15
   const left = Math.max(0, Math.min(total, quizTimeLeft.value))
@@ -1045,40 +1133,6 @@ function selectMove(move) {
   if (hasSelectedMove.value) return
   selectedMove.value = move
   socket.emit('game:action', { action: { type: 'choose', choice: move } })
-}
-
-function appendDigit(num) {
-  const text = String(num)
-  const merged = `${guessNum.value}${text}`.slice(0, 3)
-  if (!merged) return
-  if (Number(merged) > 100) return
-  guessNum.value = merged
-}
-
-function removeDigit() {
-  guessNum.value = guessNum.value.slice(0, -1)
-}
-
-function makeGuess() {
-  if (guessSubmitting.value) return
-  if (gs.value?.phase !== 'guess' || gs.value?.currentPlayer !== player.value?.id) return
-
-  const value = Number.parseInt(guessNum.value, 10)
-  if (!Number.isFinite(value)) return
-
-  const low = gs.value?.range?.low ?? 1
-  const high = gs.value?.range?.high ?? 100
-  if (value < low || value > high) {
-    alert(`请输入 ${low} 到 ${high} 之间的数字`)
-    return
-  }
-
-  guessSubmitting.value = true
-  socket.emit('game:action', { action: { type: 'guess', guess: value } })
-  guessNum.value = ''
-  window.setTimeout(() => {
-    guessSubmitting.value = false
-  }, 3000)
 }
 
 function nextRound() {
@@ -1239,9 +1293,13 @@ async function rematch() {
       }
       zhaJinHuaFoldedOut.value = false
       zhaJinHuaFoldedGameType.value = ''
-      gameState.currentRoom = null
-      gameState.currentGame = null
-      router.push({ path: '/lobby', query: { matching: targetGameType } })
+      if (res?.room?.roomId) {
+        gameState.currentRoom = res.room
+        gameState.currentGame = res.room.gameState
+        gs.value = res.room.gameState || {}
+        socket.emit('room:join', { roomId: res.room.roomId })
+        router.push(`/game/${res.room.roomId}`)
+      }
     })
     return
   }
@@ -1253,7 +1311,7 @@ async function rematch() {
       return
     }
     if (res?.requeued) {
-      router.push({ path: '/lobby', query: { matching: res.gameType || activeGameType } })
+      router.push('/lobby')
       return
     }
     if (res?.room) {
@@ -1344,7 +1402,6 @@ onMounted(() => {
     if (event.detail.room) {
       gameState.currentRoom = event.detail.room
     }
-    guessSubmitting.value = false
     if (gameType.value === 'rock_paper_scissors' && gs.value?.phase === 'choose' && !gs.value?.choices?.[player.value?.id]) {
       selectedMove.value = null
     }
@@ -1368,6 +1425,7 @@ onMounted(() => {
     gs.value = event.detail.gameState || {}
     readySubmitting.value = false
     showInvitePanel.value = false
+    showRoomRules.value = false
   }
   window.addEventListener('room:started', roomStartedHandler)
 
@@ -1380,7 +1438,6 @@ onMounted(() => {
     gs.value = resultRoom?.gameState
       ? { ...resultRoom.gameState, resultPlayers }
       : { ...gs.value, ...result, resultPlayers }
-    guessSubmitting.value = false
     clearOpponentDisconnectedNotice()
   }
   window.addEventListener('game:result', resultHandler)
@@ -1439,7 +1496,7 @@ onMounted(() => {
 
   requeuedHandler = (event) => {
     alert(event.detail?.message || '已重新匹配')
-    router.push({ path: '/lobby', query: { matching: event.detail?.gameType || gameType.value } })
+    router.push('/lobby')
   }
   window.addEventListener('match:requeued', requeuedHandler)
 
@@ -1814,6 +1871,25 @@ watch(() => roomId.value, () => {
   font-weight: 700;
 }
 
+.rps-score-line {
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+
+.rps-score-line span:nth-child(2) {
+  min-width: 88px;
+  padding: 0 14px;
+  background: linear-gradient(180deg, #fff3d0, #ffd66a);
+  color: #155bd6;
+  font-size: 18px;
+  font-weight: 1000;
+}
+
+.auto-next-copy {
+  min-height: 28px;
+  font-weight: 900;
+}
+
 .play-zone {
   margin-top: 14px;
   border-radius: 16px;
@@ -2026,6 +2102,90 @@ watch(() => roomId.value, () => {
   gap: 10px;
 }
 
+.rules-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3000;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(8, 20, 38, 0.46);
+  backdrop-filter: blur(8px);
+}
+
+.rules-panel {
+  width: min(420px, 100%);
+  max-height: min(78dvh, 620px);
+  overflow-y: auto;
+  border-radius: 20px;
+  padding: 18px;
+  background: #fff;
+  box-shadow: 0 18px 42px rgba(8, 24, 52, 0.28);
+  color: #183052;
+}
+
+.rules-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.rules-panel__head span {
+  color: #6b82ac;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.rules-panel__head h3 {
+  margin: 4px 0 0;
+  color: #17315d;
+  font-size: 22px;
+  line-height: 1.15;
+  font-weight: 1000;
+}
+
+.rules-close-btn {
+  min-width: 62px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid #aac9f4;
+  background: #fff;
+  color: #1f66da;
+  font-weight: 900;
+}
+
+.rules-section {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid #e4eefb;
+}
+
+.rules-section h4 {
+  margin: 0 0 6px;
+  color: #17315d;
+  font-size: 15px;
+  font-weight: 1000;
+}
+
+.rules-section p,
+.rules-section ul {
+  margin: 0;
+  color: #51647f;
+  font-size: 14px;
+  line-height: 1.6;
+  font-weight: 700;
+}
+
+.rules-section ul {
+  padding-left: 18px;
+}
+
+.rules-section li + li {
+  margin-top: 6px;
+}
+
 .hero-strip {
   margin-top: 12px;
   min-height: 76px;
@@ -2037,58 +2197,6 @@ watch(() => roomId.value, () => {
   font-weight: 900;
   font-size: 24px;
   color: #2158a2;
-}
-
-.status-chips {
-  margin-top: 12px;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 9px;
-}
-
-.status-chips span {
-  min-height: 42px;
-  border-radius: 12px;
-  display: grid;
-  place-items: center;
-  font-size: 14px;
-  font-weight: 700;
-  background: #f0f6ff;
-  color: #31558f;
-}
-
-.number-screen {
-  margin-top: 12px;
-  min-height: 98px;
-  border-radius: 16px;
-  border: 2px solid #b7d3fb;
-  background: #fff;
-  display: grid;
-  place-items: center;
-  color: #1d3c76;
-  font-size: 64px;
-  font-weight: 900;
-}
-
-.num-pad {
-  margin-top: 12px;
-  display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.num-pad button {
-  min-height: 52px;
-  border-radius: 12px;
-  border: 1px solid #d9e7f8;
-  background: #fff;
-  color: #1d3c76;
-  font-size: 24px;
-  font-weight: 800;
-}
-
-.num-pad .erase {
-  background: #edf4ff;
 }
 
 .hint-line {
@@ -2247,6 +2355,20 @@ watch(() => roomId.value, () => {
   font-size: 24px;
 }
 
+.ready-player-range {
+  margin: 6px 0 0;
+  color: #6b82ac;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.ready-head-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .ready-head strong {
   width: 54px;
   height: 54px;
@@ -2256,6 +2378,21 @@ watch(() => roomId.value, () => {
   display: grid;
   place-items: center;
   font-size: 20px;
+}
+
+.rules-icon-btn {
+  width: 46px;
+  height: 46px;
+  border-radius: 16px;
+  border: 1px solid #c9dcf7;
+  background: linear-gradient(180deg, #fff8dc, #ffd86b);
+  color: #1365e8;
+  display: grid;
+  place-items: center;
+  font-size: 25px;
+  line-height: 1;
+  font-weight: 1000;
+  box-shadow: 0 8px 14px rgba(9, 89, 208, 0.14);
 }
 
 .ready-list {
@@ -2958,15 +3095,6 @@ watch(() => roomId.value, () => {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .num-pad {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  .number-screen {
-    font-size: 42px;
-    min-height: 84px;
-  }
-
   .quiz-head {
     grid-template-columns: 1fr;
   }
@@ -3055,7 +3183,6 @@ watch(() => roomId.value, () => {
 }
 
 .result-line span,
-.status-chips span,
 .quiz-head span {
   border: 1px solid #d7e8fb;
   background: #fff;
@@ -3074,15 +3201,7 @@ watch(() => roomId.value, () => {
   text-shadow: 0 2px 0 #fff;
 }
 
-.number-screen {
-  border-radius: 22px;
-  border: 2px solid #9fc8ff;
-  background: linear-gradient(180deg, #ffffff, #f7fbff);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.8);
-}
-
 .move-btn,
-.num-pad button,
 .quiz-options button {
   border-radius: 18px;
   border: 2px solid #dceafb;
@@ -3267,7 +3386,6 @@ watch(() => roomId.value, () => {
 }
 
 .game-room.rps-layout,
-.game-room.guess-layout,
 .game-room.quiz-layout,
 .game-room.board-layout {
   padding: 0 10px 10px;
@@ -3285,7 +3403,6 @@ watch(() => roomId.value, () => {
 }
 
 .game-room.rps-layout .game-header,
-.game-room.guess-layout .game-header,
 .game-room.quiz-layout .game-header,
 .game-room.board-layout .game-header {
   width: min(100%, 520px);
@@ -3298,15 +3415,13 @@ watch(() => roomId.value, () => {
 }
 
 .game-room.rps-layout .point-pill,
-.game-room.guess-layout .point-pill,
 .game-room.quiz-layout .point-pill,
 .game-room.board-layout .point-pill {
   justify-self: end;
   white-space: nowrap;
 }
 
-.game-room.rps-layout .mode-card.rps-mode,
-.game-room.guess-layout .mode-card.guess-mode {
+.game-room.rps-layout .mode-card.rps-mode {
   width: min(100%, 520px);
   flex: 1 1 auto;
   display: grid;
@@ -3320,46 +3435,33 @@ watch(() => roomId.value, () => {
   overflow: hidden;
 }
 
-.game-room.rps-layout .profile-row,
-.game-room.guess-layout .profile-row.compact {
+.game-room.rps-layout .profile-row {
   margin: 0;
 }
 
-.game-room.rps-layout .side,
-.game-room.guess-layout .side {
+.game-room.rps-layout .side {
   min-height: 68px;
   padding: 9px 11px;
   gap: 10px;
   border-radius: 18px;
 }
 
-.game-room.rps-layout .side strong,
-.game-room.guess-layout .side strong {
+.game-room.rps-layout .side strong {
   font-size: 16px;
 }
 
-.game-room.rps-layout .side p,
-.game-room.guess-layout .side p {
+.game-room.rps-layout .side p {
   margin-top: 2px;
   font-size: 12px;
 }
 
-.game-room.rps-layout .avatar-circle,
-.game-room.guess-layout .avatar-circle {
+.game-room.rps-layout .avatar-circle {
   width: 48px;
   height: 48px;
   font-size: 22px;
 }
 
-.game-room.guess-layout .small-action {
-  min-height: 44px;
-  padding: 0 14px;
-  justify-self: end;
-}
-
-.game-room.rps-layout .result-line,
-.game-room.guess-layout .status-chips,
-.game-room.guess-layout .dual-btns {
+.game-room.rps-layout .result-line {
   margin-top: 0;
 }
 
@@ -3417,9 +3519,7 @@ watch(() => roomId.value, () => {
 }
 
 .game-room.rps-layout .round-result,
-.game-room.rps-layout .dual-btns,
-.game-room.guess-layout .hint-line,
-.game-room.guess-layout .final-box {
+.game-room.rps-layout .dual-btns {
   margin-top: 0;
 }
 
@@ -3429,42 +3529,6 @@ watch(() => roomId.value, () => {
   height: 48px;
   justify-self: center;
   width: 100%;
-}
-
-.game-room.guess-layout .hero-strip {
-  margin-top: 0;
-  min-height: 62px;
-  font-size: 20px;
-}
-
-.game-room.guess-layout .status-chips span {
-  min-height: 38px;
-  font-size: 13px;
-}
-
-.game-room.guess-layout .number-screen {
-  margin-top: 0;
-  min-height: 78px;
-  font-size: 48px;
-}
-
-.game-room.guess-layout .num-pad {
-  margin-top: 0;
-  gap: 8px;
-}
-
-.game-room.guess-layout .num-pad button {
-  min-height: 46px;
-  font-size: 20px;
-}
-
-.game-room.guess-layout .dual-btns {
-  gap: 10px;
-}
-
-.game-room.guess-layout .final-box {
-  min-height: 0;
-  overflow: auto;
 }
 
 @media (max-height: 820px) {
@@ -3505,14 +3569,12 @@ watch(() => roomId.value, () => {
     min-height: 64px;
   }
 
-  .game-room.rps-layout .mode-card.rps-mode,
-  .game-room.guess-layout .mode-card.guess-mode {
+  .game-room.rps-layout .mode-card.rps-mode {
     gap: 8px;
     padding: 12px;
   }
 
-  .game-room.rps-layout .side,
-  .game-room.guess-layout .side {
+  .game-room.rps-layout .side {
     min-height: 62px;
     padding: 8px 10px;
   }
@@ -3521,15 +3583,6 @@ watch(() => roomId.value, () => {
     min-height: 74px;
   }
 
-  .game-room.guess-layout .hero-strip {
-    min-height: 56px;
-    font-size: 18px;
-  }
-
-  .game-room.guess-layout .number-screen {
-    min-height: 68px;
-    font-size: 42px;
-  }
 }
 
 @media (max-width: 760px) {
@@ -3547,7 +3600,6 @@ watch(() => roomId.value, () => {
   }
 
   .game-room.rps-layout,
-  .game-room.guess-layout,
   .game-room.board-layout {
     padding: 0 8px 8px;
   }
@@ -3558,7 +3610,6 @@ watch(() => roomId.value, () => {
 
   .game-room.quiz-layout .game-header,
   .game-room.rps-layout .game-header,
-  .game-room.guess-layout .game-header,
   .game-room.board-layout .game-header {
     grid-template-columns: 36px minmax(0, 1fr) auto;
     min-height: 32px;
@@ -3568,14 +3619,12 @@ watch(() => roomId.value, () => {
 
   .game-room.quiz-layout .game-header h1,
   .game-room.rps-layout .game-header h1,
-  .game-room.guess-layout .game-header h1,
   .game-room.board-layout .game-header h1 {
     font-size: 16px;
   }
 
   .game-room.quiz-layout .point-pill,
   .game-room.rps-layout .point-pill,
-  .game-room.guess-layout .point-pill,
   .game-room.board-layout .point-pill {
     grid-column: auto;
     justify-self: end;
@@ -3590,7 +3639,6 @@ watch(() => roomId.value, () => {
   }
 
   .game-room.rps-layout .coin-dot,
-  .game-room.guess-layout .coin-dot,
   .game-room.board-layout .coin-dot {
     width: 18px;
     height: 18px;
@@ -3691,8 +3739,7 @@ watch(() => roomId.value, () => {
     max-height: 160px;
   }
 
-  .game-room.rps-layout .mode-card.rps-mode,
-  .game-room.guess-layout .mode-card.guess-mode {
+  .game-room.rps-layout .mode-card.rps-mode {
     gap: 8px;
     height: calc(100dvh - 62px);
     max-height: calc(100dvh - 62px);
@@ -3700,21 +3747,18 @@ watch(() => roomId.value, () => {
     border-radius: 24px;
   }
 
-  .game-room.rps-layout .side,
-  .game-room.guess-layout .side {
+  .game-room.rps-layout .side {
     min-height: 60px;
     padding: 8px 10px;
     gap: 8px;
     border-radius: 16px;
   }
 
-  .game-room.rps-layout .side strong,
-  .game-room.guess-layout .side strong {
+  .game-room.rps-layout .side strong {
     font-size: 15px;
   }
 
-  .game-room.rps-layout .avatar-circle,
-  .game-room.guess-layout .avatar-circle {
+  .game-room.rps-layout .avatar-circle {
     width: 42px;
     height: 42px;
     font-size: 20px;
@@ -3781,50 +3825,6 @@ watch(() => roomId.value, () => {
     font-size: 18px;
   }
 
-  .game-room.guess-layout .small-action {
-    min-height: 40px;
-    padding: 0 12px;
-    font-size: 13px;
-  }
-
-  .game-room.guess-layout .hero-strip {
-    min-height: 54px;
-    font-size: 18px;
-  }
-
-  .game-room.guess-layout .status-chips {
-    gap: 8px;
-  }
-
-  .game-room.guess-layout .status-chips span {
-    min-height: 36px;
-    font-size: 12px;
-  }
-
-  .game-room.guess-layout .number-screen {
-    min-height: 64px;
-    font-size: 38px;
-  }
-
-  .game-room.guess-layout .num-pad {
-    gap: 8px;
-  }
-
-  .game-room.guess-layout .num-pad button {
-    min-height: 42px;
-    font-size: 18px;
-  }
-
-  .game-room.guess-layout .hint-line {
-    font-size: 13px;
-  }
-
-  .game-room.guess-layout .dual-btns {
-    gap: 8px;
-  }
-
-  .game-room.guess-layout .primary-btn,
-  .game-room.guess-layout .secondary-btn,
   .game-room.rps-layout .primary-btn,
   .game-room.rps-layout .secondary-btn {
     height: 42px;

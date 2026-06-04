@@ -105,7 +105,7 @@ function readPositiveIntEnv(name, fallback) {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-const READY_TIMEOUT_MS = readPositiveIntEnv('READY_TIMEOUT_MS', 20000);
+const READY_TIMEOUT_MS = readPositiveIntEnv('READY_TIMEOUT_MS', 10000);
 const DISCONNECT_GRACE_MS = readPositiveIntEnv('DISCONNECT_GRACE_MS', 45000);
 const ACTION_TIMEOUT_FALLBACK_MS = readPositiveIntEnv('ACTION_TIMEOUT_FALLBACK_MS', 30000);
 
@@ -206,7 +206,7 @@ io.on('connection', (socket) => {
   });
 
   // 开始匹配
-  socket.on('match:join', ({ gameType }, callback) => {
+  socket.on('match:join', async ({ gameType }, callback = () => {}) => {
     if (!currentPlayer) return callback({ error: '请先注册' });
 
     const config = getGameConfig(gameType);
@@ -222,9 +222,48 @@ io.on('connection', (socket) => {
       });
     }
 
-    store.enqueue(currentPlayer.id, gameType);
-    const queueSize = store.getQueue(gameType).length;
-    callback({ success: true, queueSize });
+    const lock = await store.acquireLock(`quick-room:${gameType}`, 1800);
+    if (!lock) return callback({ error: '房间正忙，请稍后再试' });
+
+    try {
+      const latestBlockingRoom = getBlockingRoom(currentPlayer.id);
+      if (latestBlockingRoom) {
+        return callback({
+          error: latestBlockingRoom.status === 'playing'
+            ? '你仍在未结束对局中，暂时不能加入其他游戏'
+            : '你已在房间中',
+          currentRoom: serializeRoom(latestBlockingRoom, currentPlayer.id)
+        });
+      }
+
+      store.dequeue(currentPlayer.id);
+
+      let room = findAvailableQuickRoom(gameType);
+      if (room) {
+        room = store.addPlayerToRoom(room.id, currentPlayer);
+        ensureReadyDeadline(room);
+        store.saveRoom(room);
+        socket.join(`room:${room.id}`);
+        emitRoomUpdate(room);
+        callback({ success: true, room: serializeRoom(room, currentPlayer.id) });
+        broadcastUpdate();
+        return;
+      }
+
+      room = store.createRoom(gameType, [currentPlayer], {
+        mode: 'quick',
+        visibility: 'public',
+        ownerId: null
+      });
+      socket.join(`room:${room.id}`);
+      callback({ success: true, room: serializeRoom(room, currentPlayer.id) });
+      broadcastUpdate();
+    } catch (error) {
+      console.error('[match:join]', error);
+      callback({ error: '进入候场房间失败，请稍后重试' });
+    } finally {
+      await lock.release();
+    }
   });
 
   // 加入游戏房间
@@ -344,7 +383,17 @@ io.on('connection', (socket) => {
     if (!currentPlayer) return callback({ error: '请先注册' });
     const room = store.getRoom(roomId);
     if (!room) return callback({ error: '房间不存在' });
-    if (room.ownerId !== currentPlayer.id) return callback({ error: '只有房主可以邀请玩家' });
+    const isRoomMember = room.players.includes(currentPlayer.id);
+    const canInvite = room.visibility === 'public'
+      ? isRoomMember
+      : room.ownerId === currentPlayer.id;
+    if (!canInvite) {
+      return callback({
+        error: room.visibility === 'public'
+          ? '只有房间内玩家可以邀请'
+          : '只有房主可以邀请玩家'
+      });
+    }
     if (room.status !== 'readying') return callback({ error: '房间已开始' });
 
     const target = store.getPlayer(playerId);
@@ -627,31 +676,44 @@ function emitPendingRoomInvites(playerId) {
   }
 }
 
-function isRoomFull(room) {
-  const config = getGameConfig(room.gameType);
-  return Boolean(config && room.players.length >= config.maxPlayers);
+function findAvailableQuickRoom(gameType) {
+  const config = getGameConfig(gameType);
+  if (!config) return null;
+
+  return Array.from(store.rooms.values())
+    .filter(room => (
+      room.gameType === gameType &&
+      room.status === 'readying' &&
+      room.mode === 'quick' &&
+      room.visibility === 'public' &&
+      room.players.length < config.maxPlayers
+    ))
+    .sort((a, b) => Number(a.createdAt || 0) - Number(b.createdAt || 0))[0] || null;
 }
 
 function ensureReadyDeadline(room) {
   if (!room || room.status !== 'readying') return;
-  if (canStartReadyRoom(room)) {
+  if (areAllRoomPlayersReady(room) && needsReadyGraceWindow(room)) {
     room.readyDeadline = room.readyDeadline || (Date.now() + READY_TIMEOUT_MS);
   } else {
     room.readyDeadline = null;
   }
 }
 
-function supportsFlexiblePlayerCount(gameType) {
-  return ['reaction_race', 'dice_roll', 'guess_dice', 'blackjack'].includes(gameType);
+function needsReadyGraceWindow(room) {
+  const config = getGameConfig(room?.gameType);
+  if (!config) return false;
+  const minPlayers = Number(config.minPlayers || config.maxPlayers || room.players.length);
+  const maxPlayers = Number(config.maxPlayers || minPlayers);
+  return maxPlayers > minPlayers && room.players.length < maxPlayers;
 }
 
 function canStartReadyRoom(room) {
   const config = getGameConfig(room?.gameType);
   if (!config) return false;
-  if (supportsFlexiblePlayerCount(room.gameType)) {
-    return room.players.length >= config.minPlayers && room.players.length <= config.maxPlayers;
-  }
-  return isRoomFull(room);
+  const minPlayers = Number(config.minPlayers || config.maxPlayers || room.players.length);
+  const maxPlayers = Number(config.maxPlayers || minPlayers);
+  return room.players.length >= minPlayers && room.players.length <= maxPlayers;
 }
 
 function areAllRoomPlayersReady(room) {
@@ -679,30 +741,6 @@ function prepareRoomRematch(room, playerId) {
   room.players = getPlayersAvailableForRematch(room);
   if (!room.players.includes(playerId)) {
     room.players.push(playerId);
-  }
-
-  if (room.visibility === 'public' && room.players.length < config.maxPlayers) {
-    const player = store.getPlayer(playerId);
-    if (player?.online) {
-      store.enqueue(playerId, room.gameType);
-      player.currentRoom = null;
-      store.savePlayer(player);
-      io.to(`player:${playerId}`).emit('match:requeued', {
-        gameType: room.gameType,
-        message: '对手已返回大厅，已为你重新匹配'
-      });
-    }
-
-    room.players = room.players.filter(pid => pid !== playerId);
-    if (room.players.length === 0) {
-      store.removeRoom(room.id);
-    } else {
-      room.updatedAt = Date.now();
-      store.saveRoom(room);
-      emitRoomUpdate(room);
-    }
-    broadcastUpdate();
-    return { success: true, requeued: true, gameType: room.gameType };
   }
 
   room.status = 'readying';
@@ -745,6 +783,13 @@ function prepareRoomRematch(room, playerId) {
 
 function maybeStartReadyRoom(room) {
   if (!room || room.status !== 'readying' || !areAllRoomPlayersReady(room)) return false;
+  if (needsReadyGraceWindow(room) && !room.readyDeadline) {
+    room.readyDeadline = Date.now() + READY_TIMEOUT_MS;
+    store.saveRoom(room);
+    emitRoomUpdate(room);
+    return false;
+  }
+  if (needsReadyGraceWindow(room) && Date.now() < room.readyDeadline) return false;
 
   const engine = getEngine(room.gameType);
   if (!engine) return false;
@@ -787,31 +832,14 @@ function handleReadyTimeout(room) {
   }
 
   const unreadyIds = room.players.filter(pid => !room.ready?.[pid]);
-  const readyIds = room.players.filter(pid => room.ready?.[pid]);
 
   unreadyIds.forEach(pid => {
     io.to(`player:${pid}`).emit('room:kicked', {
       roomId: room.id,
       reason: 'ready_timeout',
-      message: '20秒内未准备，已返回大厅'
+      message: '准备超时，已返回大厅'
     });
   });
-
-  if (room.visibility === 'public') {
-    const gameType = room.gameType;
-    store.removeRoom(room.id);
-    readyIds.forEach(pid => {
-      const player = store.getPlayer(pid);
-      if (!player || !player.online) return;
-      store.enqueue(pid, gameType);
-      io.to(`player:${pid}`).emit('match:requeued', {
-        gameType,
-        message: '有人未准备，已为你重新匹配'
-      });
-    });
-    broadcastUpdate();
-    return;
-  }
 
   unreadyIds.forEach(pid => store.removePlayerFromRoom(room.id, pid));
   const updatedRoom = store.getRoom(room.id);
@@ -1139,13 +1167,8 @@ function getAutomatedAction(room, playerId) {
   const state = room.gameState || {};
 
   if (room.gameType === 'rock_paper_scissors' && state.phase === 'choose' && !state.choices?.[playerId]) {
-    return { type: 'choose', choice: 'rock' };
-  }
-
-  if (room.gameType === 'guess_number' && state.phase === 'guess' && state.currentPlayer === playerId) {
-    const low = Number(state.range?.low || 1);
-    const high = Number(state.range?.high || 100);
-    return { type: 'guess', guess: Math.floor((low + high) / 2) };
+    const choices = ['rock', 'scissors', 'paper'];
+    return { type: 'choose', choice: choices[Math.floor(Math.random() * choices.length)] };
   }
 
   if (room.gameType === 'blackjack' && state.phase === 'play' && state.currentPlayer === playerId) {
@@ -1177,7 +1200,7 @@ function getAutomatedAction(room, playerId) {
 }
 
 function shouldForfeitOnTimeout(gameType) {
-  return ['rock_paper_scissors', 'guess_number', 'blackjack', 'gomoku', 'chess'].includes(gameType);
+  return ['blackjack', 'gomoku', 'chess'].includes(gameType);
 }
 
 function handleActionTimeout(room) {
@@ -1363,24 +1386,7 @@ function handlePlayerLeaveRoom(room, playerId, { confirmForfeit = false, reason 
   }
 
   if (room.status === 'readying') {
-    const remainingIds = room.players.filter(pid => pid !== playerId);
     io.to(`player:${playerId}`).emit('room:left', { roomId: room.id });
-
-    if (room.visibility === 'public') {
-      const gameType = room.gameType;
-      store.removeRoom(room.id);
-      remainingIds.forEach(pid => {
-        const p = store.getPlayer(pid);
-        if (!p?.online) return;
-        store.enqueue(pid, gameType);
-        io.to(`player:${pid}`).emit('match:requeued', {
-          gameType,
-          message: '有玩家离开，已为你重新匹配'
-        });
-      });
-      broadcastUpdate();
-      return { success: true, left: true };
-    }
 
     const updatedRoom = store.removePlayerFromRoom(room.id, playerId);
     if (!updatedRoom || updatedRoom.players.length === 0) {

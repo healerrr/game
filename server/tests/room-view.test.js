@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const store = require('../store');
 const { GuandanEngine } = require('../game-engines/guandan');
 const { getPlayerGameState, getPublicGameState, serializeRoom } = require('../room-view');
-const { handleActionTimeout, prepareRoomRematch } = require('../index');
+const { handleActionTimeout, maybeStartReadyRoom, prepareRoomRematch } = require('../index');
 
 function card(rank, suit, value) {
   return { rank, suit, value, id: `${rank}-${suit}` };
@@ -183,28 +183,41 @@ test('Guandan rematch waits for all players and starts a new match from 2', () =
   assert.equal(room.gameState.level, '2');
 });
 
-test('guess number hides the secret until the game finishes', () => {
+test('flexible ready room waits before starting while seats remain open', () => {
+  const players = ['flex1', 'flex2'];
+  players.forEach((id, index) => {
+    store.savePlayer({
+      id,
+      nickname: id,
+      busNumber: index + 1,
+      online: true,
+      currentRoom: 'room-flex-ready'
+    });
+  });
+
   const room = {
-    id: 'room-guess',
-    gameType: 'guess_number',
-    status: 'playing',
-    players: ['p1', 'p2'],
-    gameState: {
-      phase: 'guess',
-      secret: 42,
-      range: { low: 1, high: 100 },
-      currentPlayer: 'p1',
-      players: ['p1', 'p2'],
-      guesses: []
-    }
+    id: 'room-flex-ready',
+    gameType: 'reaction_race',
+    players,
+    status: 'readying',
+    mode: 'quick',
+    visibility: 'public',
+    ready: { flex1: true, flex2: true },
+    readyDeadline: null,
+    seatStates: Object.fromEntries(players.map(pid => [pid, { ready: true, connection: 'online', intent: 'active' }])),
+    gameState: null
   };
 
-  const playingView = getPlayerGameState(room, 'p1');
-  assert.equal(Object.prototype.hasOwnProperty.call(playingView, 'secret'), false);
+  maybeStartReadyRoom(room);
 
-  room.gameState.phase = 'finished';
-  const finishedView = getPlayerGameState(room, 'p1');
-  assert.equal(finishedView.secret, 42);
+  assert.equal(room.status, 'readying');
+  assert.ok(room.readyDeadline > Date.now());
+
+  room.readyDeadline = Date.now() - 1;
+  maybeStartReadyRoom(room);
+
+  assert.equal(room.status, 'playing');
+  assert.equal(room.gameState.phase, 'waiting');
 });
 
 test('quiz hides answer fields while preserving reveal results', () => {

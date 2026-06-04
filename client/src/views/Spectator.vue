@@ -40,19 +40,6 @@
         </div>
       </div>
 
-      <!-- 猜大小 -->
-      <div v-else-if="gameType === 'guess_number'">
-        <div class="guess-display">
-          <div class="guess-info">范围: {{ gs.range?.low }} ~ {{ gs.range?.high }}</div>
-          <div class="guess-current">轮到: {{ getPlayerName(gs.currentPlayer) }}</div>
-          <div class="guess-history" v-if="gs.guesses?.length">
-            <div v-for="(g, i) in gs.guesses" :key="i" class="guess-item">
-              {{ getPlayerName(g.playerId) }} 猜 {{ g.guess }} → {{ g.guess < gs.secret ? '小了' : '大了' }}
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- 21点 -->
       <div v-else-if="gameType === 'blackjack'">
         <div class="bj-display">
@@ -154,7 +141,6 @@ const spectatorCount = ref(0)
 const gameLabel = computed(() => {
   const map = {
     rock_paper_scissors: '✌️ 剪刀石头布',
-    guess_number: '🎲 猜大小',
     blackjack: '🃏 21点',
     zha_jin_hua: '♠️ 炸金花',
     quiz: '🧠 知识问答',
@@ -456,27 +442,6 @@ function backToLobby() {
   gap: 24px;
   font-size: 14px;
   color: var(--text-secondary);
-}
-
-.guess-info, .guess-current {
-  text-align: center;
-  padding: 8px;
-  font-size: 15px;
-}
-
-.guess-info {
-  font-weight: 600;
-  color: var(--gold-light);
-}
-
-.guess-history { margin-top: 12px; }
-
-.guess-item {
-  padding: 6px 12px;
-  font-size: 13px;
-  color: var(--text-secondary);
-  border-left: 3px solid var(--accent);
-  margin-bottom: 4px;
 }
 
 .bj-display {

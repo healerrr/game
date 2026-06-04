@@ -9,12 +9,14 @@ const cardEngines = require('./game-engines');
 class RockPaperScissors {
   init(room, players) {
     return {
-      phase: 'choose',        // choose | reveal | result
+      phase: 'choose',
       round: 1,
-      maxRounds: 1,
+      maxRounds: 3,
+      targetScore: 2,
       scores: { [players[0]]: 0, [players[1]]: 0 },
       choices: {},
-      timer: 5,              // 5秒出拳倒计时
+      result: null,
+      timer: 3,
       timerStarted: Date.now()
     };
   }
@@ -52,93 +54,43 @@ class RockPaperScissors {
       state.scores[winner]++;
     }
 
-    state.result = { winner, choices: { ...state.choices }, round: state.round };
-    if (winner && state.round >= state.maxRounds) {
-      state.phase = 'finished';
-      state.finalWinner = winner;
-      return state;
-    }
+    state.result = {
+      winner,
+      choices: { ...state.choices },
+      round: state.round,
+      scores: { ...state.scores }
+    };
 
     state.phase = 'reveal';
+    state.timer = 1;
+    state.timerStarted = Date.now();
     return state;
   }
 
   nextRound(state) {
-    const pids = Object.keys(state.scores);
-    // 一局定胜负
-    if (state.round >= state.maxRounds) {
-      if (state.scores[pids[0]] === state.scores[pids[1]]) {
-        state.phase = 'choose';
-        state.choices = {};
-        state.result = null;
-        state.timerStarted = Date.now();
-        return state;
-      }
+    if (state.phase === 'finished') return state;
+
+    if (state.result?.winner && state.scores[state.result.winner] >= (state.targetScore || 2)) {
       state.phase = 'finished';
-      state.finalWinner = state.scores[pids[0]] > state.scores[pids[1]] ? pids[0] : pids[1];
-    } else {
-      state.phase = 'choose';
-      state.round++;
-      state.choices = {};
-      state.result = null;
-      state.timerStarted = Date.now();
-    }
-    return state;
-  }
-}
-
-// ========== 猜大小 ==========
-class GuessNumber {
-  init(room, players) {
-    const secret = randomInt(1, 101);
-    return {
-      phase: 'guess',
-      secret,
-      range: { low: 1, high: 100 },
-      currentPlayer: players[randomInt(0, players.length)],
-      players,
-      guesses: [],
-      maxGuesses: 10,
-      timer: 15,
-      timerStarted: Date.now()
-    };
-  }
-
-  update(state, action, playerId) {
-    if (state.phase !== 'guess') return state;
-    if (playerId !== state.currentPlayer) return state;
-    if (action.type !== 'guess') return state;
-
-    const guess = Number(action.guess);
-    if (!Number.isInteger(guess) || guess < state.range.low || guess > state.range.high) {
+      state.finalWinner = state.result.winner;
+      state.winningPlayers = [state.result.winner];
+      state.timerStarted = null;
       return state;
     }
 
-    state.guesses.push({ playerId, guess });
-
-    if (guess === state.secret) {
-      state.phase = 'finished';
-      state.winner = playerId;
-    } else if (guess < state.secret) {
-      state.range.low = Math.max(state.range.low, guess + 1);
-      state.currentPlayer = state.players.find(p => p !== playerId);
-      state.timerStarted = Date.now();
-    } else {
-      state.range.high = Math.min(state.range.high, guess - 1);
-      state.currentPlayer = state.players.find(p => p !== playerId);
-      state.timerStarted = Date.now();
+    if (state.result?.winner) {
+      state.round++;
     }
 
-    if (state.phase === 'guess' && state.guesses.length >= (state.maxGuesses || 10)) {
-      state.phase = 'finished';
-      state.winner = null;
-      state.finalWinner = null;
-    }
+    state.phase = 'choose';
+    state.choices = {};
+    state.result = null;
+    state.timer = 3;
+    state.timerStarted = Date.now();
     return state;
   }
 }
 
-// ========== 炸金花 ==========
 // ========== 看谁快 ==========
 class ReactionRace {
   init(room, players) {
@@ -1807,7 +1759,6 @@ class MahjongGame {
 // ========== 引擎注册表 ==========
 const engines = {
   rock_paper_scissors: new RockPaperScissors(),
-  guess_number: new GuessNumber(),
   reaction_race: new ReactionRace(),
   dice_roll: new DiceRoll(),
   guess_dice: new GuessDice(),
@@ -1829,15 +1780,7 @@ const GAME_CONFIG = {
     category: 'quick',
     minPlayers: 2,
     maxPlayers: 2,
-    duration: '10秒'
-  },
-  guess_number: {
-    name: '猜大小',
-    entryFee: 15,
-    category: 'quick',
-    minPlayers: 2,
-    maxPlayers: 2,
-    duration: '15秒'
+    duration: '10-20秒'
   },
   reaction_race: {
     name: '看谁快',

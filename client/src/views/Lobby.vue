@@ -46,6 +46,7 @@
         <h2 class="games-heading">快速开始</h2>
         <div class="games-grid">
           <button v-for="game in gameCards" :key="game.key" type="button" class="game-tile" :aria-label="game.name"
+            :disabled="joiningGameKey === game.key"
             @click="joinGame(game.key)">
             <div class="game-tile__wrapper">
               <img :src="game.image" :alt="game.name" class="game-tile__image" />
@@ -67,17 +68,6 @@
           </div>
         </button>
       </section>
-
-      <transition name="fade">
-        <div v-if="matching" class="overlay" @click="cancelMatch">
-          <div class="dialog" @click.stop>
-            <div class="spinner"></div>
-            <h3>正在匹配对手</h3>
-            <p>{{ selectedGameName }}</p>
-            <button type="button" class="dialog-btn" @click="cancelMatch">取消匹配</button>
-          </div>
-        </div>
-      </transition>
 
       <transition name="fade">
         <div v-if="showCreateRoom" class="overlay" @click="showCreateRoom = false">
@@ -103,7 +93,7 @@
 
 <script setup>
   import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-  import { useRoute, useRouter } from 'vue-router'
+  import { useRouter } from 'vue-router'
   import { gameState, getPlayer, socket, ensureAuthenticated } from '../socket'
 
   import cardChineseChess from '../../img/card_chinese_chess_transparent.png'
@@ -120,9 +110,8 @@
   import cardBlackjack from '../../img/card_blackjack.png'
 
   const router = useRouter()
-  const route = useRoute()
   const player = computed(() => getPlayer())
-  const matching = ref(false)
+  const joiningGameKey = ref('')
   const selectedGameKey = ref('')
   const showCreateRoom = ref(false)
   const toastMessage = ref('')
@@ -152,10 +141,6 @@
     { key: 'results', label: '我的战绩', desc: '历史成绩', icon: '/assets/lobby/feature-achievement.png' }
   ]
 
-  const selectedGameName = computed(() => {
-    return gameCards.find((item) => item.key === selectedGameKey.value)?.name || '游戏对局'
-  })
-
   const playerInitial = computed(() => {
     const text = player.value?.nickname || '游'
     return text.slice(0, 1)
@@ -173,28 +158,23 @@
 
     matchedHandler = (event) => {
       const room = event.detail
-      matching.value = false
+      joiningGameKey.value = ''
       gameState.currentRoom = room
       gameState.currentGame = room.gameState
       router.push(`/game/${room.roomId}`)
     }
     kickedHandler = (event) => {
-      matching.value = false
+      joiningGameKey.value = ''
       showToast(event.detail?.message || '已返回大厅')
     }
     requeuedHandler = (event) => {
       selectedGameKey.value = event.detail?.gameType || selectedGameKey.value
-      matching.value = true
-      showToast(event.detail?.message || '已重新匹配')
+      joiningGameKey.value = ''
+      showToast(event.detail?.message || '请重新选择游戏进入候场')
     }
     window.addEventListener('game:matched', matchedHandler)
     window.addEventListener('room:kicked', kickedHandler)
     window.addEventListener('match:requeued', requeuedHandler)
-
-    if (route.query.matching) {
-      selectedGameKey.value = String(route.query.matching)
-      matching.value = true
-    }
   })
 
   onBeforeUnmount(() => {
@@ -217,7 +197,7 @@
   }
 
   async function joinGame(gameType) {
-    if (matching.value) return
+    if (joiningGameKey.value) return
 
     if (!player.value) {
       await ensureAuthenticated()
@@ -229,11 +209,11 @@
     }
 
     selectedGameKey.value = gameType
-    matching.value = true
+    joiningGameKey.value = gameType
 
     socket.emit('match:join', { gameType }, (res) => {
+      joiningGameKey.value = ''
       if (res?.error) {
-        matching.value = false
         if (res.currentRoom?.roomId) {
           gameState.currentRoom = res.currentRoom
           gameState.currentGame = res.currentRoom.gameState
@@ -241,6 +221,14 @@
           return
         }
         showToast(res.error)
+        return
+      }
+
+      if (res?.room?.roomId) {
+        gameState.currentRoom = res.room
+        gameState.currentGame = res.room.gameState
+        socket.emit('room:join', { roomId: res.room.roomId })
+        router.push(`/game/${res.room.roomId}`)
       }
     })
   }
@@ -273,12 +261,6 @@
 
   function openCreateRoom() {
     showCreateRoom.value = true
-  }
-
-  function cancelMatch() {
-    socket.emit('match:cancel', { gameType: selectedGameKey.value || 'rock_paper_scissors' }, () => {
-      matching.value = false
-    })
   }
 
   function handleUtility(item) {
@@ -576,12 +558,16 @@
     text-align: left;
   }
 
+  .game-tile:disabled {
+    opacity: 0.64;
+  }
+
   .game-tile__wrapper {
     position: relative;
     border-radius: 20px;
     overflow: hidden;
     aspect-ratio: 1 / 1.42;
-    padding-bottom: 10px;
+    padding-bottom: 16px;
   }
 
   .game-tile__image {

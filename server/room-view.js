@@ -48,13 +48,6 @@ function omitAnswer(question) {
   return safeQuestion;
 }
 
-function sanitizeGuessNumberState(state) {
-  if (!state) return state;
-  if (state.phase === 'finished') return state;
-  const { secret, ...safeState } = state;
-  return safeState;
-}
-
 function sanitizeQuizState(state, playerId) {
   if (!state) return state;
 
@@ -82,7 +75,6 @@ function sanitizeQuizState(state, playerId) {
 
 function sanitizeGameState(room, state, viewerId = null) {
   if (!room || !state) return state;
-  if (room.gameType === 'guess_number') return sanitizeGuessNumberState(state);
   if (room.gameType === 'quiz') return sanitizeQuizState(state, viewerId);
   return state;
 }

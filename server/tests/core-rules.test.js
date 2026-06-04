@@ -40,23 +40,32 @@ test('剪刀石头布平局会继续加赛而不是直接结算', () => {
   assert.equal(state.finalWinner, undefined);
 });
 
-test('猜数字达到最大次数后无人获胜', () => {
-  const engine = getEngine('guess_number');
+test('剪刀石头布三局两胜先到2分才结算', () => {
+  const engine = getEngine('rock_paper_scissors');
   const state = engine.init(null, ['p1', 'p2']);
-  state.secret = 50;
-  state.currentPlayer = 'p1';
 
-  engine.update(state, { type: 'guess', guess: 101 }, 'p1');
-  assert.equal(state.guesses.length, 0);
+  engine.update(state, { type: 'choose', choice: 'rock' }, 'p1');
+  engine.update(state, { type: 'choose', choice: 'scissors' }, 'p2');
 
-  for (const guess of [1, 99, 2, 98, 3, 97, 4, 96, 5, 95]) {
-    engine.update(state, { type: 'guess', guess }, state.currentPlayer);
-  }
+  assert.equal(state.phase, 'reveal');
+  assert.equal(state.scores.p1, 1);
+  assert.equal(state.finalWinner, undefined);
+  assert.equal(state.timer, 1);
+
+  engine.nextRound(state);
+  engine.update(state, { type: 'choose', choice: 'paper' }, 'p1');
+  engine.update(state, { type: 'choose', choice: 'rock' }, 'p2');
+
+  assert.equal(state.phase, 'reveal');
+  assert.equal(state.finalWinner, undefined);
+  assert.equal(state.scores.p1, 2);
+
+  engine.nextRound(state);
 
   assert.equal(state.phase, 'finished');
-  assert.equal(state.winner, null);
-  assert.equal(state.finalWinner, null);
-  assert.equal(state.guesses.length, 10);
+  assert.equal(state.finalWinner, 'p1');
+  assert.deepEqual(state.winningPlayers, ['p1']);
+  assert.equal(state.scores.p1, 2);
 });
 
 test('猜点数按开奖结果标记所有猜中玩家', () => {
