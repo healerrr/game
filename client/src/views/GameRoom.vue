@@ -7,7 +7,8 @@
       'rps-layout': gameType === 'rock_paper_scissors',
       'quick-party-layout': ['reaction_race', 'dice_roll', 'guess_dice'].includes(gameType),
       'board-layout': ['gomoku', 'chess', 'zha_jin_hua'].includes(gameType),
-      'chess-layout': gameType === 'chess'
+      'chess-layout': gameType === 'chess',
+      'ready-layout': isReadyRoom
     }"
   >
     <header class="game-header">
@@ -43,7 +44,19 @@
             <strong>{{ item.nickname }}</strong>
             <p>{{ item.busNumber }}号车 · {{ item.connection === 'offline' ? '离线' : '在线' }}</p>
           </div>
-          <span :class="{ on: item.ready }">{{ item.ready ? '已准备' : '未准备' }}</span>
+          <div class="ready-player-actions">
+            <span class="ready-status" :class="{ on: item.ready }">{{ item.ready ? '已准备' : '未准备' }}</span>
+            <button
+              v-if="item.id === player?.id"
+              type="button"
+              class="ready-inline-action"
+              :class="{ ready: myReady }"
+              :disabled="readySubmitting"
+              @click="toggleReady"
+            >
+              {{ readyButtonText }}
+            </button>
+          </div>
         </div>
 
         <div v-for="n in emptySeatCount" :key="`empty-${n}`" class="ready-player empty">
@@ -52,7 +65,17 @@
             <strong>等待玩家</strong>
             <p>可邀请在线玩家加入</p>
           </div>
-          <span>空位</span>
+          <div class="ready-player-actions">
+            <span class="ready-status">空位</span>
+            <button
+              v-if="canInvitePlayers"
+              type="button"
+              class="ready-inline-action invite"
+              @click="openInvitePanel"
+            >
+              邀请
+            </button>
+          </div>
         </div>
       </div>
 
@@ -61,7 +84,7 @@
           {{ readyButtonText }}
         </button>
         <button v-if="canInvitePlayers" class="secondary-btn" @click="toggleInvitePanel">
-          邀请玩家
+          {{ showInvitePanel ? '收起邀请' : '邀请玩家' }}
         </button>
         <button class="secondary-btn" @click="backToLobby">返回大厅</button>
       </div>
@@ -1239,7 +1262,17 @@ function toggleInvitePanel() {
     inviteSearchText.value = ''
     return
   }
-  if (showInvitePanel.value) {
+  loadInvitePlayers()
+}
+
+function openInvitePanel() {
+  if (!showInvitePanel.value) {
+    showInvitePanel.value = true
+    loadInvitePlayers()
+    return
+  }
+
+  if (!inviteLoading.value && inviteCandidates.value.length === 0) {
     loadInvitePlayers()
   }
 }
@@ -1605,6 +1638,13 @@ watch(() => roomId.value, () => {
 
 .game-room.fullscreen-game .game-header {
   display: none;
+}
+
+.game-room.ready-layout {
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 10px calc(18px + env(safe-area-inset-bottom));
 }
 
 .game-header {
@@ -2332,7 +2372,8 @@ watch(() => roomId.value, () => {
 
 .ready-room {
   width: min(100%, 520px);
-  margin: 0 auto;
+  flex: 0 0 auto;
+  margin: 0 auto 18px;
   padding: 16px;
 }
 
@@ -2413,6 +2454,12 @@ watch(() => roomId.value, () => {
   align-items: center;
 }
 
+.ready-player .avatar-circle {
+  width: 50px;
+  height: 50px;
+  font-size: 22px;
+}
+
 .ready-player.empty {
   background: #f7fbff;
   border-style: dashed;
@@ -2430,7 +2477,16 @@ watch(() => roomId.value, () => {
   font-weight: 700;
 }
 
-.ready-player > span {
+.ready-player-actions {
+  justify-self: end;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.ready-status {
   min-height: 30px;
   padding: 0 10px;
   border-radius: 999px;
@@ -2440,17 +2496,48 @@ watch(() => roomId.value, () => {
   align-items: center;
   font-size: 12px;
   font-weight: 900;
+  white-space: nowrap;
 }
 
-.ready-player > span.on {
+.ready-status.on {
   background: #e8fbf1;
   color: #168a4c;
+}
+
+.ready-inline-action {
+  min-width: 68px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: 12px;
+  background: linear-gradient(180deg, #2f92ff, #0758ef);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 900;
+  white-space: nowrap;
+  box-shadow: 0 7px 14px rgba(9, 89, 208, 0.16);
+}
+
+.ready-inline-action.ready {
+  background: linear-gradient(180deg, #2eb87f, #148f5d);
+}
+
+.ready-inline-action.invite {
+  background: linear-gradient(180deg, #fff8dc, #ffd86b);
+  color: #1365e8;
+}
+
+.ready-inline-action:disabled {
+  opacity: 0.68;
+  box-shadow: none;
 }
 
 .ready-actions {
   margin-top: 16px;
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
   gap: 10px;
 }
 
@@ -2467,7 +2554,7 @@ watch(() => roomId.value, () => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  max-height: min(300px, calc(100dvh - 420px));
+  max-height: clamp(180px, 36dvh, 300px);
   overflow: hidden;
 }
 
@@ -3101,6 +3188,16 @@ watch(() => roomId.value, () => {
 
   .blackjack-table {
     grid-template-columns: 1fr;
+  }
+
+  .ready-player {
+    grid-template-columns: 50px minmax(0, 1fr);
+  }
+
+  .ready-player-actions {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    justify-content: flex-end;
   }
 }
 
