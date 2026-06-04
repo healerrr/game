@@ -215,6 +215,11 @@
       joiningGameKey.value = ''
       if (res?.error) {
         if (res.currentRoom?.roomId) {
+          // 如果回到已结算的房间，清理状态留在大厅而不是跳转
+          if (res.currentRoom.status === 'finished') {
+            showToast('上一局已结算，请选择新游戏')
+            return
+          }
           gameState.currentRoom = res.currentRoom
           gameState.currentGame = res.currentRoom.gameState
           router.push(`/game/${res.currentRoom.roomId}`)

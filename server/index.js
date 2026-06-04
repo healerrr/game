@@ -222,6 +222,13 @@ io.on('connection', (socket) => {
       });
     }
 
+    // 如果存在已 finished 的房间残留，清理它避免干扰
+    const staleRoom = store.getPlayerRoom(currentPlayer.id);
+    if (staleRoom && staleRoom.status === 'finished') {
+      store.removePlayerFromRoom(staleRoom.id, currentPlayer.id);
+      if (staleRoom.players.length <= 1) store.removeRoom(staleRoom.id);
+    }
+
     const lock = await store.acquireLock(`quick-room:${gameType}`, 1800);
     if (!lock) return callback({ error: '房间正忙，请稍后再试' });
 
