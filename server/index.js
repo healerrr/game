@@ -642,7 +642,7 @@ function ensureReadyDeadline(room) {
 }
 
 function supportsFlexiblePlayerCount(gameType) {
-  return ['reaction_race', 'dice_roll'].includes(gameType);
+  return ['reaction_race', 'dice_roll', 'guess_dice', 'blackjack'].includes(gameType);
 }
 
 function canStartReadyRoom(room) {
@@ -985,14 +985,6 @@ function resolveCurrentActorId(room) {
     return state.currentPlayer || null;
   }
 
-  if (room.gameType === 'undercover') {
-    if (state.phase === 'describe') return state.currentDescriber || null;
-    if (state.phase === 'vote') {
-      const activePlayers = (state.players || room.players).filter(pid => !state.eliminatedPlayers?.includes(pid));
-      return activePlayers.find(pid => !state.votes?.[pid]) || null;
-    }
-  }
-
   if (room.gameType === 'chess') {
     if (state.currentPlayer === 'red') return state.players?.[0] || room.players[0];
     if (state.currentPlayer === 'black') return state.players?.[1] || room.players[1];
@@ -1050,10 +1042,10 @@ function maybeAdvanceTimedPhase(room) {
 
   const autoAdvancePhases = {
     quiz: ['answer'],
-    undercover: ['reveal'],
     rock_paper_scissors: ['reveal'],
     reaction_race: ['waiting', 'go'],
     dice_roll: ['rolling', 'tiebreak'],
+    guess_dice: ['guessing'],
     guandan: ['round_finished']
   };
   if (!autoAdvancePhases[room.gameType]?.includes(state.phase)) return false;
@@ -1143,20 +1135,6 @@ function getAutoDoudizhuAction(state, playerId) {
   return hand[0] ? { type: 'play', cards: [hand[0]] } : null;
 }
 
-function getAutoUndercoverAction(state, playerId) {
-  if (state.phase === 'describe' && state.currentDescriber === playerId) {
-    return { type: 'describe', text: '托管发言' };
-  }
-
-  if (state.phase === 'vote' && !state.votes?.[playerId]) {
-    const activePlayers = (state.players || []).filter(pid => !state.eliminatedPlayers?.includes(pid));
-    const targetId = activePlayers.find(pid => pid !== playerId) || activePlayers[0];
-    return targetId ? { type: 'vote', targetId } : null;
-  }
-
-  return null;
-}
-
 function getAutomatedAction(room, playerId) {
   const state = room.gameState || {};
 
@@ -1193,10 +1171,6 @@ function getAutomatedAction(room, playerId) {
 
   if (room.gameType === 'quiz' && state.phase === 'question' && !state.answeredPlayers?.includes(playerId)) {
     return { type: 'answer', answer: -1 };
-  }
-
-  if (room.gameType === 'undercover') {
-    return getAutoUndercoverAction(state, playerId);
   }
 
   return null;
@@ -1495,6 +1469,9 @@ function handleGameEnd(room) {
   } else if (room.gameType === 'doudizhu') {
     // 斗地主：地主 1v2，农民共同获胜
     settleDoudizhu(room, winningPlayers);
+  } else if (room.gameType === 'guess_dice') {
+    // 猜点数：猜中 +门票，猜错 -门票，不做奖池平衡
+    settleGuessDice(room, winningPlayers);
   } else if (room.players.length === 2) {
     // 1v1 游戏：输家输门票，赢家赢门票
     settle1v1(room, winnerId);
@@ -1588,6 +1565,23 @@ function settleMultiplayer(room, winningPlayers) {
     } else {
       store.updatePoints(pid, -entryFee, 'game_settlement', { roomId: room.id, gameType: room.gameType, won: false });
     }
+  });
+}
+
+function settleGuessDice(room, winningPlayers) {
+  const config = getGameConfig(room.gameType);
+  const entryFee = config.entryFee;
+
+  room.players.forEach(pid => {
+    const isWinner = winningPlayers.includes(pid);
+    store.recordGame(pid, isWinner);
+    store.updatePoints(pid, isWinner ? entryFee : -entryFee, 'game_settlement', {
+      roomId: room.id,
+      gameType: room.gameType,
+      won: isWinner,
+      dice: room.gameState?.dice,
+      guess: room.gameState?.guesses?.[pid]?.guess ?? null
+    });
   });
 }
 

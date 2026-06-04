@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
-const { getEngine } = require('../game-engine');
+const { getEngine, getGameConfig } = require('../game-engine');
 const { GomokuEngine, EMPTY } = require('../game-engines/gomoku');
 const {
   ChessEngine,
@@ -57,6 +57,52 @@ test('猜数字达到最大次数后无人获胜', () => {
   assert.equal(state.winner, null);
   assert.equal(state.finalWinner, null);
   assert.equal(state.guesses.length, 10);
+});
+
+test('猜点数按开奖结果标记所有猜中玩家', () => {
+  const engine = getEngine('guess_dice');
+  const state = engine.init(null, ['p1', 'p2', 'p3']);
+
+  engine.update(state, { type: 'guess', guess: 1 }, 'p1');
+  engine.update(state, { type: 'guess', guess: 2 }, 'p2');
+  engine.update(state, { type: 'guess', guess: 3 }, 'p3');
+
+  assert.equal(state.phase, 'finished');
+  assert.ok(state.dice >= 1 && state.dice <= 6);
+  assert.deepEqual(
+    state.winningPlayers,
+    state.players.filter(pid => state.guesses[pid].guess === state.dice)
+  );
+  assert.equal(state.finalWinner, state.winningPlayers[0] || null);
+});
+
+test('猜点数超时未选时无人猜中', () => {
+  const engine = getEngine('guess_dice');
+  const state = engine.init(null, ['p1', 'p2', 'p3']);
+
+  engine.nextRound(state);
+
+  assert.equal(state.phase, 'finished');
+  assert.deepEqual(state.winningPlayers, []);
+  assert.equal(state.finalWinner, null);
+  assert.equal(state.guesses.p1.timeout, true);
+  assert.equal(state.guesses.p1.guess, null);
+});
+
+test('21点支持2到4人并隐藏其他玩家手牌', () => {
+  const config = getGameConfig('blackjack');
+  assert.equal(config.minPlayers, 2);
+  assert.equal(config.maxPlayers, 4);
+
+  const engine = getEngine('blackjack');
+  const state = engine.init(null, ['p1', 'p2', 'p3', 'p4']);
+  const view = engine.getPlayerView(state, 'p1');
+
+  assert.deepEqual(Object.keys(view.hands), ['p1']);
+  assert.equal(view.hands.p1.length, 2);
+  assert.deepEqual(view.handCounts, { p1: 2, p2: 2, p3: 2, p4: 2 });
+  assert.equal(typeof view.deckCount, 'number');
+  assert.equal(view.deck, undefined);
 });
 
 test('快问快答每局只有三道高难度题', () => {

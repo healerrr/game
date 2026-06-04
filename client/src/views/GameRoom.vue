@@ -6,8 +6,8 @@
       'quiz-layout': gameType === 'quiz',
       'rps-layout': gameType === 'rock_paper_scissors',
       'guess-layout': gameType === 'guess_number',
-      'quick-party-layout': ['reaction_race', 'dice_roll'].includes(gameType),
-      'board-layout': ['gomoku', 'chess', 'zha_jin_hua', 'undercover'].includes(gameType),
+      'quick-party-layout': ['reaction_race', 'dice_roll', 'guess_dice'].includes(gameType),
+      'board-layout': ['gomoku', 'chess', 'zha_jin_hua'].includes(gameType),
       'chess-layout': gameType === 'chess'
     }"
   >
@@ -194,6 +194,62 @@
       </div>
     </section>
 
+    <section v-else-if="gameType === 'guess_dice'" class="mode-card party-game-card dice-roll-mode">
+      <div class="party-hero dice">
+        <div>
+          <span>3-6 人 · 门票 10 分</span>
+          <h2>猜点数</h2>
+          <p>选择 1-6 的点数，系统摇一颗骰子；猜中得分，猜错扣分。</p>
+        </div>
+        <strong>{{ guessDicePhaseLabel }}</strong>
+      </div>
+
+      <div class="dice-stage guess-dice-stage">
+        <div class="dice-face single-dice">
+          <span
+            v-for="dot in diceDots(guessDiceValue)"
+            :key="`guess-dice-${dot}`"
+            :class="`dot dot-${dot}`"
+          ></span>
+        </div>
+        <strong>{{ guessDiceResultLabel }}</strong>
+        <p>{{ guessDiceHintText }}</p>
+        <div v-if="gs.phase !== 'finished'" class="guess-dice-options">
+          <button
+            v-for="value in diceGuessOptions"
+            :key="value"
+            type="button"
+            :class="{ selected: myDiceGuess?.guess === value }"
+            :disabled="!canGuessDice"
+            @click="guessDice(value)"
+          >
+            {{ value }}
+          </button>
+        </div>
+      </div>
+
+      <div class="party-list">
+        <div
+          v-for="item in guessDicePlayerRows"
+          :key="item.id"
+          class="party-row"
+          :class="{ winner: item.winner, muted: item.timeout || item.loser }"
+        >
+          <div class="avatar-circle">{{ item.initial }}</div>
+          <div>
+            <strong>{{ item.name }}</strong>
+            <p>{{ item.detail }}</p>
+          </div>
+          <span>{{ item.badge }}</span>
+        </div>
+      </div>
+
+      <div class="dual-btns">
+        <button v-if="gs.phase === 'finished'" class="primary-btn" @click="rematch">再来一局</button>
+        <button class="secondary-btn" @click="backToLobby">返回大厅</button>
+      </div>
+    </section>
+
     <section v-else-if="gameType === 'rock_paper_scissors'" class="mode-card rps-mode">
       <section class="battle-card">
         <div class="player-mini">
@@ -342,6 +398,58 @@
       </div>
     </section>
 
+    <section v-else-if="gameType === 'blackjack'" class="mode-card blackjack-mode">
+      <div class="blackjack-hero">
+        <div>
+          <span>2-4 人 · 门票 30 分</span>
+          <h2>21点</h2>
+          <p>轮流要牌或停牌，不爆牌且点数最高者获胜。</p>
+        </div>
+        <strong>{{ blackjackStatusLabel }}</strong>
+      </div>
+
+      <div class="blackjack-table">
+        <div
+          v-for="item in blackjackPlayerRows"
+          :key="item.id"
+          class="blackjack-player"
+          :class="{ active: item.active, winner: item.winner, busted: item.busted }"
+        >
+          <div class="blackjack-player__top">
+            <div>
+              <strong>{{ item.name }}</strong>
+              <span>{{ item.status }}</span>
+            </div>
+            <b>{{ item.score }}</b>
+          </div>
+          <div class="blackjack-hand">
+            <div
+              v-for="(card, index) in item.cards"
+              :key="`${item.id}-${index}-${card.rank || 'back'}`"
+              class="blackjack-card"
+              :class="[{ hidden: card.hidden }, cardColor(card)]"
+            >
+              <span>{{ blackjackCardLabel(card) }}</span>
+              <small>{{ blackjackSuitSymbol(card?.suit) }}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="hint-line">{{ blackjackHintText }}</div>
+
+      <div class="dual-btns">
+        <template v-if="gs.phase === 'play'">
+          <button class="primary-btn" :disabled="!isMyBlackjackTurn" @click="blackjackAction('hit')">要牌</button>
+          <button class="secondary-btn" :disabled="!isMyBlackjackTurn" @click="blackjackAction('stand')">停牌</button>
+        </template>
+        <template v-else>
+          <button class="primary-btn" @click="rematch">再来一局</button>
+          <button class="secondary-btn" @click="backToLobby">返回大厅</button>
+        </template>
+      </div>
+    </section>
+
     <section v-else-if="gameType === 'quiz'" class="mode-card quiz-mode">
       <div class="profile-row compact">
         <div class="side side-me">
@@ -483,15 +591,6 @@
       @back="backToLobby"
     />
 
-    <UndercoverGame
-      v-else-if="gameType === 'undercover'"
-      :gs="gs"
-      :player="player"
-      :roomPlayers="roomPlayers"
-      @back="backToLobby"
-      @rematch="rematch"
-    />
-
     <section v-else class="mode-card fallback">
       <h3>该游戏暂未启用新 UI</h3>
       <button class="primary-btn" @click="backToLobby">返回大厅</button>
@@ -523,7 +622,6 @@ import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } fr
 import { useRoute, useRouter } from 'vue-router'
 import { gameState, getPlayer, socket } from '../socket'
 
-const UndercoverGame = defineAsyncComponent(() => import('../components/UndercoverGame.vue'))
 const ZhaJinHuaBoard = defineAsyncComponent(() => import('../components/games/ZhaJinHuaBoard.vue'))
 const GuandanBoard = defineAsyncComponent(() => import('../components/games/GuandanBoard.vue'))
 const DoudizhuBoard = defineAsyncComponent(() => import('../components/games/DoudizhuBoard.vue'))
@@ -599,11 +697,11 @@ const gameLabel = computed(() => {
   const labels = {
     reaction_race: '看谁快',
     dice_roll: '摇骰子',
+    guess_dice: '猜点数',
     rock_paper_scissors: '剪刀石头布',
     guess_number: '猜数字',
     blackjack: '21点',
     zha_jin_hua: '炸金花',
-    undercover: '谁是卧底',
     quiz: '快问快答',
     guandan: '掼蛋',
     doudizhu: '斗地主',
@@ -762,6 +860,93 @@ const dicePlayerRows = computed(() => {
   })
 })
 
+const diceGuessOptions = [1, 2, 3, 4, 5, 6]
+const myDiceGuess = computed(() => gs.value?.guesses?.[player.value?.id] || null)
+const canGuessDice = computed(() => (
+  gs.value?.phase === 'guessing' &&
+  !myDiceGuess.value
+))
+const guessDiceValue = computed(() => gs.value?.dice || '?')
+const guessDicePhaseLabel = computed(() => {
+  if (gs.value?.phase === 'finished') return '开奖'
+  return myDiceGuess.value ? '已选择' : `${timeLeft.value}s`
+})
+const guessDiceResultLabel = computed(() => {
+  if (gs.value?.phase !== 'finished') {
+    return myDiceGuess.value ? `已选 ${myDiceGuess.value.guess} 点` : '选择点数'
+  }
+  return `开出 ${gs.value?.dice || '?'} 点`
+})
+const guessDiceHintText = computed(() => {
+  if (gs.value?.phase !== 'finished') {
+    return canGuessDice.value ? '请选择你认为会摇出的点数' : '等待其他玩家选择'
+  }
+  const winners = gs.value?.winningPlayers || []
+  if (winners.length === 0) return '无人猜中，所有人扣除门票积分'
+  if (winners.length === roomPlayers.value.length) return '所有人猜中，所有人获得门票积分'
+  return `猜中：${winners.map(getPlayerName).join('、')}`
+})
+const guessDicePlayerRows = computed(() => {
+  const winners = new Set(gs.value?.winningPlayers || [])
+  return roomPlayers.value.map((item) => {
+    const guess = gs.value?.guesses?.[item.id]
+    const finished = gs.value?.phase === 'finished'
+    const winner = winners.has(item.id)
+    return {
+      id: item.id,
+      name: item.nickname || '玩家',
+      initial: (item.nickname || '玩').slice(0, 1),
+      winner,
+      loser: finished && !winner,
+      timeout: Boolean(guess?.timeout),
+      detail: guess?.timeout ? '超时未选' : (guess ? `选择 ${guess.guess} 点` : '等待选择'),
+      badge: finished ? (winner ? '+10' : '-10') : (guess ? '已选' : '待定')
+    }
+  })
+})
+
+const isMyBlackjackTurn = computed(() => (
+  gs.value?.phase === 'play' &&
+  gs.value?.currentPlayer === player.value?.id
+))
+const blackjackStatusLabel = computed(() => {
+  if (gs.value?.phase === 'finished') return '结算'
+  return isMyBlackjackTurn.value ? `${timeLeft.value}s` : '等待'
+})
+const blackjackHintText = computed(() => {
+  if (gs.value?.phase === 'finished') {
+    return gs.value?.finalWinner === player.value?.id
+      ? '你获得本局胜利'
+      : `${getPlayerName(gs.value?.finalWinner)} 获得本局胜利`
+  }
+  return isMyBlackjackTurn.value
+    ? '轮到你操作，可以继续要牌或选择停牌'
+    : `等待 ${getPlayerName(gs.value?.currentPlayer)} 操作`
+})
+const blackjackPlayerRows = computed(() => {
+  const finishedPlayers = new Set(gs.value?.finishedPlayers || [])
+  const bustedPlayers = new Set(gs.value?.bustedPlayers || [])
+  const handCounts = gs.value?.handCounts || {}
+  return roomPlayers.value.map((item) => {
+    const hand = gs.value?.hands?.[item.id] || []
+    const hiddenCount = hand.length ? 0 : Number(handCounts[item.id] || 0)
+    const busted = bustedPlayers.has(item.id)
+    const winner = gs.value?.finalWinner === item.id
+    const active = gs.value?.phase === 'play' && gs.value?.currentPlayer === item.id
+    const done = finishedPlayers.has(item.id)
+    return {
+      id: item.id,
+      name: item.nickname || '玩家',
+      active,
+      winner,
+      busted,
+      cards: hand.length ? hand : Array.from({ length: hiddenCount }, () => ({ hidden: true })),
+      score: hand.length ? blackjackHandValue(hand) : (hiddenCount ? `${hiddenCount}张` : '--'),
+      status: winner ? '赢家' : (busted ? '爆牌' : (active ? '操作中' : (done ? '已停牌' : '等待')))
+    }
+  })
+})
+
 const remainingChances = computed(() => {
   const total = 10
   const used = gs.value?.guesses?.length || 0
@@ -806,6 +991,32 @@ function diceDots(value) {
   return layouts[value] || []
 }
 
+function blackjackHandValue(cards = []) {
+  let total = 0
+  let aces = 0
+  for (const card of cards) {
+    total += Number(card?.value || 0)
+    if (card?.rank === 'A') aces += 1
+  }
+  while (total > 21 && aces > 0) {
+    total -= 10
+    aces -= 1
+  }
+  return total > 21 ? `${total} 爆` : total
+}
+
+function blackjackCardLabel(card) {
+  return card?.hidden ? '?' : (card?.rank || '?')
+}
+
+function blackjackSuitSymbol(suit) {
+  return { spade: '♠', heart: '♥', club: '♣', diamond: '♦' }[suit] || ''
+}
+
+function cardColor(card) {
+  return ['heart', 'diamond'].includes(card?.suit) ? 'red' : 'black'
+}
+
 function tapReactionRace() {
   if (reactionButtonDisabled.value) return
   socket.emit('game:action', { action: { type: 'tap' } })
@@ -814,6 +1025,16 @@ function tapReactionRace() {
 function rollDice() {
   if (!canRollDice.value) return
   socket.emit('game:action', { action: { type: 'roll' } })
+}
+
+function guessDice(value) {
+  if (!canGuessDice.value) return
+  socket.emit('game:action', { action: { type: 'guess', guess: value } })
+}
+
+function blackjackAction(type) {
+  if (!isMyBlackjackTurn.value) return
+  socket.emit('game:action', { action: { type } })
 }
 
 function moveIcon(key) {
@@ -2467,6 +2688,41 @@ watch(() => roomId.value, () => {
   gap: 16px;
 }
 
+.guess-dice-stage {
+  align-content: center;
+}
+
+.single-dice {
+  margin: 0 auto;
+}
+
+.guess-dice-options {
+  width: min(100%, 360px);
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.guess-dice-options button {
+  min-height: 46px;
+  border: 2px solid #cfe3fb;
+  border-radius: 14px;
+  background: #fff;
+  color: #153260;
+  font-size: 18px;
+  font-weight: 1000;
+  box-shadow: 0 8px 14px rgba(16, 92, 180, 0.08);
+}
+
+.guess-dice-options button.selected {
+  border-color: #ffd56a;
+  background: linear-gradient(180deg, #fff9df, #ffe38f);
+}
+
+.guess-dice-options button:disabled:not(.selected) {
+  opacity: 0.55;
+}
+
 .dice-face {
   position: relative;
   width: 92px;
@@ -2523,6 +2779,168 @@ watch(() => roomId.value, () => {
   font-weight: 800;
 }
 
+.blackjack-mode {
+  display: grid;
+  gap: 12px;
+}
+
+.blackjack-hero {
+  min-height: 116px;
+  padding: 18px;
+  border-radius: 24px;
+  color: #fff;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  background: linear-gradient(140deg, #123e83, #1672d9 55%, #24b37d);
+  box-shadow: 0 14px 26px rgba(9, 80, 190, 0.16);
+}
+
+.blackjack-hero span,
+.blackjack-hero p {
+  display: block;
+  margin: 0;
+  color: rgba(255, 255, 255, 0.86);
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 800;
+}
+
+.blackjack-hero h2 {
+  margin: 6px 0;
+  font-size: 30px;
+  line-height: 1;
+  font-weight: 1000;
+}
+
+.blackjack-hero strong {
+  min-width: 72px;
+  height: 72px;
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.18);
+  display: grid;
+  place-items: center;
+  color: #d8ffe9;
+  font-size: 20px;
+  font-weight: 1000;
+}
+
+.blackjack-table {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.blackjack-player {
+  min-height: 150px;
+  padding: 12px;
+  border-radius: 18px;
+  border: 2px solid #dceafb;
+  background: #fff;
+  display: grid;
+  gap: 10px;
+}
+
+.blackjack-player.active {
+  border-color: #47b8ff;
+  box-shadow: 0 10px 18px rgba(31, 107, 255, 0.12);
+}
+
+.blackjack-player.winner {
+  border-color: #ffd56a;
+  background: linear-gradient(180deg, #fffdf3, #fff6d5);
+}
+
+.blackjack-player.busted {
+  opacity: 0.72;
+}
+
+.blackjack-player__top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.blackjack-player__top strong,
+.blackjack-player__top span {
+  display: block;
+}
+
+.blackjack-player__top strong {
+  color: #153260;
+  font-size: 16px;
+  line-height: 1.2;
+  font-weight: 900;
+}
+
+.blackjack-player__top span {
+  margin-top: 3px;
+  color: #6b82ac;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.blackjack-player__top b {
+  min-width: 48px;
+  min-height: 34px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: #eef6ff;
+  color: #145bd8;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 1000;
+}
+
+.blackjack-hand {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.blackjack-card {
+  width: 48px;
+  height: 68px;
+  border-radius: 10px;
+  border: 1px solid #d8e2f2;
+  background: linear-gradient(180deg, #fff, #f4f8ff);
+  color: #153260;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  box-shadow: 0 8px 14px rgba(16, 92, 180, 0.1);
+}
+
+.blackjack-card.red {
+  color: #d73545;
+}
+
+.blackjack-card.hidden {
+  color: #fff;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.2) 25%, transparent 25%) 0 0 / 10px 10px,
+    linear-gradient(180deg, #2f6ff1, #173b9c);
+  border-color: #1746bd;
+}
+
+.blackjack-card span {
+  font-size: 19px;
+  line-height: 1;
+  font-weight: 1000;
+}
+
+.blackjack-card small {
+  margin-top: 5px;
+  font-size: 16px;
+  line-height: 1;
+  font-weight: 900;
+}
+
 @media (max-width: 760px) {
   .mode-card {
     padding: 12px;
@@ -2550,6 +2968,10 @@ watch(() => roomId.value, () => {
   }
 
   .quiz-head {
+    grid-template-columns: 1fr;
+  }
+
+  .blackjack-table {
     grid-template-columns: 1fr;
   }
 }

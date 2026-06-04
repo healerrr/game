@@ -75,25 +75,6 @@
         </div>
       </div>
 
-      <!-- 谁是卧底 -->
-      <div v-else-if="gameType === 'undercover'">
-        <div class="uc-display">
-          <div class="uc-round">第 {{ gs.round }} 轮 — {{ phaseText(gs.phase) }}</div>
-          <div class="uc-desc" v-if="gs.descriptions?.length">
-            <div v-for="(d, i) in gs.descriptions" :key="i" class="uc-desc-item">
-              <strong>{{ getPlayerName(d.playerId) }}:</strong> "{{ d.text }}"
-            </div>
-          </div>
-          <div v-if="gs.phase === 'reveal'" class="reveal-text">
-            被投出的: {{ gs.lastEliminated?.playerId ? getPlayerName(gs.lastEliminated.playerId) : '无' }}
-            → 身份: {{ gs.lastEliminated?.identity || '未知' }}
-          </div>
-          <div v-if="gs.phase === 'finished'" class="result-text">
-            {{ gs.winner === 'civilian' ? '👍 平民胜利！' : '🕵️ 卧底胜利！' }}
-          </div>
-        </div>
-      </div>
-
       <!-- 知识问答 -->
       <div v-else-if="gameType === 'quiz'">
         <div class="quiz-display">
@@ -176,7 +157,6 @@ const gameLabel = computed(() => {
     guess_number: '🎲 猜大小',
     blackjack: '🃏 21点',
     zha_jin_hua: '♠️ 炸金花',
-    undercover: '🎯 谁是卧底',
     quiz: '🧠 知识问答',
     guandan: '🃏 掼蛋',
     doudizhu: '🃏 斗地主',
@@ -322,10 +302,6 @@ function bjValue(pid) {
   }
   while (total > 21 && aces > 0) { total -= 10; aces-- }
   return total > 21 ? `${total} 爆!` : total
-}
-
-function phaseText(phase) {
-  return { describe: '描述中', vote: '投票中', reveal: '揭示中', finished: '已结束' }[phase] || phase
 }
 
 function backToLobby() {
@@ -531,23 +507,6 @@ function backToLobby() {
 }
 
 .zjh-info { font-size: 14px; color: var(--text-secondary); }
-
-.uc-display { padding: 8px; }
-
-.uc-round {
-  text-align: center;
-  font-size: 14px;
-  color: var(--text-secondary);
-  margin-bottom: 12px;
-}
-
-.uc-desc-item {
-  padding: 6px 12px;
-  margin-bottom: 4px;
-  background: var(--bg-secondary);
-  border-radius: var(--radius-sm);
-  font-size: 13px;
-}
 
 .reveal-text, .quiz-result {
   text-align: center;

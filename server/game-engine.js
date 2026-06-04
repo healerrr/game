@@ -310,6 +310,69 @@ class DiceRoll {
   }
 }
 
+// ========== 猜点数 ==========
+class GuessDice {
+  init(room, players) {
+    return {
+      phase: 'guessing',
+      players,
+      guesses: {},
+      dice: null,
+      winningPlayers: [],
+      timer: 15,
+      timerStarted: Date.now()
+    };
+  }
+
+  update(state, action, playerId) {
+    if (state.phase !== 'guessing') return state;
+    if (action.type !== 'guess') return state;
+    if (!state.players?.includes(playerId)) return state;
+    if (state.guesses?.[playerId]) return state;
+
+    const guess = Number(action.guess);
+    if (!Number.isInteger(guess) || guess < 1 || guess > 6) return state;
+
+    state.guesses[playerId] = {
+      playerId,
+      guess,
+      guessedAt: Date.now()
+    };
+
+    const allGuessed = state.players.every(pid => state.guesses?.[pid]);
+    return allGuessed ? this.finish(state) : state;
+  }
+
+  nextRound(state) {
+    if (state.phase !== 'guessing') return state;
+    for (const pid of state.players || []) {
+      if (!state.guesses?.[pid]) {
+        state.guesses[pid] = {
+          playerId: pid,
+          guess: null,
+          guessedAt: Date.now(),
+          timeout: true
+        };
+      }
+    }
+    return this.finish(state);
+  }
+
+  finish(state) {
+    const dice = randomInt(1, 7);
+    const winningPlayers = (state.players || []).filter(pid => state.guesses?.[pid]?.guess === dice);
+
+    state.phase = 'finished';
+    state.dice = dice;
+    state.finalWinner = winningPlayers[0] || null;
+    state.winner = state.finalWinner;
+    state.winningPlayers = winningPlayers;
+    state.timer = 0;
+    state.timerStarted = Date.now();
+    return state;
+  }
+}
+
 class ZhaJinHua {
   constructor() {
     this.SUITS = ['spade', 'heart', 'club', 'diamond'];
@@ -1034,6 +1097,29 @@ class Blackjack {
     return total;
   }
 
+  getPublicView(state) {
+    const { deck, hands, ...view } = state;
+    const handCounts = Object.fromEntries(
+      Object.entries(hands || {}).map(([pid, hand]) => [pid, Array.isArray(hand) ? hand.length : 0])
+    );
+    return {
+      ...view,
+      deckCount: Array.isArray(deck) ? deck.length : 0,
+      handCounts,
+      hands: state.phase === 'finished' ? hands : {}
+    };
+  }
+
+  getPlayerView(state, playerId) {
+    const view = this.getPublicView(state);
+    if (state.phase !== 'finished') {
+      view.hands = {
+        [playerId]: state.hands?.[playerId] || []
+      };
+    }
+    return view;
+  }
+
   update(state, action, playerId) {
     if (state.phase !== 'play') return state;
     if (playerId !== state.currentPlayer) return state;
@@ -1091,294 +1177,9 @@ class Blackjack {
       }
     }
     state.finalWinner = best;
+    state.winner = best;
+    state.winningPlayers = best ? [best] : [];
     state.showdownResult = { hands: state.hands, values };
-    return state;
-  }
-}
-
-// ========== 谁是卧底 ==========
-class Undercover {
-  constructor() {
-    this.wordPairs = [
-      ['大巴', '公交'], ['可乐', '雪碧'], ['团建', '旅游'], ['老板', '领导'],
-      ['馒头', '包子'], ['微信', 'QQ'], ['加班', '值班'], ['KPI', 'OKR'],
-      ['猫', '狗'], ['西瓜', '哈密瓜'], ['沙发', '椅子'], ['筷子', '叉子'],
-      ['跑步', '散步'], ['唱歌', '哼歌'], ['画画', '涂鸦'], ['饺子', '馄饨'],
-      ['钢笔', '圆珠笔'], ['空调', '风扇'], ['地铁', '轻轨'], ['火锅', '麻辣烫'],
-      ['眼镜', '墨镜'], ['拖鞋', '凉鞋'], ['枕头', '靠垫'], ['毛巾', '浴巾']
-    ];
-  }
-
-  shuffle(list) {
-    const result = [...list];
-    for (let i = result.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [result[i], result[j]] = [result[j], result[i]];
-    }
-    return result;
-  }
-
-  makeQuestion({ q, correct, wrong, category }) {
-    const wrongOptions = this.shuffle(wrong).slice(0, 3);
-    const options = this.shuffle([correct, ...wrongOptions]);
-    return { q, options, answer: options.indexOf(correct), category };
-  }
-
-  getGeneralQuestionFacts() {
-    return [
-      { category: 'geography', q: '下列哪座城市不在欧洲？', correct: '开罗', wrong: ['维也纳', '布拉格', '里斯本', '哥本哈根'] },
-      { category: 'geography', q: '下列哪条河流最终流入地中海？', correct: '尼罗河', wrong: ['亚马孙河', '恒河', '密西西比河', '长江'] },
-      { category: 'science', q: '声音在下列哪种介质中通常传播最快？', correct: '钢铁', wrong: ['空气', '真空', '水蒸气', '软木'] },
-      { category: 'science', q: '下列哪一种变化属于化学变化？', correct: '铁生锈', wrong: ['冰融化', '水蒸发', '玻璃破碎', '盐溶于水'] },
-      { category: 'culture', q: '文艺复兴最早兴起于欧洲哪个地区？', correct: '意大利', wrong: ['北欧', '伊比利亚半岛', '巴尔干半岛', '不列颠群岛'] },
-      { category: 'culture', q: '下列哪部作品通常被归为莎士比亚的悲剧？', correct: '《哈姆雷特》', wrong: ['《威尼斯商人》', '《仲夏夜之梦》', '《皆大欢喜》', '《暴风雨》'] },
-      { category: 'reasoning', q: '如果“所有甲都是乙”成立，下列哪项一定成立？', correct: '不是乙的一定不是甲', wrong: ['所有乙都是甲', '有些甲不是乙', '不是甲的一定不是乙', '甲和乙完全相同'] },
-      { category: 'reasoning', q: '“幸存者偏差”最接近下列哪种情况？', correct: '只观察留下来的样本而忽略消失的样本', wrong: ['随机样本数量太大', '所有样本概率完全相同', '重复实验导致结果稳定', '用平均数代替中位数'] },
-      { category: 'economics', q: '“机会成本”指的是？', correct: '选择某项方案而放弃的最佳替代收益', wrong: ['已经发生且无法收回的成本', '账面上记录的全部成本', '产品售出后的净利润', '固定资产折旧总额'] },
-      { category: 'economics', q: '“通货膨胀”通常表示？', correct: '总体物价水平持续上升', wrong: ['某一商品价格偶然上涨', '失业率持续下降', '货币购买力持续增强', '出口量必然增加'] },
-      { category: 'math', q: '一个数增加20%后再减少20%，结果与原数相比？', correct: '减少4%', wrong: ['不变', '增加4%', '减少20%', '增加20%'] },
-      { category: 'math', q: '若三个独立事件发生概率均为1/2，它们同时发生的概率是？', correct: '1/8', wrong: ['1/2', '1/4', '3/8', '1/16'] },
-      { category: 'life', q: '做实验时设置对照组的主要目的是什么？', correct: '用于比较变量产生的影响', wrong: ['让实验人数更多', '保证结果一定正确', '减少记录工作', '替代实验组'] },
-      { category: 'life', q: '阅读统计图时，最需要警惕哪种误导？', correct: '坐标轴截断造成差异被夸大', wrong: ['标题字号太大', '颜色数量太少', '图例放在右侧', '数据点太整齐'] }
-    ];
-  }
-
-  makeGeneratedQuestion(seed) {
-    const generators = [
-      () => {
-        const base = 12 + Math.floor(Math.random() * 24);
-        const percent = [10, 15, 20, 25][Math.floor(Math.random() * 4)];
-        const correct = String(Math.round(base * (1 - (percent / 100) ** 2) * 100) / 100);
-        return {
-          category: 'math',
-          q: `某数先增加${percent}%，再减少${percent}%，若原数为${base}，结果最接近多少？`,
-          correct,
-          wrong: [String(base), String(Math.round(base * (1 - percent / 100) * 100) / 100), String(Math.round(base * (1 + percent / 100) * 100) / 100), String(base - percent / 10)]
-        };
-      },
-      () => {
-        const pairs = [
-          ['水星', '太阳系中最靠近太阳的行星', ['金星', '火星', '木星', '土星']],
-          ['臭氧层', '主要吸收太阳紫外线的地球大气结构', ['电离层', '对流层水汽', '磁层', '平流层云']],
-          ['活字印刷术', '北宋毕昇相关的技术发明', ['指南针', '火药', '造纸术', '地动仪']],
-          ['二十四节气', '古代中国用于指导农事的时间知识体系', ['十二生肖', '干支纪年', '五行学说', '星座体系']]
-        ];
-        const [correct, clue, wrong] = pairs[Math.floor(Math.random() * pairs.length)];
-        return { category: 'culture', q: `下列哪一项最符合“${clue}”？`, correct, wrong };
-      },
-      () => {
-        const examples = [
-          ['把只返回问卷的人当成全部人群来判断', '自选择偏差', ['安慰剂效应', '沉没成本', '边际收益', '规模经济']],
-          ['因为已经投入很多而继续投入一个明显不划算的项目', '沉没成本误区', ['幸存者偏差', '从众效应', '机会成本', '路径依赖']],
-          ['看到两个变量同时变化，就断定其中一个导致另一个', '相关不等于因果', ['样本均衡', '边际递减', '复利效应', '风险对冲']],
-          ['只凭少数醒目案例判断整体概率', '可得性偏差', ['价格歧视', '比较优势', '复盘效应', '对照实验']]
-        ];
-        const [scene, correct, wrong] = examples[Math.floor(Math.random() * examples.length)];
-        return { category: 'reasoning', q: `下面情境最接近哪一个概念：${scene}？`, correct, wrong };
-      }
-    ];
-    return this.makeQuestion(generators[seed % generators.length]());
-  }
-
-  generateQuestions(count) {
-    const questions = [];
-    const seen = new Set();
-    const usedCategories = new Set();
-    const facts = this.shuffle(this.getGeneralQuestionFacts());
-
-    for (const fact of facts) {
-      if (questions.length >= count) break;
-      if (seen.has(fact.q) || usedCategories.has(fact.category)) continue;
-      questions.push(this.makeQuestion(fact));
-      seen.add(fact.q);
-      usedCategories.add(fact.category);
-    }
-
-    for (const fact of facts) {
-      if (questions.length >= count) break;
-      if (seen.has(fact.q)) continue;
-      questions.push(this.makeQuestion(fact));
-      seen.add(fact.q);
-    }
-
-    let seed = 0;
-    while (questions.length < count) {
-      const question = this.makeGeneratedQuestion(seed++);
-      if (seen.has(question.q)) continue;
-      questions.push(question);
-      seen.add(question.q);
-    }
-
-    return questions;
-  }
-
-  init(room, players) {
-    // 随机选词语对
-    const pair = this.wordPairs[Math.floor(Math.random() * this.wordPairs.length)];
-
-    // 分配身份
-    const numPlayers = players.length;
-    const numUndercover = numPlayers <= 5 ? 1 : 2;
-    const hasBlank = numPlayers >= 7;
-
-    const identities = Array(numPlayers).fill('civilian');
-    // 随机选卧底
-    const shuffled = [...players].sort(() => Math.random() - 0.5);
-    for (let i = 0; i < numUndercover; i++) {
-      const idx = players.indexOf(shuffled[i]);
-      identities[idx] = 'undercover';
-    }
-    // 白板（如果有）
-    if (hasBlank) {
-      const blankIdx = players.indexOf(shuffled[numUndercover]);
-      identities[blankIdx] = 'blank';
-    }
-
-    const words = {};
-    players.forEach((pid, i) => {
-      if (identities[i] === 'undercover') words[pid] = pair[1];
-      else if (identities[i] === 'blank') words[pid] = '???';
-      else words[pid] = pair[0];
-    });
-
-    return {
-      phase: 'describe',     // describe | vote | reveal | finished
-      round: 1,
-      players,
-      identities,
-      words,
-      civilianWord: pair[0],
-      undercoverWord: pair[1],
-      descriptions: [],       // { playerId, text }
-      votes: {},             // { voterId: targetId }
-      eliminatedPlayers: [],
-      currentDescriber: players[0],
-      describerIndex: 0,
-      timer: 20,
-      timerStarted: Date.now(),
-      result: null
-    };
-  }
-
-  update(state, action, playerId) {
-    if (state.phase === 'describe') {
-      if (playerId !== state.currentDescriber) return state;
-      if (state.eliminatedPlayers.includes(playerId)) {
-        // 被淘汰的人跳过
-        return this.nextDescriber(state);
-      }
-
-      if (action.type === 'describe') {
-        state.descriptions.push({ playerId, text: action.text, round: state.round });
-        return this.nextDescriber(state);
-      }
-    }
-
-    if (state.phase === 'vote') {
-      if (state.votes[playerId]) return state; // 已经投过了
-      if (state.eliminatedPlayers.includes(playerId)) return state;
-
-      if (action.type === 'vote') {
-        state.votes[playerId] = action.targetId;
-
-        // 检查是否所有人都投票了
-        const activePlayers = state.players.filter(p => !state.eliminatedPlayers.includes(p));
-        if (Object.keys(state.votes).length >= activePlayers.length) {
-          return this.resolveVote(state);
-        }
-      }
-    }
-
-    return state;
-  }
-
-  nextDescriber(state) {
-    const activePlayers = state.players.filter(p => !state.eliminatedPlayers.includes(p));
-    const idx = activePlayers.indexOf(state.currentDescriber);
-    const nextIdx = (idx + 1) % activePlayers.length;
-
-    if (nextIdx === 0) {
-      // 一轮描述结束 → 进入投票
-      state.phase = 'vote';
-      state.votes = {};
-      state.timer = 30;
-      state.timerStarted = Date.now();
-    } else {
-      state.currentDescriber = activePlayers[nextIdx];
-      state.timerStarted = Date.now();
-    }
-    return state;
-  }
-
-  resolveVote(state) {
-    // 计数投票
-    const voteCount = {};
-    for (const [voter, target] of Object.entries(state.votes)) {
-      voteCount[target] = (voteCount[target] || 0) + 1;
-    }
-
-    // 找到票数最多的
-    let maxVotes = 0;
-    let eliminated = null;
-    for (const [pid, count] of Object.entries(voteCount)) {
-      if (count > maxVotes) {
-        maxVotes = count;
-        eliminated = pid;
-      }
-    }
-
-    if (eliminated) {
-      state.eliminatedPlayers.push(eliminated);
-      const identity = state.identities[state.players.indexOf(eliminated)];
-      state.lastEliminated = { playerId: eliminated, identity };
-    }
-
-    state.phase = 'reveal';
-    state.revealResult = { votes: state.votes, eliminated, voteCount };
-    state.timer = 10;
-    state.timerStarted = Date.now();
-
-    // 检查胜负
-    const remaining = state.players.filter(p => !state.eliminatedPlayers.includes(p));
-    const undercoverAlive = remaining.filter(p => {
-      const idx = state.players.indexOf(p);
-      return state.identities[idx] === 'undercover';
-    });
-
-    const civiliansAlive = remaining.filter(p => {
-      const idx = state.players.indexOf(p);
-      return state.identities[idx] !== 'undercover';
-    });
-
-    if (undercoverAlive.length === 0) {
-      state.phase = 'finished';
-      state.winner = 'civilian'; // 平民方获胜
-      state.winningPlayers = remaining.filter(p => {
-        const idx = state.players.indexOf(p);
-        return state.identities[idx] !== 'undercover';
-      });
-    } else if (civiliansAlive.length <= undercoverAlive.length) {
-      state.phase = 'finished';
-      state.winner = 'undercover'; // 卧底获胜
-      state.winningPlayers = remaining.filter(p => {
-        const idx = state.players.indexOf(p);
-        return state.identities[idx] === 'undercover';
-      });
-    }
-
-    return state;
-  }
-
-  // 揭示后开始下一轮
-  nextRound(state) {
-    state.phase = 'describe';
-    state.round++;
-    state.descriptions = [];
-    state.votes = {};
-    state.lastEliminated = null;
-    state.currentDescriber = state.players.find(p => !state.eliminatedPlayers.includes(p));
-    state.timer = 20;
-    state.timerStarted = Date.now();
     return state;
   }
 }
@@ -2009,9 +1810,9 @@ const engines = {
   guess_number: new GuessNumber(),
   reaction_race: new ReactionRace(),
   dice_roll: new DiceRoll(),
+  guess_dice: new GuessDice(),
   zha_jin_hua: cardEngines.zha_jin_hua,
   blackjack: new Blackjack(),
-  undercover: new Undercover(),
   quiz: new QuizGame(),
   guandan: cardEngines.guandan,
   doudizhu: cardEngines.doudizhu,
@@ -2054,21 +1855,21 @@ const GAME_CONFIG = {
     maxPlayers: 6,
     duration: '10秒'
   },
+  guess_dice: {
+    name: '猜点数',
+    entryFee: 10,
+    category: 'quick',
+    minPlayers: 3,
+    maxPlayers: 6,
+    duration: '15秒'
+  },
   blackjack: {
     name: '21点对决',
     entryFee: 30,
     category: 'medium',
     minPlayers: 2,
-    maxPlayers: 2,
+    maxPlayers: 4,
     duration: '1分钟'
-  },
-  undercover: {
-    name: '谁是卧底',
-    entryFee: 40,
-    category: 'social',
-    minPlayers: 5,
-    maxPlayers: 8,
-    duration: '3-5分钟'
   },
   zha_jin_hua: {
     name: '炸金花',
