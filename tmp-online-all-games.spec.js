@@ -55,6 +55,10 @@ function roomIdOf(room) {
   return room?.roomId || room?.id;
 }
 
+function roomHasPlayer(room, playerId) {
+  return Boolean(room?.players?.some((item) => item === playerId || item?.id === playerId));
+}
+
 async function waitFor(players, description, predicate, timeoutMs = 30000) {
   const start = Date.now();
   let last = [];
@@ -231,7 +235,7 @@ function publicState(snaps, players) {
   return snaps.find((snap, index) => (
     snap.game &&
     snap.room?.status === 'playing' &&
-    snap.room?.players?.some((item) => item.id === players[index]?.playerInfo.id)
+    roomHasPlayer(snap.room, players[index]?.playerInfo.id)
   ))?.game
     || snaps.find((snap) => snap.game && snap.room?.status === 'playing')?.game
     || snaps.find((snap) => snap.game)?.game
@@ -382,7 +386,7 @@ async function driveGame(game, players) {
     const actions = [];
 
     for (let i = 0; i < players.length; i += 1) {
-      const isMember = snaps[i]?.room?.players?.some((item) => item.id === players[i].playerInfo.id);
+      const isMember = roomHasPlayer(snaps[i]?.room, players[i].playerInfo.id);
       if (players[i].active === false || isMember === false) {
         players[i].active = false;
         continue;
@@ -390,7 +394,7 @@ async function driveGame(game, players) {
       const ownState = snaps[i]?.game || commonState;
       const state = ['doudizhu', 'guandan', 'mahjong'].includes(game.key) ? ownState : commonState;
       const action = ['doudizhu', 'guandan', 'mahjong'].includes(game.key)
-        ? actionForCardGame(game.key, players[i], state)
+        ? actionForCardGame(game.key, players[i], i, state)
         : actionForPlayer(game.key, players[i], i, state);
       if (action) actions.push({ player: players[i], action });
     }
