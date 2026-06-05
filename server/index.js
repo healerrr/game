@@ -279,8 +279,38 @@ io.on('connection', (socket) => {
       if (typeof callback === 'function') callback({ error: '请先注册' });
       return;
     }
+
+    const room = store.getRoom(roomId);
+    if (!room) {
+      if (typeof callback === 'function') callback({ error: '房间不存在' });
+      return;
+    }
+
+    // 确保玩家在房间列表中
+    if (!room.players.includes(currentPlayer.id)) {
+      room.players.push(currentPlayer.id);
+    }
+
+    // 进入房间默认准备
+    if (room.status === 'readying') {
+      room.ready = room.ready || {};
+      room.ready[currentPlayer.id] = true;
+      room.seatStates = room.seatStates || {};
+      room.seatStates[currentPlayer.id] = {
+        ...(room.seatStates[currentPlayer.id] || {}),
+        ready: true,
+        connection: 'online',
+        intent: 'active'
+      };
+      room.updatedAt = Date.now();
+      ensureReadyDeadline(room);
+      store.saveRoom(room);
+      emitRoomUpdate(room);
+      maybeStartReadyRoom(room);
+    }
+
     socket.join(`room:${roomId}`);
-    if (typeof callback === 'function') callback({ success: true });
+    if (typeof callback === 'function') callback({ success: true, room: serializeRoom(room, currentPlayer.id) });
   });
 
   socket.on('room:create', ({ gameType }, callback) => {

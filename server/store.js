@@ -392,10 +392,10 @@ class Store {
       room.players.push(player.id);
     }
     room.ready = room.ready || {};
-    room.ready[player.id] = false;
+    room.ready[player.id] = true;
     room.seatStates = room.seatStates || {};
     room.seatStates[player.id] = {
-      ready: false,
+      ready: true,
       connection: 'online',
       intent: 'active'
     };
