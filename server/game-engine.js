@@ -1816,7 +1816,7 @@ const GAME_CONFIG = {
     name: '猜点数',
     entryFee: 10,
     category: 'quick',
-    minPlayers: 3,
+    minPlayers: 2,
     maxPlayers: 6,
     duration: '15秒'
   },
