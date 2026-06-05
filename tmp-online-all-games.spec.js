@@ -139,7 +139,16 @@ async function createPlayer(browser, runId, gameKey, index) {
         .forEach((event) => socket.on(event, (data) => remember(event, data)));
 
       window.__pwEmit = (event, payload = {}) => new Promise((resolve) => {
+        let settled = false;
+        const timer = setTimeout(() => {
+          if (settled) return;
+          settled = true;
+          resolve({ error: `emit_timeout:${event}` });
+        }, 10000);
         socket.emit(event, payload, (response = {}) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
           state.responses.push({ event, response, at: Date.now() });
           if (response.room) {
             state.room = response.room;
@@ -334,7 +343,13 @@ function actionForCardGame(gameKey, player, index, state) {
   if (gameKey === 'guandan') {
     if (state.phase === 'round_finished' && index === 0) return { type: 'next_round' };
     if (state.phase !== 'play' || state.currentPlayer !== id) return null;
-    if (state.lastPattern && state.lastLeadPlayer !== id) return { type: 'pass' };
+    if (state.lastPattern && state.lastLeadPlayer !== id) {
+      const hints = Array.isArray(state.currentHints) ? state.currentHints : [];
+      const bestHint = hints
+        .filter((item) => Array.isArray(item.cards) && item.cards.length > 0)
+        .sort((a, b) => b.cards.length - a.cards.length)[0];
+      return bestHint ? { type: 'play', cards: bestHint.cards } : { type: 'pass' };
+    }
     const hand = state.hands?.[id] || [];
     return hand[0] ? { type: 'play', cards: [hand[0]] } : null;
   }
@@ -360,6 +375,7 @@ async function driveGame(game, players) {
   const startedAt = Date.now();
   const actionLog = [];
   let idleTicks = 0;
+  let nextProgressAt = startedAt + 30000;
 
   while (Date.now() - startedAt < game.timeoutMs) {
     const snaps = await snapshots(players);
@@ -383,6 +399,10 @@ async function driveGame(game, players) {
     }
 
     const commonState = publicState(snaps, players);
+    if (Date.now() >= nextProgressAt) {
+      console.log(`[PROGRESS] ${game.key} phase=${commonState?.phase || 'n/a'} stage=${commonState?.stage || 'n/a'} current=${commonState?.currentPlayer || 'n/a'} actions=${actionLog.length}`);
+      nextProgressAt = Date.now() + 30000;
+    }
     const actions = [];
 
     for (let i = 0; i < players.length; i += 1) {
