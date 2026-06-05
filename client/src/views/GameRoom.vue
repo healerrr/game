@@ -1588,7 +1588,9 @@
   })
 
   watch(() => roomId.value, () => {
+    gs.value = {}
     opponentDisconnected.value = false
+    selectedMove.value = null
     zhaJinHuaFoldedOut.value = false
     zhaJinHuaFoldedGameType.value = ''
     lastGuessDiceResultKey.value = ''
