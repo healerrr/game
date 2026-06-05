@@ -669,8 +669,8 @@
   const currentRoom = computed(() => gameState.currentRoom || {})
   const isActivePlayingRoom = computed(() => currentRoom.value?.status === 'playing' && gs.value?.phase !== 'finished')
   const showOpponentDisconnected = computed(() => opponentDisconnected.value && isActivePlayingRoom.value)
-  const isFullscreenGame = computed(() => ['guandan', 'doudizhu', 'mahjong'].includes(gameType.value))
   const isReadyRoom = computed(() => currentRoom.value?.status === 'readying' || (!gs.value?.phase && currentRoom.value?.status !== 'playing'))
+  const isFullscreenGame = computed(() => ['guandan', 'doudizhu', 'mahjong'].includes(gameType.value) && !isReadyRoom.value)
   const isZhaJinHuaFoldedOut = computed(() => zhaJinHuaFoldedOut.value && (zhaJinHuaFoldedGameType.value || gameType.value) === 'zha_jin_hua')
   const myReady = computed(() => Boolean(currentRoom.value?.ready?.[player.value?.id] || roomPlayers.value.find(item => item.id === player.value?.id)?.ready))
   const readyButtonText = computed(() => {

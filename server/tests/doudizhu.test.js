@@ -116,6 +116,7 @@ test('斗地主抢地主成功后地主获得三张底牌并先出', () => {
   assert.equal(state.hands.p1.length, 17);
   assert.equal(state.hands.p3.length, 17);
   assert.equal(state.currentPlayer, 'p2');
+  assert.equal(state.scoreUnit, 100);
 });
 
 test('斗地主叫三分立即成为地主', () => {
@@ -128,9 +129,10 @@ test('斗地主叫三分立即成为地主', () => {
   assert.equal(state.landlord, 'p1');
   assert.equal(state.hands.p1.length, 20);
   assert.equal(state.currentPlayer, 'p1');
+  assert.equal(state.scoreUnit, 150);
 });
 
-test('斗地主三家不叫时重新发牌继续抢地主', () => {
+test('斗地主三家不叫时默认第一个玩家当地主', () => {
   const engine = new DoudizhuEngine();
   const state = engine.init(null, ['p1', 'p2', 'p3']);
 
@@ -138,14 +140,22 @@ test('斗地主三家不叫时重新发牌继续抢地主', () => {
   engine.update(state, { type: 'pass' }, 'p2');
   engine.update(state, { type: 'pass' }, 'p3');
 
-  assert.equal(state.phase, 'bid');
-  assert.equal(state.redealCount, 1);
-  assert.equal(state.landlord, null);
+  assert.equal(state.phase, 'play');
+  assert.equal(state.redealCount, 0);
+  assert.equal(state.landlord, 'p1');
   assert.equal(state.bottomCards.length, 3);
-  assert.equal(state.hands.p1.length, 17);
+  assert.equal(state.hands.p1.length, 20);
   assert.equal(state.hands.p2.length, 17);
   assert.equal(state.hands.p3.length, 17);
   assert.equal(state.currentPlayer, 'p1');
+  assert.equal(state.scoreUnit, 50);
+});
+
+test('doudizhu bid score controls settlement unit', () => {
+  assert.equal(getDoudizhuScoreUnit({ currentBid: 1, bombCount: 0 }, 50), 50);
+  assert.equal(getDoudizhuScoreUnit({ currentBid: 2, bombCount: 0 }, 50), 100);
+  assert.equal(getDoudizhuScoreUnit({ currentBid: 3, bombCount: 0 }, 50), 150);
+  assert.equal(getDoudizhuScoreUnit({ currentBid: 2, bombCount: 1 }, 50), 200);
 });
 
 test('斗地主地主先出完时只有地主获胜', () => {

@@ -274,8 +274,9 @@ function syncHandCounts(state) {
 
 function getDoudizhuScoreUnit(state, baseScore = BASE_SCORE) {
   const base = Number(baseScore || BASE_SCORE);
+  const bidMultiplier = Math.max(1, Number(state?.currentBid || 0));
   const bombCount = Math.max(0, Number(state?.bombCount || 0));
-  return bombCount > 0 ? base * 2 : base;
+  return base * bidMultiplier * (bombCount > 0 ? 2 : 1);
 }
 
 function recordBombIfNeeded(state, pattern) {
@@ -356,6 +357,7 @@ function finishBidding(state) {
   state.lastPattern = null;
   state.lastLeadPlayer = null;
   state.passedPlayers = [];
+  state.scoreUnit = getDoudizhuScoreUnit(state, state.baseScore || BASE_SCORE);
   state.timerStarted = Date.now();
   syncHandCounts(state);
   return state;
@@ -442,6 +444,7 @@ class DoudizhuEngine {
         state.currentBid = score;
         state.currentBidder = playerId;
         state.consecutivePasses = 0;
+        state.scoreUnit = getDoudizhuScoreUnit(state, state.baseScore || BASE_SCORE);
       } else {
         state.consecutivePasses = Number(state.consecutivePasses || 0) + 1;
       }
@@ -453,7 +456,8 @@ class DoudizhuEngine {
       }
 
       if (!state.currentBidder && state.bidTurnCount >= state.players.length) {
-        resetBiddingDeal(state);
+        finishBidding(state);
+        this._updateHints(state);
         return state;
       }
 

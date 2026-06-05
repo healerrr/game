@@ -904,9 +904,9 @@ watch(() => props.gs?.currentPlayer, () => {
 }
 
 .bottom-zone {
-  flex: 0 0 clamp(146px, 32vh, 166px);
-  min-height: 146px;
-  max-height: 166px;
+  flex: 0 0 clamp(176px, 34vh, 206px);
+  min-height: 176px;
+  max-height: 206px;
   display: grid;
   grid-template-columns: 70px minmax(0, 1fr);
   align-items: stretch;
@@ -977,8 +977,8 @@ watch(() => props.gs?.currentPlayer, () => {
 .hand-stage {
   min-width: 0;
   display: grid;
-  grid-template-rows: 38px minmax(70px, 1fr) 28px;
-  gap: 4px;
+  grid-template-rows: 38px minmax(98px, 1fr) 28px;
+  gap: 6px;
   overflow: visible;
 }
 
@@ -1063,9 +1063,9 @@ watch(() => props.gs?.currentPlayer, () => {
 }
 
 .hand-cards {
-  --card-overlap: clamp(-30px, -3.2vw, -18px);
-  --card-w: clamp(38px, 4.35vw, 48px);
-  --card-h: clamp(54px, 6.18vw, 68px);
+  --card-gap: clamp(6px, 0.9vw, 10px);
+  --card-w: clamp(52px, 5.45vw, 64px);
+  --card-h: clamp(74px, 7.75vw, 91px);
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -1076,7 +1076,8 @@ watch(() => props.gs?.currentPlayer, () => {
   touch-action: none;
   cursor: grab;
   overscroll-behavior: contain;
-  padding: 10px 90px 2px 4px;
+  gap: var(--card-gap);
+  padding: 14px 96px 4px 8px;
   border-radius: 14px;
   background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.035));
   border: 1px solid rgba(255,255,255,0.08);
@@ -1092,7 +1093,10 @@ watch(() => props.gs?.currentPlayer, () => {
 }
 
 .card-slot {
-  flex: 0 0 auto;
+  flex: 0 0 var(--card-w);
+  width: var(--card-w);
+  height: var(--card-h);
+  position: relative;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
@@ -1100,12 +1104,8 @@ watch(() => props.gs?.currentPlayer, () => {
   filter: drop-shadow(0 9px 10px rgba(0,0,0,0.18));
 }
 
-.card-slot + .card-slot {
-  margin-left: var(--card-overlap);
-}
-
 .card-slot.selected {
-  transform: translateY(-12px);
+  transform: translateY(-14px);
   z-index: 80 !important;
 }
 
@@ -1252,9 +1252,9 @@ watch(() => props.gs?.currentPlayer, () => {
   }
 
   .bottom-zone {
-    flex-basis: 136px;
-    min-height: 136px;
-    max-height: 136px;
+    flex-basis: 158px;
+    min-height: 158px;
+    max-height: 158px;
     grid-template-columns: 62px minmax(0, 1fr);
     margin: 5px 6px;
     padding: 7px;
@@ -1267,7 +1267,7 @@ watch(() => props.gs?.currentPlayer, () => {
   }
 
   .hand-stage {
-    grid-template-rows: 34px minmax(66px, 1fr) 24px;
+    grid-template-rows: 34px minmax(82px, 1fr) 24px;
     gap: 3px;
   }
 
@@ -1293,8 +1293,12 @@ watch(() => props.gs?.currentPlayer, () => {
   }
 
   .hand-cards {
-    padding-top: 7px;
-    padding-right: 76px;
+    --card-gap: clamp(5px, 0.75vw, 8px);
+    --card-w: clamp(46px, 5vw, 56px);
+    --card-h: clamp(65px, 7.1vw, 80px);
+    padding-top: 10px;
+    padding-right: 82px;
+    padding-left: 6px;
   }
 
   .hand-utility {
