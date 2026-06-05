@@ -634,7 +634,7 @@
 <script setup>
 import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { gameState, getPlayer, socket } from '../socket'
+import { gameState, getPlayer, socket, ensureAuthenticated } from '../socket'
 import die1Image from '../../img/dice/die-1.webp'
 import die2Image from '../../img/dice/die-2.webp'
 import die3Image from '../../img/dice/die-3.webp'
@@ -1512,10 +1512,14 @@ async function backToLobby() {
   })
 }
 
-onMounted(() => {
+onMounted(async () => {
   if (!player.value) {
-    router.push('/')
-    return
+    // 尝试恢复身份后再跳转
+    const restored = await ensureAuthenticated().catch(() => null)
+    if (!restored) {
+      router.push('/')
+      return
+    }
   }
 
   gs.value = gameState.currentGame || {}

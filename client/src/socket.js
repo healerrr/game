@@ -147,13 +147,54 @@ export async function ensureAuthenticated() {
     return gameState.player
   }
 
-  const restored = await restoreSavedPlayer({ force: Boolean(gameState.player?.id) })
-  return restored?.player || null
+  // 如果 socket 已连接但身份丢失，最多重试 3 次
+  let lastError = null
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    if (attempt > 1) {
+      await new Promise(r => setTimeout(r, 500 * attempt))
+    }
+    const restored = await restoreSavedPlayer({ force: true }).catch(e => {
+      lastError = e
+      return null
+    })
+    if (restored?.player) return restored.player
+  }
+
+  // 从本地存储直接恢复，不做服务端验证
+  const savedPlayer = readSavedPlayer()
+  if (savedPlayer && socket.connected) {
+    // 最后一次尝试：直接重新注册
+    try {
+      const result = await new Promise((resolve) => {
+        socket.emit('player:register', {
+          nickname: savedPlayer.nickname,
+          busNumber: savedPlayer.busNumber
+        }, (res) => {
+          if (res?.player) {
+            rememberPlayer(res.player)
+            if (res.currentRoom) {
+              gameState.currentRoom = res.currentRoom
+              gameState.currentGame = res.currentRoom.gameState
+            }
+            resolve(res.player)
+          } else {
+            resolve(null)
+          }
+        })
+      })
+      if (result) return result
+    } catch (_) {}
+  }
+
+  return null
 }
 
 socket.on('connect', () => {
   authenticatedSocketId = null
-  restoreSavedPlayer({ force: true })
+  // 延迟一点再恢复，给 socket.io 内部初始化完成的时间
+  setTimeout(() => {
+    restoreSavedPlayer({ force: true }).catch(() => {})
+  }, 300)
 })
 
 // 监听服务器推送

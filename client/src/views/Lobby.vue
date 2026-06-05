@@ -93,7 +93,7 @@
 <script setup>
   import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
   import { useRouter } from 'vue-router'
-  import { gameState, getPlayer, socket, ensureAuthenticated } from '../socket'
+  import { gameState, getPlayer, socket, ensureAuthenticated, readSavedPlayer } from '../socket'
 
   import cardChineseChess from '../../img/card_chinese_chess_transparent.png'
   import cardDoudizhu from '../../img/card_doudizhu.png'
@@ -201,6 +201,23 @@
 
     if (!player.value) {
       await ensureAuthenticated()
+    }
+
+    if (!player.value) {
+      // 尝试重新注册，而不仅仅是回到首页
+      const savedPlayer = readSavedPlayer()
+      if (savedPlayer?.nickname && savedPlayer?.busNumber) {
+        showToast('连接已恢复，正在重新登录…')
+        await new Promise(resolve => {
+          socket.emit('player:register', {
+            nickname: savedPlayer.nickname,
+            busNumber: savedPlayer.busNumber
+          }, (res) => {
+            if (res?.player) resolve(res.player)
+            else resolve(null)
+          })
+        })
+      }
     }
 
     if (!player.value) {
