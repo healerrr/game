@@ -420,7 +420,7 @@ async function driveGame(game, players) {
     key: game.key,
     ok: false,
     elapsedMs: Date.now() - startedAt,
-    last: last.map((snap) => ({
+    last: last.map((snap, index) => ({
       player: snap.player?.nickname,
       playerId: snap.player?.id,
       expectedId: players[index]?.playerInfo.id,
