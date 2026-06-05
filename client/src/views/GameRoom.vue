@@ -1395,6 +1395,12 @@
 
     gs.value = gameState.currentGame || {}
 
+    // 如果当前房间是准备状态但 gameState 还有旧数据，清空它
+    if (gameState.currentRoom?.status === 'readying' && gs.value?.phase) {
+      gs.value = {}
+      gameState.currentGame = null
+    }
+
     stateHandler = (event) => {
       gs.value = event.detail.gameState
       if (event.detail.room) {

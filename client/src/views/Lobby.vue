@@ -238,7 +238,11 @@
             return
           }
           gameState.currentRoom = res.currentRoom
-          gameState.currentGame = res.currentRoom.gameState
+          if (res.currentRoom.status === 'readying' || !res.currentRoom.gameState) {
+            gameState.currentGame = null
+          } else {
+            gameState.currentGame = res.currentRoom.gameState
+          }
           router.push(`/game/${res.currentRoom.roomId}`)
           return
         }
@@ -248,7 +252,12 @@
 
       if (res?.room?.roomId) {
         gameState.currentRoom = res.room
-        gameState.currentGame = res.room.gameState
+        // 新房间没有 gameState，确保清空旧的游戏状态
+        if (res.room.status === 'readying' || !res.room.gameState) {
+          gameState.currentGame = null
+        } else {
+          gameState.currentGame = res.room.gameState
+        }
         socket.emit('room:join', { roomId: res.room.roomId })
         router.push(`/game/${res.room.roomId}`)
       }
@@ -274,7 +283,11 @@
       }
       if (res?.room) {
         gameState.currentRoom = res.room
-        gameState.currentGame = res.room.gameState
+        if (res.room.status === 'readying' || !res.room.gameState) {
+          gameState.currentGame = null
+        } else {
+          gameState.currentGame = res.room.gameState
+        }
         socket.emit('room:join', { roomId: res.room.roomId })
         router.push(`/game/${res.room.roomId}`)
       }
