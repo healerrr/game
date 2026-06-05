@@ -589,7 +589,7 @@
     border-radius: 20px;
     overflow: hidden;
     aspect-ratio: 1 / 1.42;
-    padding-bottom: 16px;
+    padding-bottom: 26px;
   }
 
   .game-tile__image {

@@ -26,6 +26,10 @@ const GAMES = [
   { key: 'guandan', players: 4, timeoutMs: 240000 }
 ];
 
+const SELECTED_GAMES = process.env.ONLY_GAME
+  ? GAMES.filter((game) => game.key === process.env.ONLY_GAME)
+  : GAMES;
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -418,6 +422,8 @@ async function driveGame(game, players) {
     elapsedMs: Date.now() - startedAt,
     last: last.map((snap) => ({
       player: snap.player?.nickname,
+      playerId: snap.player?.id,
+      expectedId: players[index]?.playerInfo.id,
       roomStatus: snap.room?.status,
       phase: snap.game?.phase,
       stage: snap.game?.stage,
@@ -435,7 +441,7 @@ test('online all games can finish with simulated browser players', async ({ brow
   const runId = `${Date.now().toString(36)}`;
   const results = [];
 
-  for (const game of GAMES) {
+  for (const game of SELECTED_GAMES) {
     const players = await setupRoom(browser, game, runId);
     try {
       const result = await driveGame(game, players);
