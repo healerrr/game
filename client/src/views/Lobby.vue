@@ -49,9 +49,9 @@
             :disabled="joiningGameKey === game.key" @click="joinGame(game.key)">
             <div class="game-tile__wrapper">
               <img :src="game.image" :alt="game.name" class="game-tile__image" />
-              <div class="game-tile__overlay">
-                <span class="game-tile__fee">门票 {{ game.entryFee }}分</span>
-              </div>
+            </div>
+            <div class="game-tile__overlay">
+              <span class="game-tile__fee">门票 {{ game.entryFee }}分</span>
             </div>
           </button>
         </div>
@@ -578,7 +578,8 @@
     border: none;
     background: transparent;
     text-align: left;
-    padding-bottom: 24px;
+    padding-bottom: 16px;
+    position: relative;
   }
 
   .game-tile:disabled {
