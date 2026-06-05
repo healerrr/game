@@ -1149,6 +1149,10 @@
   }
 
   async function forfeitGame() {
+    if (!player.value) {
+      const restored = await ensureAuthenticated().catch(() => null)
+      if (!restored) return
+    }
     if (!(await askConfirm('确认认输吗？'))) return
     socket.emit('game:forfeit', { reason: 'forfeit' }, (res) => {
       if (res?.error) {
@@ -1162,7 +1166,11 @@
     readyDeadlineLeft.value = deadline ? Math.max(0, Math.ceil((deadline - Date.now()) / 1000)) : 0
   }
 
-  function toggleReady() {
+  async function toggleReady() {
+    if (!player.value) {
+      const restored = await ensureAuthenticated().catch(() => null)
+      if (!restored) return
+    }
     if (readySubmitting.value) return
     const previousReady = myReady.value
     const nextReady = !previousReady
@@ -1266,6 +1274,11 @@
   }
 
   async function rematch() {
+    // 确保身份有效
+    if (!player.value) {
+      const restored = await ensureAuthenticated().catch(() => null)
+      if (!restored) return
+    }
     const activeGameType = zhaJinHuaFoldedGameType.value || gameType.value
     if (!player.value || !activeGameType) return
     if (isZhaJinHuaFoldedOut.value) {
@@ -1344,6 +1357,12 @@
   }
 
   async function backToLobby() {
+    // 确保身份有效
+    if (!player.value) {
+      const restored = await ensureAuthenticated().catch(() => null)
+      if (!restored) return
+    }
+
     if (isZhaJinHuaFoldedOut.value) {
       zhaJinHuaFoldedOut.value = false
       zhaJinHuaFoldedGameType.value = ''
