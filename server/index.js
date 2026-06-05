@@ -815,6 +815,7 @@ function prepareRoomRematch(room, playerId) {
     ];
   }));
   room.gameState = null;
+  room.settlementApplied = false;
   room.readyDeadline = null;
   room.updatedAt = Date.now();
 
