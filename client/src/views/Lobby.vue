@@ -603,7 +603,7 @@
 
   .game-tile__overlay {
     position: absolute;
-    bottom: -10px;
+    bottom: -14px;
     left: 0;
     right: 0;
     padding: 0 4px 8px;
@@ -613,7 +613,7 @@
   }
 
   .game-tile__fee {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 900;
     color: #ffd700;
     line-height: 1.1;
