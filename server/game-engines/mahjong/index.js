@@ -461,6 +461,8 @@ class MahjongEngine {
       }
 
       // pass - 跳过该玩家
+      if (action.type !== 'pass') return state;
+
       pending.queue.shift();
       if (pending.queue.length === 0) {
         // 所有人都pass，完成补杠
@@ -539,6 +541,8 @@ class MahjongEngine {
         state.timerStarted = Date.now();
         return state;
       }
+
+      if (action.type !== 'pass') return state;
 
       pending.queue.shift();
       if (pending.queue.length === 0) {

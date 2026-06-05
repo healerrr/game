@@ -64,6 +64,27 @@ test('斗地主识别三带一、顺子和飞机带对', () => {
   ]).type, 'airplane_pair');
 });
 
+test('doudizhu ignores malformed played cards without throwing', () => {
+  const engine = new DoudizhuEngine();
+  const state = engine.init(null, ['p1', 'p2', 'p3']);
+  state.phase = 'play';
+  state.stage = 'play';
+  state.landlord = 'p1';
+  state.farmers = ['p2', 'p3'];
+  state.hands = {
+    p1: [card('3', 'spade')],
+    p2: [card('4', 'spade')],
+    p3: [card('5', 'spade')]
+  };
+  state.handCounts = { p1: 1, p2: 1, p3: 1 };
+  state.currentPlayer = 'p1';
+
+  assert.equal(identifyPattern([null]), null);
+  assert.doesNotThrow(() => engine.update(state, { type: 'play', cards: [null] }, 'p1'));
+  assert.equal(state.currentPlayer, 'p1');
+  assert.equal(state.hands.p1.length, 1);
+});
+
 test('斗地主初始化为三人发牌并保留三张底牌', () => {
   const engine = new DoudizhuEngine();
   const state = engine.init(null, ['p1', 'p2', 'p3']);

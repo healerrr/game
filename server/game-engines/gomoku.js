@@ -54,6 +54,12 @@ function isBoardFull(board) {
   return true;
 }
 
+function isValidPosition(x, y) {
+  return Number.isInteger(x) && Number.isInteger(y) &&
+    x >= 0 && x < BOARD_SIZE &&
+    y >= 0 && y < BOARD_SIZE;
+}
+
 class GomokuEngine {
   init(room, players) {
     return {
@@ -76,7 +82,7 @@ class GomokuEngine {
 
     if (action.type === 'place') {
       const { x, y } = action;
-      if (x < 0 || x >= BOARD_SIZE || y < 0 || y >= BOARD_SIZE) return state;
+      if (!isValidPosition(x, y)) return state;
       if (state.board[x][y] !== EMPTY) return state;
 
       const playerIndex = state.players.indexOf(playerId);
@@ -115,5 +121,6 @@ module.exports = {
   BLACK,
   WHITE,
   checkWin,
-  isBoardFull
+  isBoardFull,
+  isValidPosition
 };

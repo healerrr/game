@@ -1565,8 +1565,13 @@ function settle1v1(room, winnerId) {
 function settleMultiplayer(room, winningPlayers) {
   const config = getGameConfig(room.gameType);
   const entryFee = config.entryFee;
+  if (!winningPlayers.length) {
+    room.players.forEach(pid => store.recordGame(pid, null));
+    return;
+  }
+
   const totalPool = entryFee * room.players.length;
-  const numWinners = winningPlayers.length || 1;
+  const numWinners = winningPlayers.length;
   const winAmount = Math.floor(totalPool / numWinners);
 
   room.players.forEach(pid => {
@@ -1676,9 +1681,10 @@ function settleGameWithPot(room, winningPlayers) {
   // 麻将：使用游戏引擎中的 scores 进行结算
   if (room.gameType === 'mahjong') {
     const scores = room.gameState.scores || {};
+    const hasWinner = winningPlayers.length > 0;
     room.players.forEach(pid => {
       const isWinner = winningPlayers.includes(pid);
-      store.recordGame(pid, isWinner);
+      store.recordGame(pid, hasWinner ? isWinner : null);
       
       // 麻将的 scores 已经是净收益（包含门票和番数）
       const scoreDelta = scores[pid] || 0;

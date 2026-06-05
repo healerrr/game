@@ -40,6 +40,10 @@ function createDeck() {
   }));
 }
 
+function isCardLike(card) {
+  return Boolean(card && typeof card === 'object' && typeof card.suit === 'string' && card.rank !== undefined && card.rank !== null);
+}
+
 function isWild(card, level) {
   return card.suit === 'heart' && card.rank === level;
 }
@@ -410,6 +414,7 @@ function tryWildPair(allCards, nonWilds, wildCount, level) {
 // --- Main identifyPattern with wild support ---
 function identifyPattern(cards, level = '2') {
   if (!Array.isArray(cards) || cards.length === 0) return null;
+  if (!cards.every(isCardLike)) return null;
 
   const sorted = sortHand(cards, level);
   const size = sorted.length;
@@ -1062,6 +1067,7 @@ class GuandanEngine {
     if (action.type === 'play') {
       const hand = state.hands[playerId] || [];
       const selected = Array.isArray(action.cards) ? action.cards : [];
+      if (!selected.every(isCardLike)) return state;
       const indexes = [];
 
       // Card validation: verify each card is in hand by suit+rank+id

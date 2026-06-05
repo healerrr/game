@@ -4,6 +4,8 @@ const assert = require('node:assert/strict');
 const { canHu, getWaitTiles, checkSevenPairs } = require('../game-engines/mahjong/hule');
 const { evaluateFan } = require('../game-engines/mahjong/fan');
 const { MahjongEngine } = require('../game-engines/mahjong/index');
+const store = require('../store');
+const { handleActionTimeout } = require('../index');
 
 let nextId = 0;
 function tile(suit, rank) {
@@ -217,4 +219,112 @@ test('红中推倒胡 - 无红中杠上开花清一色按12倍结算', () => {
   assert.equal(state.scores.p2, -600);
   assert.equal(state.scores.p3, -600);
   assert.equal(state.scores.p4, -600);
+});
+
+test('mahjong response ignores unknown actions without passing', () => {
+  const engine = new MahjongEngine();
+  let state = engine.init(null, ['p1', 'p2', 'p3', 'p4']);
+  const claimCard = tile('wan', 1);
+  state.phase = 'response';
+  state.pendingAction = {
+    type: 'claim',
+    sourcePlayerId: 'p1',
+    card: claimCard,
+    queue: [{ playerId: 'p2', action: 'peng', priority: 1 }]
+  };
+
+  engine.update(state, { type: 'dance' }, 'p2');
+
+  assert.equal(state.phase, 'response');
+  assert.equal(state.pendingAction.queue.length, 1);
+  assert.equal(state.pendingAction.queue[0].playerId, 'p2');
+
+  state = engine.init(null, ['p1', 'p2', 'p3', 'p4']);
+  const bugangTile = tile('wan', 2);
+  state.phase = 'response';
+  state.pendingAction = {
+    type: 'qianggang',
+    sourcePlayerId: 'p1',
+    tile: bugangTile,
+    option: { tile: bugangTile, cards: [bugangTile] },
+    queue: [{ playerId: 'p2', action: 'hu', priority: 3 }]
+  };
+
+  engine.update(state, { type: 'dance' }, 'p2');
+
+  assert.equal(state.phase, 'response');
+  assert.equal(state.pendingAction.queue.length, 1);
+  assert.equal(state.pendingAction.queue[0].playerId, 'p2');
+});
+
+test('mahjong draw settlement records draw instead of losses', async () => {
+  const roomId = `room-mahjong-draw-${Date.now()}`;
+  const players = ['mahjong-draw-p1', 'mahjong-draw-p2', 'mahjong-draw-p3', 'mahjong-draw-p4'];
+  players.forEach((id) => {
+    store.savePlayer({
+      id,
+      nickname: id,
+      busNumber: 1,
+      points: 1000,
+      totalGames: 0,
+      wins: 0,
+      winStreak: 0,
+      lossStreak: 0,
+      online: true,
+      currentRoom: roomId
+    });
+  });
+
+  const room = {
+    id: roomId,
+    gameType: 'mahjong',
+    status: 'playing',
+    mode: 'normal',
+    visibility: 'public',
+    players,
+    ready: Object.fromEntries(players.map(pid => [pid, true])),
+    seatStates: Object.fromEntries(players.map(pid => [pid, { ready: true, connection: 'online', intent: 'active' }])),
+    gameState: {
+      phase: 'draw',
+      players,
+      dealer: players[0],
+      currentPlayer: players[0],
+      hands: Object.fromEntries(players.map(pid => [pid, []])),
+      fulu: Object.fromEntries(players.map(pid => [pid, []])),
+      scores: Object.fromEntries(players.map(pid => [pid, 0])),
+      discards: Object.fromEntries(players.map(pid => [pid, []])),
+      shan: { tiles: [] },
+      remainingTiles: 4,
+      lastDraw: null,
+      lastDiscard: null,
+      discardCount: 0,
+      pendingAction: null,
+      winInfo: null,
+      scoreInfo: null,
+      tingInfo: {},
+      timer: 1,
+      timerStarted: Date.now() - 2000
+    }
+  };
+  store.saveRoom(room);
+
+  handleActionTimeout(room);
+
+  assert.equal(room.status, 'finished');
+  assert.equal(room.gameState.finalWinner, null);
+  players.forEach((id) => {
+    const player = store.getPlayer(id);
+    assert.equal(player.points, 1000);
+    assert.equal(player.totalGames, 1);
+    assert.equal(player.wins, 0);
+    assert.equal(player.winStreak, 0);
+    assert.equal(player.lossStreak, 0);
+  });
+
+  const records = await store.getPlayerGameRecords(players[0], 1);
+  assert.equal(records[0].result, 'draw');
+  assert.equal(records[0].scoreDelta, 0);
+
+  store.removeRoom(roomId);
+  players.forEach(id => store.removePlayer(id));
 });

@@ -114,6 +114,16 @@ test('21点支持2到4人并隐藏其他玩家手牌', () => {
   assert.equal(view.deck, undefined);
 });
 
+test('blackjack ignores unknown actions without advancing turn', () => {
+  const engine = getEngine('blackjack');
+  const state = engine.init(null, ['p1', 'p2', 'p3']);
+
+  engine.update(state, { type: 'dance' }, 'p1');
+
+  assert.equal(state.currentPlayer, 'p1');
+  assert.deepEqual(state.finishedPlayers, []);
+});
+
 test('快问快答每局只有三道高难度题', () => {
   const engine = getEngine('quiz');
   const state = engine.init(null, ['p1', 'p2']);
@@ -143,6 +153,18 @@ test('五子棋忽略悔棋动作', () => {
   assert.equal(state.currentPlayer, 'p2');
 });
 
+test('gomoku ignores invalid coordinates without throwing', () => {
+  const engine = new GomokuEngine();
+  const state = engine.init(null, ['p1', 'p2']);
+
+  assert.doesNotThrow(() => {
+    engine.update(state, { type: 'place', x: undefined, y: 1 }, 'p1');
+    engine.update(state, { type: 'place', x: 100, y: 1 }, 'p1');
+  });
+  assert.equal(state.currentPlayer, 'p1');
+  assert.equal(state.moveHistory.length, 0);
+});
+
 test('象棋将帅照面会被视为将军并阻止露将移动', () => {
   const board = emptyChessBoard();
   board[0][4] = { type: PIECE_TYPES.KING, color: COLORS.BLACK };
@@ -155,6 +177,19 @@ test('象棋将帅照面会被视为将军并阻止露将移动', () => {
 
   const moves = getLegalMoves(board, 5, 4);
   assert.equal(moves.some(move => move.row === 5 && move.col === 5), false);
+});
+
+test('chess ignores invalid coordinates without throwing', () => {
+  const engine = new ChessEngine();
+  const state = engine.init(null, ['p1', 'p2']);
+
+  assert.doesNotThrow(() => {
+    engine.update(state, { type: 'select', row: undefined, col: 0 }, 'p1');
+    engine.update(state, { type: 'move', fromRow: 100, fromCol: 0, row: 5, col: 0 }, 'p1');
+    getLegalMoves(state.board, undefined, 0);
+  });
+  assert.equal(state.currentPlayer, COLORS.RED);
+  assert.equal(state.moveHistory.length, 0);
 });
 
 test('象棋忽略悔棋动作', () => {

@@ -47,6 +47,10 @@ function suitPower(suit) {
   return { diamond: 0, club: 1, heart: 2, spade: 3, joker: 4 }[suit] ?? 0;
 }
 
+function isCardLike(card) {
+  return Boolean(card && typeof card === 'object' && typeof card.suit === 'string' && card.rank !== undefined && card.rank !== null);
+}
+
 function sortHand(hand) {
   return [...hand].sort((a, b) => {
     const diff = rankPower(a.rank) - rankPower(b.rank);
@@ -153,6 +157,7 @@ function identifyAirplane(sorted, counts) {
 
 function identifyPattern(cards) {
   if (!Array.isArray(cards) || cards.length === 0) return null;
+  if (!cards.every(isCardLike)) return null;
 
   const sorted = sortHand(cards);
   const counts = getValueCounts(sorted);
@@ -226,6 +231,7 @@ function comparePattern(nextPattern, currentPattern) {
 }
 
 function removeSelectedCards(hand, selected) {
+  if (!Array.isArray(selected) || !selected.every(isCardLike)) return null;
   const nextHand = [...hand];
   const indexes = [];
 

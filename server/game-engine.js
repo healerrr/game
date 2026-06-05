@@ -1086,9 +1086,12 @@ class Blackjack {
     if (state.phase !== 'play') return state;
     if (playerId !== state.currentPlayer) return state;
     if (state.finishedPlayers.includes(playerId)) return state;
+    if (!['hit', 'stand'].includes(action.type)) return state;
 
     if (action.type === 'hit') {
-      state.hands[playerId].push(state.deck.pop());
+      const drawn = state.deck.pop();
+      if (!drawn) return state;
+      state.hands[playerId].push(drawn);
       const val = this.handValue(state.hands[playerId]);
       if (val > 21) {
         state.bustedPlayers.push(playerId);

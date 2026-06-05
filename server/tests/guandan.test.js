@@ -42,6 +42,24 @@ test('掼蛋识别三带二', () => {
   assert.equal(pattern.type, 'triple_pair');
 });
 
+test('guandan ignores malformed played cards without throwing', () => {
+  const engine = new GuandanEngine();
+  const state = engine.init(null, ['p1', 'p2', 'p3', 'p4']);
+  state.hands = {
+    p1: [card('3', 'spade', 3)],
+    p2: [card('4', 'spade', 4)],
+    p3: [card('5', 'spade', 5)],
+    p4: [card('6', 'spade', 6)]
+  };
+  state.handCounts = { p1: 1, p2: 1, p3: 1, p4: 1 };
+  state.currentPlayer = 'p1';
+
+  assert.equal(identifyPattern([null], '2'), null);
+  assert.doesNotThrow(() => engine.update(state, { type: 'play', cards: [null] }, 'p1'));
+  assert.equal(state.currentPlayer, 'p1');
+  assert.equal(state.hands.p1.length, 1);
+});
+
 test('掼蛋升级结算支持双下', () => {
   const settlement = resolveRoundEnd(['p1', 'p3', 'p2', 'p4'], {
     south_north: ['p1', 'p3'],

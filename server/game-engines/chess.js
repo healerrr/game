@@ -79,7 +79,14 @@ function isOwnSide(row, color) {
   return row >= 5;
 }
 
+function isInsideBoard(row, col) {
+  return Number.isInteger(row) && Number.isInteger(col) &&
+    row >= 0 && row < ROWS &&
+    col >= 0 && col < COLS;
+}
+
 function getValidMoves(board, row, col) {
+  if (!isInsideBoard(row, col)) return [];
   const piece = board[row][col];
   if (!piece) return [];
   
@@ -243,6 +250,7 @@ function simulateMove(board, fromRow, fromCol, toRow, toCol) {
 }
 
 function getLegalMoves(board, row, col) {
+  if (!isInsideBoard(row, col)) return [];
   const piece = board[row][col];
   if (!piece) return [];
   
@@ -340,6 +348,7 @@ class ChessEngine {
 
     if (action.type === 'select') {
       const { row, col } = action;
+      if (!isInsideBoard(row, col)) return state;
       const piece = state.board[row][col];
       if (piece && piece.color === playerColor) {
         state.selectedPiece = { row, col };
@@ -360,6 +369,9 @@ class ChessEngine {
       }
       
       const { row: toRow, col: toCol } = action;
+      if (!isInsideBoard(fromRow, fromCol) || !isInsideBoard(toRow, toCol)) {
+        return state;
+      }
       
       const legalMoves = getLegalMoves(state.board, fromRow, fromCol);
       if (!legalMoves.some(m => m.row === toRow && m.col === toCol)) {
@@ -422,6 +434,7 @@ module.exports = {
   initBoard,
   getValidMoves,
   getLegalMoves,
+  isInsideBoard,
   isKingInCheck,
   kingsFace,
   evaluateBoard,
