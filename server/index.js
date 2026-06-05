@@ -808,13 +808,6 @@ function releaseFinishedRoom(room) {
 
   room.status = 'finished';
   room.finishedAt = room.finishedAt || Date.now();
-  room.players.forEach(pid => {
-    const player = store.getPlayer(pid);
-    if (player?.currentRoom === room.id) {
-      player.currentRoom = null;
-      store.savePlayer(player);
-    }
-  });
   store.saveRoom(room);
 }
 
@@ -975,6 +968,9 @@ function prepareRoomRematch(room, playerId) {
   }));
   room.gameState = null;
   room.settlementApplied = false;
+  delete room.settledAt;
+  delete room.finishedAt;
+  delete room.settlementFailed;
   room.readyDeadline = null;
   room.updatedAt = Date.now();
 

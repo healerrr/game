@@ -223,11 +223,23 @@ function finishRound(state, winnerId, reason) {
   return state;
 }
 
+function shouldForceMaxRoundShowdown(state) {
+  return Number(state.round || 1) > Number(state.maxRounds || MAX_ROUNDS);
+}
+
+function finishMaxRoundShowdown(state) {
+  return finishRound(state, getShowdownWinnerForState(state), 'max_rounds_showdown');
+}
+
 function advanceTurnOrShowdown(state, currentPlayerId) {
+  if (shouldForceMaxRoundShowdown(state)) {
+    return finishMaxRoundShowdown(state);
+  }
+
   state.currentPlayer = getNextActivePlayer(state, currentPlayerId);
   if (state.actedThisRound.length >= state.activePlayers.length) {
     if (state.round >= (state.maxRounds || MAX_ROUNDS)) {
-      return finishRound(state, getShowdownWinnerForState(state), 'max_rounds_showdown');
+      return finishMaxRoundShowdown(state);
     }
     state.round += 1;
     state.actedThisRound = [];
@@ -319,6 +331,10 @@ class ZhaJinHuaEngine {
   }
 
   handleBetPhase(state, action, playerId) {
+    if (shouldForceMaxRoundShowdown(state)) {
+      return finishMaxRoundShowdown(state);
+    }
+
     if (playerId !== state.currentPlayer || !state.activePlayers.includes(playerId)) {
       return state;
     }
@@ -390,6 +406,9 @@ class ZhaJinHuaEngine {
       state.currentPlayer = getNextActivePlayer(state, loser);
       state.round += 1;
       state.actedThisRound = [];
+      if (shouldForceMaxRoundShowdown(state)) {
+        return finishMaxRoundShowdown(state);
+      }
       state.timerStarted = Date.now();
       return state;
     } else if (action.type === 'showdown') {
