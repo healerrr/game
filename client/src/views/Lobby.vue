@@ -603,7 +603,7 @@
 
   .game-tile__overlay {
     position: absolute;
-    bottom: -18px;
+    bottom: 0;
     left: 0;
     right: 0;
     padding: 0 4px 8px;
