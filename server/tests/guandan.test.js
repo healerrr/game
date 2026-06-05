@@ -95,11 +95,11 @@ test('掼蛋出完的玩家不再重新拿到回合', () => {
   assert.equal(state.lastLeadPlayer, null);
 });
 
-test('Guandan tracks team levels and only finishes after a team reaches 1', () => {
+test('Guandan tracks team levels and keeps playing before the third hand', () => {
   const settlement = resolveRoundEnd(['p1', 'p2', 'p3', 'p4'], {
     south_north: ['p1', 'p3'],
     east_west: ['p2', 'p4']
-  }, { south_north: '3', east_west: '2' });
+  }, { south_north: '3', east_west: '2' }, 1);
 
   assert.equal(settlement.winnerTeam, 'south_north');
   assert.equal(settlement.levelUp, 2);
@@ -109,15 +109,18 @@ test('Guandan tracks team levels and only finishes after a team reaches 1', () =
   assert.equal(settlement.matchFinished, false);
 });
 
-test('Guandan reaches final level 1 and scores level difference from 1 as 13', () => {
+test('Guandan finishes after 3 hands and winner is the team with higher level', () => {
   const settlement = resolveRoundEnd(['p1', 'p2', 'p3', 'p4'], {
     south_north: ['p1', 'p3'],
     east_west: ['p2', 'p4']
-  }, { south_north: 'K', east_west: '3' });
+  }, { south_north: '4', east_west: '9' }, 3);
 
-  assert.equal(settlement.nextLevel, '1');
   assert.equal(settlement.matchFinished, true);
-  assert.equal(getLevelScore(settlement.nextLevel) - getLevelScore('3'), 10);
+  assert.equal(settlement.roundWinnerTeam, 'south_north');
+  assert.equal(settlement.winnerTeam, 'east_west');
+  assert.deepEqual(settlement.winningPlayers, ['p2', 'p4']);
+  assert.equal(settlement.levelDiff, 3);
+  assert.equal(getLevelScore('1'), 13);
 });
 
 test('Guandan hand end advances to next hand until final match settlement', () => {
@@ -145,4 +148,31 @@ test('Guandan hand end advances to next hand until final match settlement', () =
   assert.equal(next.level, '4');
   assert.equal(next.teamLevels.south_north, '4');
   assert.equal(next.round, 2);
+  assert.equal(next.maxRounds, 3);
+});
+
+test('Guandan engine settles the third hand without opening another round', () => {
+  const engine = new GuandanEngine();
+  const state = engine.init(null, ['p1', 'p2', 'p3', 'p4']);
+  state.round = 3;
+  state.teamLevels = { south_north: '4', east_west: '7' };
+  state.level = '2';
+  state.hands = {
+    p1: [card('3', 'spade', 3)],
+    p2: [card('4', 'spade', 4)],
+    p3: [card('5', 'spade', 5)],
+    p4: [card('6', 'spade', 6), card('7', 'spade', 7)]
+  };
+  state.currentPlayer = 'p1';
+  state.handCounts = Object.fromEntries(Object.entries(state.hands).map(([pid, hand]) => [pid, hand.length]));
+
+  engine.update(state, { type: 'play', cards: [state.hands.p1[0]] }, 'p1');
+  engine.update(state, { type: 'play', cards: [state.hands.p2[0]] }, 'p2');
+  engine.update(state, { type: 'play', cards: [state.hands.p3[0]] }, 'p3');
+
+  assert.equal(state.phase, 'finished');
+  assert.equal(state.settlement.matchFinished, true);
+  assert.equal(state.settlement.winnerTeam, 'east_west');
+  assert.deepEqual(state.winningPlayers, ['p2', 'p4']);
+  assert.equal(state.settlement.levelDiff, 1);
 });

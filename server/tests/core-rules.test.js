@@ -2,6 +2,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const { getEngine, getGameConfig } = require('../game-engine');
+const store = require('../store');
+const { handleActionTimeout, handleGameEnd } = require('../index');
 const { GomokuEngine, EMPTY } = require('../game-engines/gomoku');
 const {
   ChessEngine,
@@ -15,6 +17,28 @@ const {
 
 function emptyChessBoard() {
   return Array.from({ length: ROWS }, () => Array(COLS).fill(null));
+}
+
+function saveRoomPlayers(roomId, players, points = 1000) {
+  players.forEach((id, index) => {
+    store.savePlayer({
+      id,
+      nickname: id,
+      busNumber: index + 1,
+      points,
+      totalGames: 0,
+      wins: 0,
+      winStreak: 0,
+      lossStreak: 0,
+      online: true,
+      currentRoom: roomId
+    });
+  });
+}
+
+function cleanupRoomPlayers(roomId, players) {
+  store.removeRoom(roomId);
+  players.forEach(id => store.removePlayer(id));
 }
 
 test('剪刀石头布提交后不能重复改拳', () => {
@@ -98,6 +122,67 @@ test('猜点数超时未选时无人猜中', () => {
   assert.equal(state.guesses.p1.guess, null);
 });
 
+test('猜点数无人猜中时平局不扣分', async () => {
+  const roomId = `room-guess-draw-${Date.now()}`;
+  const players = ['guess-draw-p1', 'guess-draw-p2', 'guess-draw-p3'];
+  players.forEach((id) => {
+    store.savePlayer({
+      id,
+      nickname: id,
+      busNumber: 1,
+      points: 1000,
+      totalGames: 0,
+      wins: 0,
+      winStreak: 0,
+      lossStreak: 0,
+      online: true,
+      currentRoom: roomId
+    });
+  });
+
+  const room = {
+    id: roomId,
+    gameType: 'guess_dice',
+    status: 'playing',
+    mode: 'normal',
+    visibility: 'public',
+    players,
+    ready: Object.fromEntries(players.map(pid => [pid, true])),
+    seatStates: Object.fromEntries(players.map(pid => [pid, { ready: true, connection: 'online', intent: 'active' }])),
+    gameState: {
+      phase: 'finished',
+      players,
+      dice: 6,
+      guesses: {
+        [players[0]]: { guess: 1 },
+        [players[1]]: { guess: 2 },
+        [players[2]]: { guess: 3 }
+      },
+      finalWinner: null,
+      winningPlayers: []
+    }
+  };
+  store.saveRoom(room);
+
+  handleGameEnd(room);
+
+  players.forEach((id) => {
+    const player = store.getPlayer(id);
+    assert.equal(player.points, 1000);
+    assert.equal(player.totalGames, 1);
+    assert.equal(player.wins, 0);
+    assert.equal(player.winStreak, 0);
+    assert.equal(player.lossStreak, 0);
+  });
+
+  const records = await store.getPlayerGameRecords(players[0], 1);
+  assert.equal(records[0].result, 'draw');
+  assert.equal(records[0].scoreDelta, 0);
+
+  store.removeRoom(roomId);
+  players.forEach(id => store.removePlayer(id));
+});
+
 test('21点支持2到4人并隐藏其他玩家手牌', () => {
   const config = getGameConfig('blackjack');
   assert.equal(config.minPlayers, 2);
@@ -163,6 +248,39 @@ test('gomoku ignores invalid coordinates without throwing', () => {
   });
   assert.equal(state.currentPlayer, 'p1');
   assert.equal(state.moveHistory.length, 0);
+});
+
+test('五子棋当前玩家30秒未落子自动判负', () => {
+  const roomId = `room-gomoku-timeout-${Date.now()}`;
+  const players = ['gomoku-timeout-p1', 'gomoku-timeout-p2'];
+  saveRoomPlayers(roomId, players);
+  const engine = new GomokuEngine();
+  const room = {
+    id: roomId,
+    gameType: 'gomoku',
+    status: 'playing',
+    mode: 'normal',
+    visibility: 'public',
+    players,
+    ready: Object.fromEntries(players.map(pid => [pid, true])),
+    seatStates: Object.fromEntries(players.map(pid => [pid, { ready: true, connection: 'online', intent: 'active' }])),
+    gameState: engine.init(null, players)
+  };
+  room.gameState.timerStarted = Date.now() - 31000;
+  store.saveRoom(room);
+
+  handleActionTimeout(room);
+
+  assert.equal(room.status, 'finished');
+  assert.equal(room.gameState.phase, 'finished');
+  assert.equal(room.gameState.finalWinner, players[1]);
+  assert.equal(room.gameState.winner, players[1]);
+  assert.deepEqual(room.gameState.winningPlayers, [players[1]]);
+  assert.deepEqual(room.gameState.forfeit, { playerId: players[0], reason: 'action_timeout' });
+  assert.equal(store.getPlayer(players[0]).points, 970);
+  assert.equal(store.getPlayer(players[1]).points, 1030);
+
+  cleanupRoomPlayers(roomId, players);
 });
 
 test('象棋将帅照面会被视为将军并阻止露将移动', () => {
@@ -245,4 +363,72 @@ test('chess winner keeps color display and player id settlement winner', () => {
   assert.equal(state.winner, COLORS.RED);
   assert.equal(state.finalWinner, 'p1');
   assert.deepEqual(state.winningPlayers, ['p1']);
+});
+
+test('象棋当前玩家60秒未行棋自动判负', () => {
+  const roomId = `room-chess-timeout-${Date.now()}`;
+  const players = ['chess-timeout-p1', 'chess-timeout-p2'];
+  saveRoomPlayers(roomId, players);
+  const engine = new ChessEngine();
+  const room = {
+    id: roomId,
+    gameType: 'chess',
+    status: 'playing',
+    mode: 'normal',
+    visibility: 'public',
+    players,
+    ready: Object.fromEntries(players.map(pid => [pid, true])),
+    seatStates: Object.fromEntries(players.map(pid => [pid, { ready: true, connection: 'online', intent: 'active' }])),
+    gameState: engine.init(null, players)
+  };
+  room.gameState.timerStarted = Date.now() - 61000;
+  store.saveRoom(room);
+
+  handleActionTimeout(room);
+
+  assert.equal(room.status, 'finished');
+  assert.equal(room.gameState.phase, 'finished');
+  assert.equal(room.gameState.finalWinner, players[1]);
+  assert.equal(room.gameState.winner, COLORS.BLACK);
+  assert.deepEqual(room.gameState.winningPlayers, [players[1]]);
+  assert.deepEqual(room.gameState.forfeit, { playerId: players[0], reason: 'action_timeout' });
+  assert.equal(store.getPlayer(players[0]).points, 950);
+  assert.equal(store.getPlayer(players[1]).points, 1050);
+
+  cleanupRoomPlayers(roomId, players);
+});
+
+test('象棋当前玩家未超60秒时不会被45秒掉线宽限提前判负', () => {
+  const roomId = `room-chess-offline-grace-${Date.now()}`;
+  const players = ['chess-grace-p1', 'chess-grace-p2'];
+  saveRoomPlayers(roomId, players);
+  const engine = new ChessEngine();
+  const room = {
+    id: roomId,
+    gameType: 'chess',
+    status: 'playing',
+    mode: 'normal',
+    visibility: 'public',
+    players,
+    ready: Object.fromEntries(players.map(pid => [pid, true])),
+    seatStates: Object.fromEntries(players.map(pid => [pid, { ready: true, connection: 'online', intent: 'active' }])),
+    gameState: engine.init(null, players)
+  };
+  room.gameState.timerStarted = Date.now() - 46000;
+  room.seatStates[players[0]] = { ready: true, connection: 'offline', intent: 'active', disconnectedAt: Date.now() - 46000 };
+  const p1 = store.getPlayer(players[0]);
+  p1.online = false;
+  p1.currentRoom = roomId;
+  store.savePlayer(p1);
+  store.saveRoom(room);
+
+  handleActionTimeout(room);
+
+  assert.equal(room.status, 'playing');
+  assert.equal(room.gameState.phase, 'playing');
+  assert.equal(room.gameState.finalWinner, null);
+  assert.equal(store.getPlayer(players[0]).points, 1000);
+  assert.equal(store.getPlayer(players[1]).points, 1000);
+
+  cleanupRoomPlayers(roomId, players);
 });

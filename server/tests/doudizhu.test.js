@@ -169,7 +169,7 @@ test('斗地主地主先出完时只有地主获胜', () => {
   assert.deepEqual(state.winningPlayers, ['p1']);
 });
 
-test('斗地主每个炸弹和王炸都会把结算底分加50', () => {
+test('斗地主出现炸弹或王炸后结算底分固定变为100', () => {
   const engine = new DoudizhuEngine();
   const state = engine.init(null, ['p1', 'p2', 'p3']);
   state.phase = 'play';
@@ -202,6 +202,6 @@ test('斗地主每个炸弹和王炸都会把结算底分加50', () => {
   engine.update(state, { type: 'play', cards: state.hands.p3.slice(0, 2) }, 'p3');
 
   assert.equal(state.bombCount, 3);
-  assert.equal(state.scoreUnit, 200);
-  assert.equal(getDoudizhuScoreUnit(state, 50), 200);
+  assert.equal(state.scoreUnit, 100);
+  assert.equal(getDoudizhuScoreUnit(state, 50), 100);
 });

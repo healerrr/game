@@ -8,7 +8,7 @@
       <div class="top-bar zjh-info-strip">
         <div class="pot-info">
           <span class="pot-label">本局底分</span>
-          <span class="pot-value">{{ gs.baseScore || gs.currentBet || 100 }} 积分</span>
+          <span class="pot-value">{{ gs.baseScore || 10 }} 积分</span>
         </div>
         <div class="round-info">
           <span>游戏人数</span>
@@ -73,7 +73,7 @@
           <span class="pot-kicker">本轮奖池</span>
           <strong>{{ gs.pot || 0 }}</strong>
           <span>积分</span>
-          <small>底分：{{ gs.baseScore || gs.currentBet || 100 }} 积分</small>
+          <small>底分：{{ gs.baseScore || 10 }} 积分</small>
         </div>
 
         <div class="turn-indicator zjh-turn">
@@ -226,9 +226,9 @@
   })
 
   const betMultiplier = computed(() => (myLooked.value ? 2 : 1))
-  const betLimit = computed(() => myLooked.value ? (props.gs.lookedBetLimit || 100) : (props.gs.blindBetLimit || 50))
-  const callCost = computed(() => (props.gs.currentBet || 0) * betMultiplier.value)
-  const raiseCost = computed(() => ((props.gs.currentBet || 0) + (props.gs.raiseStep || 20)) * betMultiplier.value)
+  const betLimit = computed(() => myLooked.value ? (props.gs.lookedBetLimit || 40) : (props.gs.blindBetLimit || 20))
+  const callCost = computed(() => (props.gs.currentBet || 5) * betMultiplier.value)
+  const raiseCost = computed(() => ((props.gs.currentBet || 5) * 2) * betMultiplier.value)
   const compareCost = computed(() => callCost.value * 2)
   const playerBalance = computed(() => {
     const value = props.gs.playerBalances?.[myId.value] ?? props.player?.points

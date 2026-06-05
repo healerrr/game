@@ -98,7 +98,7 @@ test('offline Guandan player is auto-managed immediately', () => {
   assert.equal(room.gameState.currentPlayer, 'p2');
 });
 
-test('offline Guandan room settles after current hand with level gap x20', () => {
+test('offline Guandan room settles after current hand with level gap x10', () => {
   const room = makeGuandanRoom();
   room.id = 'room-offline-settle';
   room.mode = 'normal';
@@ -148,10 +148,10 @@ test('offline Guandan room settles after current hand with level gap x20', () =>
   assert.equal(room.gameState.phase, 'finished');
   assert.deepEqual(room.gameState.winningPlayers, ['p1', 'p3']);
   assert.equal(room.gameState.offlineSettlement.reason, 'offline_after_round');
-  assert.equal(store.getPlayer('p1').points, 1180);
-  assert.equal(store.getPlayer('p3').points, 1180);
-  assert.equal(store.getPlayer('p2').points, 820);
-  assert.equal(store.getPlayer('p4').points, 820);
+  assert.equal(store.getPlayer('p1').points, 1140);
+  assert.equal(store.getPlayer('p3').points, 1140);
+  assert.equal(store.getPlayer('p2').points, 860);
+  assert.equal(store.getPlayer('p4').points, 860);
 });
 
 test('Guandan rematch waits for all players and starts a new match from 2', () => {

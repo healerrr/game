@@ -602,7 +602,7 @@ io.on('connection', (socket) => {
           });
         });
 
-        if (room.status === 'playing' && room.players.length === 2) {
+        if (room.status === 'playing' && room.players.length === 2 && !shouldForfeitOnTimeout(room.gameType)) {
           setTimeout(() => {
             const p = store.getPlayer(latestPlayer.id);
             const r = store.getPlayerRoom(latestPlayer.id);
@@ -951,89 +951,25 @@ function getUncontrolledGuandanPlayers(room) {
   });
 }
 
-function getUnavailablePlayerIds(room) {
-  const result = new Set();
-  for (const pid of room.players) {
-    const seat = room.seatStates?.[pid];
-    if (seat?.intent === 'abandoned' || isPlayerOfflinePastGrace(room, pid)) {
-      result.add(pid);
-    }
-  }
-  return result;
-}
-
-function getNextAvailablePlayer(players, currentPlayer, unavailable, finishedOrder = []) {
-  const finished = new Set(finishedOrder);
-  const active = players.filter(pid => !finished.has(pid) && !unavailable.has(pid));
-  if (active.length === 0) return null;
-
-  const currentIndex = players.indexOf(currentPlayer);
-  for (let offset = 1; offset <= players.length; offset++) {
-    const candidate = players[(currentIndex + offset + players.length) % players.length];
-    if (active.includes(candidate)) return candidate;
-  }
-  return active[0];
-}
-
 function skipUnavailableTurns(room) {
   if (!isTwoVsTwoRoom(room) || room.status !== 'playing' || !room.gameState) return false;
-  if (room.gameType === 'guandan') return false;
+  if (room.gameType !== 'guandan') return false;
 
-  const state = room.gameState;
-  const unavailable = getUnavailablePlayerIds(room);
-  if (unavailable.size === 0) return false;
+  const engine = getEngine(room.gameType);
+  if (!engine) return false;
 
   let changed = false;
   for (let i = 0; i < room.players.length; i++) {
-    const current = state.currentPlayer;
-    if (!current || !unavailable.has(current)) break;
+    const current = room.gameState?.currentPlayer;
+    if (!current || !isPlayerAutoManaged(room, current)) break;
 
-    if (room.gameType === 'guandan') {
-      state.passedPlayers = state.passedPlayers || [];
-      if (state.lastPattern && state.lastLeadPlayer !== current && !state.passedPlayers.includes(current)) {
-        state.passedPlayers.push(current);
-      }
+    const action = getAutoGuandanAction(room.gameState, current);
+    if (!action) break;
 
-      const finishedOrder = state.finishedOrder || [];
-      const nextPlayer = getNextAvailablePlayer(state.players || room.players, current, unavailable, finishedOrder);
-      if (!nextPlayer) break;
-
-      const finished = new Set(finishedOrder);
-      const activeOthers = (state.players || room.players).filter(pid => (
-        !finished.has(pid) &&
-        !unavailable.has(pid) &&
-        pid !== state.lastLeadPlayer
-      ));
-
-      const leadFinished = finished.has(state.lastLeadPlayer);
-      if (state.lastPattern && state.lastLeadPlayer && !unavailable.has(state.lastLeadPlayer) && !leadFinished &&
-          activeOthers.every(pid => state.passedPlayers.includes(pid))) {
-        state.currentPlayer = state.lastLeadPlayer;
-        state.lastPlay = null;
-        state.lastPattern = null;
-        state.passedPlayers = [];
-      } else if (state.lastPattern && state.lastLeadPlayer && activeOthers.every(pid => state.passedPlayers.includes(pid))) {
-        state.currentPlayer = getNextAvailablePlayer(
-          state.players || room.players,
-          state.lastLeadPlayer,
-          unavailable,
-          finishedOrder
-        );
-        state.lastPlay = null;
-        state.lastPattern = null;
-        state.lastLeadPlayer = null;
-        state.passedPlayers = [];
-      } else {
-        state.currentPlayer = nextPlayer;
-      }
-    } else {
-      const nextPlayer = getNextAvailablePlayer(state.players || room.players, current, unavailable);
-      if (!nextPlayer) break;
-      state.currentPlayer = nextPlayer;
-    }
-
-    state.timerStarted = Date.now();
+    room.gameState = engine.update(room.gameState, action, current);
     changed = true;
+
+    if (room.gameState?.phase === 'finished' || room.gameState?.phase === 'round_finished') break;
   }
 
   return changed;
@@ -1268,10 +1204,12 @@ function handleActionTimeout(room) {
   const timeoutExpired = hasStateTimerExpired(state);
   const offlineExpired = isPlayerOfflinePastGrace(room, loserId);
   const autoManagedNow = room.gameType === 'guandan' && isPlayerAutoManaged(room, loserId);
-  if (!timeoutExpired && !offlineExpired && !autoManagedNow) return;
+  const turnTimerForfeit = room.players.length === 2 && shouldForfeitOnTimeout(room.gameType);
+  const offlineShouldTrigger = offlineExpired && !turnTimerForfeit;
+  if (!timeoutExpired && !offlineShouldTrigger && !autoManagedNow) return;
 
-  if (room.players.length === 2 && shouldForfeitOnTimeout(room.gameType)) {
-    forfeitPlayer(room, loserId, offlineExpired ? 'disconnect_timeout' : 'action_timeout');
+  if (turnTimerForfeit) {
+    forfeitPlayer(room, loserId, timeoutExpired ? 'action_timeout' : 'disconnect_timeout');
     return;
   }
 
@@ -1640,10 +1578,12 @@ function settleMultiplayer(room, winningPlayers) {
 function settleGuessDice(room, winningPlayers) {
   const config = getGameConfig(room.gameType);
   const entryFee = config.entryFee;
+  const hasWinners = winningPlayers.length > 0;
 
   room.players.forEach(pid => {
     const isWinner = winningPlayers.includes(pid);
-    store.recordGame(pid, isWinner);
+    store.recordGame(pid, hasWinners ? isWinner : null);
+    if (!hasWinners) return;
     store.updatePoints(pid, isWinner ? entryFee : -entryFee, 'game_settlement', {
       roomId: room.id,
       gameType: room.gameType,
@@ -1664,7 +1604,10 @@ function settleGuandan(room, winningPlayers) {
   const loserTeam = Object.keys(teams).find(key => key !== winnerTeam);
   const winnerLevel = room.gameState?.teamLevels?.[winnerTeam] || room.gameState?.settlement?.nextLevel || '1';
   const loserLevel = room.gameState?.teamLevels?.[loserTeam] || '2';
-  const levelBonus = Math.max(0, getLevelScore(winnerLevel) - getLevelScore(loserLevel)) * 20;
+  const levelDiff = Number.isFinite(Number(room.gameState?.settlement?.levelDiff))
+    ? Number(room.gameState.settlement.levelDiff)
+    : Math.max(0, getLevelScore(winnerLevel) - getLevelScore(loserLevel));
+  const levelBonus = Math.max(0, levelDiff) * 10;
   const payoutDelta = entryFee + levelBonus;
 
   room.players.forEach(pid => {
@@ -1676,6 +1619,7 @@ function settleGuandan(room, winningPlayers) {
       won: isWinner,
       winnerLevel,
       loserLevel,
+      levelDiff,
       levelBonus
     });
   });

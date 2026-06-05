@@ -19,6 +19,16 @@
           <div class="battle-meta__turn" :class="{ mine: isMyTurn, done: gamePhase === 'finished' }">
             {{ phaseText }}
           </div>
+          <div
+            v-if="gamePhase !== 'finished'"
+            class="turn-timer"
+            :class="{ mine: isMyTurn, urgent: countdown <= 10 }"
+            :style="timerStyle"
+          >
+            <span>{{ timerOwnerLabel }}</span>
+            <strong>{{ countdown }}s</strong>
+            <small>超时判负</small>
+          </div>
           <div class="battle-meta__score">
             <span>回合 {{ moveCount }}</span>
             <span>{{ captureText }}</span>
@@ -165,7 +175,7 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 const props = defineProps({
   gs: { type: Object, default: () => ({}) },
@@ -185,6 +195,8 @@ const BOARD_TOP = 7.5
 const BOARD_BOTTOM = 92.5
 const BOARD_WIDTH = BOARD_RIGHT - BOARD_LEFT
 const BOARD_HEIGHT = BOARD_BOTTOM - BOARD_TOP
+const clockNow = ref(Date.now())
+let clockTimer = null
 
 const PIECE_TYPES = {
   KING: 'king',
@@ -274,6 +286,17 @@ const phaseText = computed(() => {
   if (hasMyDrawOffer.value) return '已发起求和'
   return isMyTurn.value ? '轮到你行棋' : `等待 ${opponentName.value}`
 })
+const timerTotal = computed(() => Math.max(1, Number(props.gs?.timer || 60)))
+const countdown = computed(() => {
+  if (gamePhase.value === 'finished') return 0
+  const started = Number(props.gs?.timerStarted || 0)
+  if (!started) return timerTotal.value
+  const remainingMs = timerTotal.value * 1000 - (clockNow.value - started)
+  return Math.max(0, Math.ceil(remainingMs / 1000))
+})
+const timerProgress = computed(() => Math.max(0, Math.min(1, countdown.value / timerTotal.value)))
+const timerStyle = computed(() => ({ '--timer-progress': `${timerProgress.value * 100}%` }))
+const timerOwnerLabel = computed(() => (isMyTurn.value ? '你的回合' : `${opponentName.value} 回合`))
 
 const selectedCell = computed(() => {
   if (props.gs?.selectedPiece && typeof props.gs.selectedPiece.row === 'number') {
@@ -351,6 +374,18 @@ const verticalLines = computed(() => {
     }
   }
   return lines
+})
+
+onMounted(() => {
+  clockTimer = setInterval(() => {
+    clockNow.value = Date.now()
+  }, 250)
+})
+
+onBeforeUnmount(() => {
+  if (clockTimer) {
+    clearInterval(clockTimer)
+  }
 })
 
 function pointStyle(cell) {
@@ -775,6 +810,64 @@ function getLegalMoves(stateBoard, row, col) {
 .battle-meta__turn.done {
   background: linear-gradient(180deg, #6f7faa, #43557f);
   color: #fff;
+}
+
+.turn-timer {
+  --timer-progress: 100%;
+  width: min(100%, 164px);
+  min-height: 46px;
+  padding: 7px 10px;
+  border-radius: 10px;
+  background:
+    linear-gradient(90deg, rgba(47, 143, 255, 0.16) var(--timer-progress), transparent 0),
+    #f7fbff;
+  border: 1px solid rgba(47, 143, 255, 0.22);
+  color: #1d4fb5;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    "label time"
+    "hint time";
+  align-items: center;
+  column-gap: 8px;
+}
+
+.turn-timer span {
+  grid-area: label;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.turn-timer strong {
+  grid-area: time;
+  min-width: 42px;
+  text-align: right;
+  font-size: 20px;
+  font-weight: 900;
+}
+
+.turn-timer small {
+  grid-area: hint;
+  color: #6b7ea8;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.turn-timer.mine {
+  border-color: rgba(47, 143, 255, 0.42);
+  box-shadow: 0 8px 18px rgba(47, 111, 255, 0.14);
+}
+
+.turn-timer.urgent {
+  background:
+    linear-gradient(90deg, rgba(255, 76, 76, 0.18) var(--timer-progress), transparent 0),
+    #fff7f7;
+  border-color: rgba(235, 76, 76, 0.36);
+  color: #bd2f2f;
 }
 
 .battle-meta__score {

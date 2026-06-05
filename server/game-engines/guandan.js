@@ -3,6 +3,7 @@ const { createStandardDeck, shuffle, DEFAULT_RANK_VALUES } = require('./shared/c
 const SEAT_ORDER = ['south', 'east', 'north', 'west'];
 const LEVEL_SEQUENCE = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', '1'];
 const FINAL_LEVEL = '1';
+const MAX_MATCH_ROUNDS = 3;
 const DEFAULT_TEAM_LEVELS = {
   south_north: '2',
   east_west: '2'
@@ -990,7 +991,25 @@ function getLevelScore(level) {
   return Number.isFinite(numeric) ? numeric : 2;
 }
 
-function resolveRoundEnd(finishedOrder, teams, levelOrTeamLevels) {
+function getLeadingTeam(teamLevels, fallbackTeam = 'south_north') {
+  const scores = Object.fromEntries(
+    Object.keys(DEFAULT_TEAM_LEVELS).map((teamKey) => [teamKey, getLevelScore(teamLevels[teamKey])])
+  );
+  const diff = Math.abs((scores.south_north || 0) - (scores.east_west || 0));
+  if ((scores.south_north || 0) > (scores.east_west || 0)) {
+    return { team: 'south_north', diff };
+  }
+  if ((scores.east_west || 0) > (scores.south_north || 0)) {
+    return { team: 'east_west', diff };
+  }
+  return { team: fallbackTeam, diff: 0 };
+}
+
+function getOpponentTeamKey(teamKey) {
+  return teamKey === 'south_north' ? 'east_west' : 'south_north';
+}
+
+function resolveRoundEnd(finishedOrder, teams, levelOrTeamLevels, roundNumber = 1, maxRounds = MAX_MATCH_ROUNDS) {
   if (finishedOrder.length < 2) return null;
   const firstTeam = getTeamKey(finishedOrder[0], teams);
   const secondTeam = getTeamKey(finishedOrder[1], teams);
@@ -1010,14 +1029,28 @@ function resolveRoundEnd(finishedOrder, teams, levelOrTeamLevels) {
     ...teamLevels,
     [firstTeam]: nextLevel
   };
+  const round = Number(roundNumber || 1);
+  const configuredMaxRounds = Number(maxRounds || MAX_MATCH_ROUNDS);
+  const matchFinished = round >= configuredMaxRounds;
+  const finalLeader = matchFinished ? getLeadingTeam(nextTeamLevels, firstTeam) : null;
+  const winnerTeam = finalLeader?.team || firstTeam;
+  const opponentTeam = getOpponentTeamKey(winnerTeam);
+  const levelDiff = finalLeader?.diff
+    ?? Math.abs(getLevelScore(nextTeamLevels[winnerTeam]) - getLevelScore(nextTeamLevels[opponentTeam]));
+
   return {
-    winnerTeam: firstTeam,
-    winningPlayers: teams[firstTeam] || [],
+    winnerTeam,
+    roundWinnerTeam: firstTeam,
+    winningPlayers: teams[winnerTeam] || [],
+    roundWinningPlayers: teams[firstTeam] || [],
     currentLevel,
     levelUp,
     nextLevel,
     teamLevels: nextTeamLevels,
-    matchFinished: nextLevel === FINAL_LEVEL
+    matchFinished,
+    maxRounds: configuredMaxRounds,
+    roundNumber: round,
+    levelDiff
   };
 }
 
@@ -1042,6 +1075,7 @@ class GuandanEngine {
       level: '2',
       teamLevels: { ...DEFAULT_TEAM_LEVELS },
       round: 1,
+      maxRounds: MAX_MATCH_ROUNDS,
       dealerSeat: 'south',
       hands,
       currentPlayer: players[0],
@@ -1101,7 +1135,13 @@ class GuandanEngine {
         const lastPlayer = state.players.find((id) => !state.finishedOrder.includes(id));
         if (lastPlayer) state.finishedOrder.push(lastPlayer);
         syncHandCounts(state);
-        const settlement = resolveRoundEnd(state.finishedOrder, state.teams, state.teamLevels || state.level);
+        const settlement = resolveRoundEnd(
+          state.finishedOrder,
+          state.teams,
+          state.teamLevels || state.level,
+          state.round || 1,
+          state.maxRounds || MAX_MATCH_ROUNDS
+        );
         if (settlement?.teamLevels) {
           state.teamLevels = settlement.teamLevels;
           state.level = settlement.nextLevel;
@@ -1109,7 +1149,7 @@ class GuandanEngine {
         state.phase = settlement?.matchFinished ? 'finished' : 'round_finished';
         state.stage = settlement?.matchFinished ? 'settlement' : 'round_settlement';
         state.roundWinner = state.finishedOrder[0];
-        state.finalWinner = state.finishedOrder[0];
+        state.finalWinner = settlement?.winningPlayers?.[0] || state.finishedOrder[0];
         state.winningPlayers = settlement ? settlement.winningPlayers : [state.finishedOrder[0]];
         state.settlement = settlement;
         state.currentHints = [];
@@ -1192,6 +1232,7 @@ class GuandanEngine {
       nextState.level = nextLevel;
       nextState.teamLevels = normalizeTeamLevels(state.settlement?.teamLevels || state.teamLevels);
       nextState.round = (state.round || 1) + 1;
+      nextState.maxRounds = state.maxRounds || MAX_MATCH_ROUNDS;
       nextState.currentPlayer = state.roundWinner || state.players[0];
       Object.keys(nextState.hands || {}).forEach((pid) => {
         nextState.hands[pid] = sortHand(nextState.hands[pid], nextLevel);

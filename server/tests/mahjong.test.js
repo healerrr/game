@@ -189,7 +189,7 @@ test('红中推倒胡 - 出牌后手牌减少', () => {
   assert.equal(state.discards['p1'].length, 1);
 });
 
-test('红中推倒胡 - 无红中杠上开花清一色按12倍结算', () => {
+test('红中推倒胡 - 无红中杠上开花清一色按固定50分结算', () => {
   const engine = new MahjongEngine();
   let state = engine.init(null, ['p1', 'p2', 'p3', 'p4']);
   state.phase = 'response';
@@ -215,10 +215,10 @@ test('红中推倒胡 - 无红中杠上开花清一色按12倍结算', () => {
 
   assert.equal(state.winInfo.winType, 'gangshanghua');
   assert.equal(state.winInfo.fan, 12);
-  assert.equal(state.scores.p1, 1800);
-  assert.equal(state.scores.p2, -600);
-  assert.equal(state.scores.p3, -600);
-  assert.equal(state.scores.p4, -600);
+  assert.equal(state.scores.p1, 150);
+  assert.equal(state.scores.p2, -50);
+  assert.equal(state.scores.p3, -50);
+  assert.equal(state.scores.p4, -50);
 });
 
 test('mahjong response ignores unknown actions without passing', () => {

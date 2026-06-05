@@ -6,7 +6,7 @@
       <button class="back-btn" @click="$emit('back')" aria-label="返回">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
       </button>
-      <span class="info-item">第 {{ gs.round || 1 }} 局</span>
+      <span class="info-item">第 {{ gs.round || 1 }}/{{ gs.maxRounds || 3 }} 局</span>
       <span class="info-sep">|</span>
       <span class="info-item">级牌: <b>{{ myTeamLevel }}</b>/<b>{{ oppTeamLevel }}</b></span>
       <span class="info-sep">|</span>
@@ -287,7 +287,7 @@ const resultTitle = computed(() => {
     return myWon ? '本局我方升级' : '本局对方升级'
   }
   if (props.gs.phase === 'finished') {
-    return myWon ? '恭喜，我方打到 1' : '对方打到 1 获胜'
+    return myWon ? '恭喜，三局后我方级牌领先' : '三局后对方级牌领先'
   }
   return props.gs.finalWinner === props.player?.id ? '恭喜，我方率先出完' : `${getPlayerName(props.gs.finalWinner)} 率先出完`
 })
@@ -295,7 +295,8 @@ const resultTitle = computed(() => {
 const settlementText = computed(() => {
   const levelUp = props.gs.settlement?.levelUp || 0
   const nextLevel = props.gs.settlement?.nextLevel || props.gs.level || '2'
-  const prefix = props.gs.phase === 'finished' ? '本场结束' : `下局级牌 ${nextLevel}`
+  const levelDiff = props.gs.settlement?.levelDiff ?? Math.abs(levelScore(myTeamLevel.value) - levelScore(oppTeamLevel.value))
+  const prefix = props.gs.phase === 'finished' ? `本场结束 · 级差 ${levelDiff}` : `下局级牌 ${nextLevel}`
   return `升级 +${levelUp} · ${prefix} · 我方 ${myTeamLevel.value} / 对方 ${oppTeamLevel.value}`
 })
 
@@ -311,6 +312,15 @@ function rankPower(rank, level) {
   if (rank === 'BJ') return 17
   if (rank === level) return 15
   return RANK_VALUES[rank] || 0
+}
+
+function levelScore(level) {
+  if (level === '1') return 13
+  if (level === 'J') return 11
+  if (level === 'Q') return 12
+  if (level === 'K') return 13
+  const numeric = Number(level)
+  return Number.isFinite(numeric) ? numeric : 2
 }
 
 function sortHand(hand, level) {

@@ -544,7 +544,7 @@
       win: '猜中骰子点数的玩家获胜；可能多人同时猜中，也可能无人猜中。',
       scoring: [
         '门票 10 分。猜中的玩家各加 10 分，猜错的玩家各扣 10 分。',
-        '如果所有玩家都猜中，则所有人都加 10 分；如果无人猜中，则所有人都扣 10 分。'
+        '如果所有玩家都猜中，则所有人都加 10 分；如果无人猜中，则本局平局不扣分。'
       ]
     },
     rock_paper_scissors: {
@@ -567,14 +567,14 @@
     },
     gomoku: {
       name: '五子棋',
-      play: '2 人参与。双方轮流落子，黑方先手。',
-      win: '任意横、竖、斜方向先连成 5 子者获胜；棋盘下满无五连为平局。',
+      play: '2 人参与。双方轮流落子，黑方先手；每手限时 30 秒。',
+      win: '任意横、竖、斜方向先连成 5 子者获胜；30 秒内未落子自动判负；棋盘下满无五连为平局。',
       scoring: ['门票 30 分。胜者加 30 分，败者扣 30 分；平局不增减积分。']
     },
     chess: {
       name: '象棋',
-      play: '2 人参与。双方按中国象棋规则轮流走子，红方先行。',
-      win: '吃掉对方将/帅，或让对方无合法走法时获胜；双方同意和棋则为平局。',
+      play: '2 人参与。双方按中国象棋规则轮流走子，红方先行；每手限时 60 秒。',
+      win: '吃掉对方将/帅，或让对方无合法走法时获胜；60 秒内未行棋自动判负；双方同意和棋则为平局。',
       scoring: ['门票 50 分。胜者加 50 分，败者扣 50 分；和棋不增减积分。']
     },
     doudizhu: {
@@ -582,27 +582,35 @@
       play: '3 人参与。叫分抢地主后，地主拿底牌并先出，玩家按牌型压牌或过牌。',
       win: '地主先出完则地主获胜；任意农民先出完则两名农民共同获胜。',
       scoring: [
-        '基础结算单位为 50 分，每出现炸弹或王炸会提高结算单位。',
+        '基础结算单位为 50 分；本局出现过炸弹或王炸时，结算单位变为 100 分。',
         '地主胜时地主加双倍结算单位，两名农民各扣一个结算单位；农民胜时反向结算。'
       ]
     },
     guandan: {
       name: '掼蛋',
       play: '4 人参与，两副牌，南北一队、东西一队，按牌型轮流出牌或过牌。',
-      win: '按出完顺序结算本轮，头游所在队为胜方，并按名次组合升级。',
-      scoring: ['门票 100 分。胜方按等级差获得奖励，负方扣除同等分数。']
+      win: '共打 3 局。每局按出完顺序升级，3 局结束后级牌更大的队伍获胜。',
+      scoring: ['门票 100 分。胜方每人获得 100 分 + 级牌差距 × 10，负方每人扣除同等分数。']
     },
     zha_jin_hua: {
       name: '炸金花',
       play: '2 到 5 人参与。每人 3 张牌，可看牌、跟注、加注、比牌或弃牌。',
       win: '其他玩家弃牌或比牌出局后，最后留在场上的玩家获胜；也可摊牌比较牌型。',
-      scoring: ['基础下注 20 分。赢家获得当前奖池扣除自己投入后的收益，输家扣除本局实际投入。']
+      scoring: [
+        '门票 10 分。暗牌跟牌 5 分，明牌跟牌 10 分。',
+        '加注按当前下注翻倍，暗牌单次最多 20 分，明牌单次最多 40 分。',
+        '跟牌最多持续 5 轮，5 轮后场上未弃牌玩家自动开牌；赢家获得当前奖池扣除自己投入后的收益。'
+      ]
     },
     mahjong: {
       name: '红中麻将',
       play: '4 人参与。按红中麻将规则摸牌、打牌、碰、杠、胡。',
       win: '自摸、点炮胡、杠上开花、抢杠胡、天胡、地胡或四红中均可结束对局；流局无人获胜。',
-      scoring: ['底分 50 分。按胡牌方式、番型和杠分直接结算到玩家积分。']
+      scoring: [
+        '点炮赢单家 50 分；胡牌/自摸赢其余每人 50 分。',
+        '明杠赢单家 50 分；暗杠赢其余每人 50 分。',
+        '不再按番型翻倍，番型只用于展示。'
+      ]
     }
   }
 
@@ -904,7 +912,7 @@
       return canGuessDice.value ? '请选择你认为会摇出的点数' : '等待其他玩家选择'
     }
     const winners = gs.value?.winningPlayers || []
-    if (winners.length === 0) return '无人猜中，所有人扣除门票积分'
+    if (winners.length === 0) return '无人猜中，本局平局不扣分'
     if (winners.length === roomPlayers.value.length) return '所有人猜中，所有人获得门票积分'
     return `猜中：${winners.map(getPlayerName).join('、')}`
   })
@@ -919,10 +927,10 @@
         name: item.nickname || '玩家',
         initial: (item.nickname || '玩').slice(0, 1),
         winner,
-        loser: finished && !winner,
+        loser: finished && winners.size > 0 && !winner,
         timeout: Boolean(guess?.timeout),
         detail: guess?.timeout ? '超时未选' : (guess ? `选择 ${guess.guess} 点` : '等待选择'),
-        badge: finished ? (winner ? '+10' : '-10') : (guess ? '已选' : '待定')
+        badge: finished ? (winner ? '+10' : (winners.size > 0 ? '-10' : '平局')) : (guess ? '已选' : '待定')
       }
     })
   })
@@ -1356,6 +1364,11 @@
     }
   }
 
+  function hasOfflineOpponent(room) {
+    const myId = player.value?.id
+    return Boolean((room?.players || []).some((item) => item.id !== myId && item.connection === 'offline'))
+  }
+
   function finishBackToLobby() {
     clearOpponentDisconnectedNotice()
     gameState.currentRoom = null
@@ -1444,6 +1457,7 @@
       gs.value = event.detail.gameState || {}
       readySubmitting.value = false
       updateReadyDeadline()
+      if (!hasOfflineOpponent(event.detail)) clearOpponentDisconnectedNotice()
     }
     window.addEventListener('room:update', roomUpdateHandler)
 

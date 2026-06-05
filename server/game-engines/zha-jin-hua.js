@@ -1,10 +1,11 @@
 const { createStandardDeck, shuffle, DEFAULT_RANK_VALUES } = require('./shared/cards');
 const store = require('../store');
 
-const BASE_BET = 20;
-const RAISE_STEP = 20;
-const BLIND_BET_LIMIT = 50;
-const LOOKED_BET_LIMIT = 100;
+const ENTRY_FEE = 10;
+const BASE_BET = 5;
+const BLIND_BET_LIMIT = 20;
+const LOOKED_BET_LIMIT = 40;
+const MAX_ROUNDS = 5;
 
 function buildSeats(players) {
   return players.map((playerId, index) => ({
@@ -156,7 +157,7 @@ function getCallAmount(state, playerId) {
 }
 
 function getRaiseAmount(state, playerId) {
-  const nextBet = (state.currentBet || BASE_BET) + (state.raiseStep || RAISE_STEP);
+  const nextBet = (state.currentBet || BASE_BET) * 2;
   return nextBet * blindMultiplier(state, playerId);
 }
 
@@ -222,6 +223,33 @@ function finishRound(state, winnerId, reason) {
   return state;
 }
 
+function advanceTurnOrShowdown(state, currentPlayerId) {
+  state.currentPlayer = getNextActivePlayer(state, currentPlayerId);
+  if (state.actedThisRound.length >= state.activePlayers.length) {
+    if (state.round >= (state.maxRounds || MAX_ROUNDS)) {
+      return finishRound(state, getShowdownWinnerForState(state), 'max_rounds_showdown');
+    }
+    state.round += 1;
+    state.actedThisRound = [];
+  }
+  state.timerStarted = Date.now();
+  return state;
+}
+
+function getShowdownWinnerForState(state) {
+  let bestPlayer = state.activePlayers[0];
+  let bestRank = evaluateHand(state.hands[bestPlayer]);
+  for (let i = 1; i < state.activePlayers.length; i += 1) {
+    const currentPlayer = state.activePlayers[i];
+    const currentRank = evaluateHand(state.hands[currentPlayer]);
+    if (compareHands(currentRank, bestRank) > 0) {
+      bestPlayer = currentPlayer;
+      bestRank = currentRank;
+    }
+  }
+  return bestPlayer;
+}
+
 class ZhaJinHuaEngine {
   init(room, players) {
     const hands = createHands(players);
@@ -237,10 +265,10 @@ class ZhaJinHuaEngine {
       currentPlayer: players[0],
       currentBet: BASE_BET,
       baseBet: BASE_BET,
-      baseScore: BASE_BET,
-      raiseStep: RAISE_STEP,
+      baseScore: ENTRY_FEE,
       blindBetLimit: BLIND_BET_LIMIT,
       lookedBetLimit: LOOKED_BET_LIMIT,
+      maxRounds: MAX_ROUNDS,
       pot: 0,
       playerBalances: Object.fromEntries(players.map((playerId) => [playerId, getInitialBalance(room, playerId)])),
       playerBets: Object.fromEntries(players.map((playerId) => [playerId, 0])),
@@ -320,7 +348,7 @@ class ZhaJinHuaEngine {
     } else if (action.type === 'raise') {
       const amount = getRaiseAmount(state, playerId);
       if (!canPayBet(state, playerId, amount)) return state;
-      state.currentBet += state.raiseStep;
+      state.currentBet *= 2;
       applyCost(state, playerId, amount);
       state.actedThisRound = [playerId];
       recordAction(state, { type: 'raise', playerId, amount, currentBet: state.currentBet });
@@ -370,27 +398,11 @@ class ZhaJinHuaEngine {
       return state;
     }
 
-    state.currentPlayer = getNextActivePlayer(state, playerId);
-    if (state.actedThisRound.length >= state.activePlayers.length) {
-      state.round += 1;
-      state.actedThisRound = [];
-    }
-    state.timerStarted = Date.now();
-    return state;
+    return advanceTurnOrShowdown(state, playerId);
   }
 
   getShowdownWinner(state) {
-    let bestPlayer = state.activePlayers[0];
-    let bestRank = evaluateHand(state.hands[bestPlayer]);
-    for (let i = 1; i < state.activePlayers.length; i += 1) {
-      const currentPlayer = state.activePlayers[i];
-      const currentRank = evaluateHand(state.hands[currentPlayer]);
-      if (compareHands(currentRank, bestRank) > 0) {
-        bestPlayer = currentPlayer;
-        bestRank = currentRank;
-      }
-    }
-    return bestPlayer;
+    return getShowdownWinnerForState(state);
   }
 
   nextRound(state) {

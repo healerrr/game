@@ -129,7 +129,7 @@
     { key: 'blackjack', name: '21点', image: cardBlackjack, tag: '要牌停牌', entryFee: 30 },
     { key: 'gomoku', name: '五子棋', image: cardGomoku, tag: '经典棋盘', entryFee: 30 },
     { key: 'chess', name: '象棋', image: cardChineseChess, tag: '残局博弈', entryFee: 50 },
-    { key: 'zha_jin_hua', name: '炸金花', image: cardGoldenFlower, tag: '运气对决', entryFee: 20 },
+    { key: 'zha_jin_hua', name: '炸金花', image: cardGoldenFlower, tag: '运气对决', entryFee: 10 },
     { key: 'doudizhu', name: '斗地主', image: cardDoudizhu, tag: '经典扑克', entryFee: 50 },
     { key: 'mahjong', name: '红中麻将', image: cardMahjong, tag: '休闲搓牌', entryFee: 50 },
     { key: 'guandan', name: '掼蛋', image: cardEggSmash, tag: '牌桌欢乐', entryFee: 100 },

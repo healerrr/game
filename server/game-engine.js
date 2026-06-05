@@ -340,10 +340,11 @@ class ZhaJinHua {
     this.SUITS = ['spade', 'heart', 'club', 'diamond'];
     this.RANKS = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
     this.RANK_VALUES = { '2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'10':10,'J':11,'Q':12,'K':13,'A':14 };
-    this.BASE_BET = 20;
-    this.RAISE_STEP = 20;
-    this.BLIND_BET_LIMIT = 50;
-    this.LOOKED_BET_LIMIT = 100;
+    this.ENTRY_FEE = 10;
+    this.BASE_BET = 5;
+    this.BLIND_BET_LIMIT = 20;
+    this.LOOKED_BET_LIMIT = 40;
+    this.MAX_ROUNDS = 5;
   }
 
   createDeck() {
@@ -495,8 +496,8 @@ class ZhaJinHua {
       currentPlayer: players[0],
       currentBet: this.BASE_BET,
       baseBet: this.BASE_BET,
-      baseScore: this.BASE_BET,
-      raiseStep: this.RAISE_STEP,
+      baseScore: this.ENTRY_FEE,
+      maxRounds: 5,
       blindBetLimit: this.BLIND_BET_LIMIT,
       lookedBetLimit: this.LOOKED_BET_LIMIT,
       pot: 0,
@@ -549,7 +550,7 @@ class ZhaJinHua {
         state.playerBets[playerId] = state.currentBet;
         state.pot += toPay;
       } else if (action.type === 'raise') {
-        state.currentBet += state.raiseStep || this.RAISE_STEP;
+        state.currentBet *= 2;
         const toPay = state.currentBet - (state.playerBets[playerId] || 0);
         state.playerBets[playerId] = state.currentBet;
         state.pot += toPay;
@@ -669,8 +670,8 @@ class ZhaJinHua {
       state.lastAction = { type: 'call', playerId, amount };
       state.compareResult = null;
     } else if (action.type === 'raise') {
-      state.currentBet += state.raiseStep || this.RAISE_STEP;
       const amount = this.getRaiseAmount(state, playerId);
+      state.currentBet *= 2;
       this.applyCost(state, playerId, amount);
       state.actedThisRound = [playerId];
       state.lastAction = { type: 'raise', playerId, amount, currentBet: state.currentBet };
@@ -794,7 +795,7 @@ class ZhaJinHua {
   }
 
   getCallAmount(state, playerId) {
-    return (state.currentBet || this.BASE_BET) * this.getBetMultiplier(state, playerId);
+    return ((state.currentBet || this.BASE_BET) * 2) * this.getBetMultiplier(state, playerId);
   }
 
   getRaiseAmount(state, playerId) {
@@ -966,7 +967,7 @@ class ZhaJinHua {
       currentPlayer: state.players[0],
       currentBet: this.BASE_BET,
       baseBet: this.BASE_BET,
-      raiseStep: this.RAISE_STEP,
+      maxRounds: this.MAX_ROUNDS,
       pot: 0,
       playerBets: Object.fromEntries(state.players.map(pid => [pid, 0])),
       actedThisRound: [],
@@ -1829,7 +1830,7 @@ const GAME_CONFIG = {
   },
   zha_jin_hua: {
     name: '炸金花',
-    entryFee: 20,
+    entryFee: 10,
     category: 'card',
     minPlayers: 2,
     maxPlayers: 5,

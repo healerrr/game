@@ -88,22 +88,22 @@ function settleGangScore(state, gangPlayerId, gangType, fromPlayerId) {
     // 暗杠：三家各赔2倍
     for (const pid of players) {
       if (pid !== gangPlayerId) {
-        state.scores[pid] -= BASE_SCORE * 2;
-        state.scores[gangPlayerId] += BASE_SCORE * 2;
+        state.scores[pid] -= BASE_SCORE;
+        state.scores[gangPlayerId] += BASE_SCORE;
       }
     }
   } else if (gangType === 'bugang') {
     // 补杠：三家各赔1倍
     for (const pid of players) {
       if (pid !== gangPlayerId) {
-        state.scores[pid] -= BASE_SCORE * 1;
-        state.scores[gangPlayerId] += BASE_SCORE * 1;
+        state.scores[pid] -= BASE_SCORE;
+        state.scores[gangPlayerId] += BASE_SCORE;
       }
     }
   } else if (gangType === 'minggang') {
     // 明杠(点杠)：放杠者赔3倍
-    state.scores[fromPlayerId] -= BASE_SCORE * 3;
-    state.scores[gangPlayerId] += BASE_SCORE * 3;
+    state.scores[fromPlayerId] -= BASE_SCORE;
+    state.scores[gangPlayerId] += BASE_SCORE;
   }
 }
 
@@ -115,18 +115,18 @@ function settleHuScore(state, winnerId, sourcePlayerId, winType, fan) {
     // 自摸/杠上花/四红中：三家各赔 fan × 底分
     for (const pid of players) {
       if (pid !== winnerId) {
-        state.scores[pid] -= fan * BASE_SCORE;
-        state.scores[winnerId] += fan * BASE_SCORE;
+        state.scores[pid] -= BASE_SCORE;
+        state.scores[winnerId] += BASE_SCORE;
       }
     }
   } else if (winType === 'qianggang') {
     // 抢杠胡：被抢杠者包赔 fan × 底分 × 3
-    state.scores[sourcePlayerId] -= fan * BASE_SCORE * 3;
-    state.scores[winnerId] += fan * BASE_SCORE * 3;
+    state.scores[sourcePlayerId] -= BASE_SCORE;
+    state.scores[winnerId] += BASE_SCORE;
   } else {
     // 点炮：放炮者赔 fan × 底分 × 3
-    state.scores[sourcePlayerId] -= fan * BASE_SCORE * 3;
-    state.scores[winnerId] += fan * BASE_SCORE * 3;
+    state.scores[sourcePlayerId] -= BASE_SCORE;
+    state.scores[winnerId] += BASE_SCORE;
   }
 }
 
