@@ -606,7 +606,7 @@ io.on('connection', (socket) => {
           setTimeout(() => {
             const p = store.getPlayer(latestPlayer.id);
             const r = store.getPlayerRoom(latestPlayer.id);
-            if (p && !p.online && r?.status === 'playing') {
+            if (p && !p.online && r?.status === 'playing' && r.gameState?.phase !== 'finished') {
               forfeitPlayer(r, latestPlayer.id, 'disconnect_timeout');
             }
           }, DISCONNECT_GRACE_MS);
@@ -1280,7 +1280,7 @@ function emitChessDrawNotice(room, actorId, action, previousDrawOffer = null) {
 }
 
 function forfeitPlayer(room, loserId, reason) {
-  if (!room || room.status === 'finished') return;
+  if (!room || room.status === 'finished' || room.gameState?.phase === 'finished') return;
   const winnerId = room.players.find(pid => pid !== loserId) || null;
   const winnerColor = room.gameType === 'chess' ? getChessPlayerColor(room, winnerId) : null;
   const loser = store.getPlayer(loserId);
