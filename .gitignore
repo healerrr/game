@@ -1,12 +1,4 @@
-client/node_modules/
-server/node_modules/
-client/dist/
-dump.rdb
-test-artifacts/
-*.log
-*.out.log
-*.err.log
-.trae/
-.workbuddy/
-.DS_Store
-Thumbs.db
+node_modules/
+scripts/
+package.json
+package-lock.json
