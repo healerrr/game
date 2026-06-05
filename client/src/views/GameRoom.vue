@@ -494,7 +494,7 @@
 <script setup>
   import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
   import { useRoute, useRouter } from 'vue-router'
-  import { gameState, getPlayer, socket, ensureAuthenticated } from '../socket'
+  import { gameState, getPlayer, socket, ensureAuthenticated, setCurrentGame } from '../socket'
   import die1Image from '../../img/dice/die-1.webp'
   import die2Image from '../../img/dice/die-2.webp'
   import die3Image from '../../img/dice/die-3.webp'
@@ -1138,7 +1138,7 @@
           gameState.currentRoom = res.room
         }
         if (res.gameState) {
-          gameState.currentGame = res.gameState
+          setCurrentGame(res.gameState, "playing")
           gs.value = res.gameState
         }
         if (gameState.player && res.player?.id === gameState.player.id) {
@@ -1179,7 +1179,7 @@
 
       if (res?.room) {
         gameState.currentRoom = res.room
-        gameState.currentGame = res.room.gameState
+        setCurrentGame(res.room.gameState, res.room.status)
         gs.value = res.room.gameState || {}
         updateReadyDeadline()
       }
@@ -1280,10 +1280,10 @@
         if (res?.room?.roomId) {
           gameState.currentRoom = res.room
           if (res.room.status === 'readying') {
-            gameState.currentGame = null
+            setCurrentGame(null)
             gs.value = {}
           } else {
-            gameState.currentGame = res.room.gameState
+            setCurrentGame(res.room.gameState, res.room.status)
             gs.value = res.room.gameState || {}
           }
           socket.emit('room:join', { roomId: res.room.roomId })
@@ -1307,10 +1307,10 @@
         gameState.currentRoom = res.room
         // 如果是重新准备阶段，清空旧游戏状态
         if (res.room.status === 'readying') {
-          gameState.currentGame = null
+          setCurrentGame(null)
           gs.value = {}
         } else {
-          gameState.currentGame = res.room.gameState
+          setCurrentGame(res.room.gameState, res.room.status)
           gs.value = res.room.gameState || {}
         }
         readySubmitting.value = false
@@ -1348,7 +1348,7 @@
       zhaJinHuaFoldedOut.value = false
       zhaJinHuaFoldedGameType.value = ''
       gameState.currentRoom = null
-      gameState.currentGame = null
+      setCurrentGame(null)
       router.push('/lobby')
       return
     }
@@ -1399,7 +1399,7 @@
     // 如果当前房间是准备状态但 gameState 还有旧数据，清空它
     if (gameState.currentRoom?.status === 'readying' && gs.value?.phase) {
       gs.value = {}
-      gameState.currentGame = null
+      setCurrentGame(null)
     }
 
     stateHandler = (event) => {
@@ -1415,7 +1415,7 @@
 
     roomUpdateHandler = (event) => {
       gameState.currentRoom = event.detail
-      gameState.currentGame = event.detail.gameState
+      setCurrentGame(event.detail.gameState, event.detail.status)
       gs.value = event.detail.gameState || {}
       readySubmitting.value = false
       updateReadyDeadline()
@@ -1426,7 +1426,7 @@
       zhaJinHuaFoldedOut.value = false
       zhaJinHuaFoldedGameType.value = ''
       gameState.currentRoom = event.detail
-      gameState.currentGame = event.detail.gameState
+      setCurrentGame(event.detail.gameState, event.detail.status)
       gs.value = event.detail.gameState || {}
       readySubmitting.value = false
       showInvitePanel.value = false
@@ -1437,7 +1437,7 @@
     resultHandler = (event) => {
       if (event.detail.room) {
         gameState.currentRoom = event.detail.room
-        gameState.currentGame = event.detail.room.gameState
+        setCurrentGame(event.detail.room.gameState, event.detail.room.status)
       }
       const { players: resultPlayers, room: resultRoom, ...result } = event.detail
       gs.value = resultRoom?.gameState
@@ -1515,7 +1515,7 @@
       zhaJinHuaFoldedGameType.value = ''
       const room = event.detail
       gameState.currentRoom = room
-      gameState.currentGame = room.gameState
+      setCurrentGame(room.gameState, room.status)
       gs.value = room.gameState || {}
       readySubmitting.value = false
       router.push(`/game/${room.roomId}`)

@@ -24,6 +24,21 @@ export const gameState = reactive({
   invitations: []
 })
 
+/** 安全设置 currentGame：只有游戏进行中或已结束的 gameState 才设置，
+ * 确保不会把旧数据残留到新房间中 */
+export function setCurrentGame(gameStateValue, roomStatus) {
+  if (!gameStateValue) {
+    gameState.currentGame = null
+    return
+  }
+  // 如果房间是 readying 或没有 gameState.phase，清空
+  if (roomStatus === 'readying' || !gameStateValue.phase) {
+    gameState.currentGame = null
+    return
+  }
+  gameState.currentGame = gameStateValue
+}
+
 let authenticatedPlayerId = null
 let authenticatedSocketId = null
 let restorePromise = null
@@ -117,7 +132,7 @@ export async function restoreSavedPlayer({ force = false } = {}) {
           rememberPlayer(res.player)
           if (res.currentRoom) {
             gameState.currentRoom = res.currentRoom
-            gameState.currentGame = res.currentRoom.gameState
+            setCurrentGame(res.currentRoom.gameState, res.currentRoom.status)
           }
           resolve(res)
           return
@@ -174,7 +189,7 @@ export async function ensureAuthenticated() {
             rememberPlayer(res.player)
             if (res.currentRoom) {
               gameState.currentRoom = res.currentRoom
-              gameState.currentGame = res.currentRoom.gameState
+              setCurrentGame(res.currentRoom.gameState, res.currentRoom.status)
             }
             resolve(res.player)
           } else {
@@ -206,7 +221,7 @@ socket.on('server:update', (data) => {
 
 socket.on('game:matched', (data) => {
   gameState.currentRoom = data
-  gameState.currentGame = data.gameState
+  setCurrentGame(data.gameState, data.status)
   // 加入服务器端的房间
   socket.emit('room:join', { roomId: data.roomId })
   window.dispatchEvent(new CustomEvent('game:matched', { detail: data }))
@@ -215,20 +230,20 @@ socket.on('game:matched', (data) => {
 socket.on('room:update', (data) => {
   if (!gameState.currentRoom || gameState.currentRoom.roomId === data.roomId || gameState.currentRoom.id === data.roomId) {
     gameState.currentRoom = data
-    gameState.currentGame = data.gameState
+    setCurrentGame(data.gameState, data.status)
   }
   window.dispatchEvent(new CustomEvent('room:update', { detail: data }))
 })
 
 socket.on('room:started', (data) => {
   gameState.currentRoom = data
-  gameState.currentGame = data.gameState
+  setCurrentGame(data.gameState, data.status)
   window.dispatchEvent(new CustomEvent('room:started', { detail: data }))
   window.dispatchEvent(new CustomEvent('game:state', { detail: { gameState: data.gameState, players: data.players, room: data } }))
 })
 
 socket.on('game:state', (data) => {
-  gameState.currentGame = data.gameState
+  setCurrentGame(data.gameState, data.status)
   if (data.room) {
     gameState.currentRoom = data.room
   }
@@ -238,7 +253,7 @@ socket.on('game:state', (data) => {
 socket.on('game:result', (data) => {
   if (data.room) {
     gameState.currentRoom = data.room
-    gameState.currentGame = data.room.gameState
+    setCurrentGame(data.room.gameState, data.room.status)
   }
   // 更新当前玩家积分
   if (gameState.player && data.players) {

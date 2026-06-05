@@ -93,7 +93,7 @@
 <script setup>
   import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
   import { useRouter } from 'vue-router'
-  import { gameState, getPlayer, socket, ensureAuthenticated, readSavedPlayer } from '../socket'
+  import { gameState, getPlayer, socket, ensureAuthenticated, readSavedPlayer, setCurrentGame } from '../socket'
 
   import cardChineseChess from '../../img/card_chinese_chess_transparent.png'
   import cardDoudizhu from '../../img/card_doudizhu.png'
@@ -160,7 +160,7 @@
       const room = event.detail
       joiningGameKey.value = ''
       gameState.currentRoom = room
-      gameState.currentGame = room.gameState
+      setCurrentGame(room.gameState, room.status)
       router.push(`/game/${room.roomId}`)
     }
     kickedHandler = (event) => {
@@ -239,9 +239,9 @@
           }
           gameState.currentRoom = res.currentRoom
           if (res.currentRoom.status === 'readying' || !res.currentRoom.gameState) {
-            gameState.currentGame = null
+            setCurrentGame(null)
           } else {
-            gameState.currentGame = res.currentRoom.gameState
+            setCurrentGame(res.currentRoom.gameState, res.currentRoom.status)
           }
           router.push(`/game/${res.currentRoom.roomId}`)
           return
@@ -254,9 +254,9 @@
         gameState.currentRoom = res.room
         // 新房间没有 gameState，确保清空旧的游戏状态
         if (res.room.status === 'readying' || !res.room.gameState) {
-          gameState.currentGame = null
+          setCurrentGame(null)
         } else {
-          gameState.currentGame = res.room.gameState
+          setCurrentGame(res.room.gameState, res.room.status)
         }
         socket.emit('room:join', { roomId: res.room.roomId })
         router.push(`/game/${res.room.roomId}`)
@@ -284,9 +284,9 @@
       if (res?.room) {
         gameState.currentRoom = res.room
         if (res.room.status === 'readying' || !res.room.gameState) {
-          gameState.currentGame = null
+          setCurrentGame(null)
         } else {
-          gameState.currentGame = res.room.gameState
+          setCurrentGame(res.room.gameState, res.room.status)
         }
         socket.emit('room:join', { roomId: res.room.roomId })
         router.push(`/game/${res.room.roomId}`)
