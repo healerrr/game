@@ -1278,8 +1278,13 @@
         zhaJinHuaFoldedGameType.value = ''
         if (res?.room?.roomId) {
           gameState.currentRoom = res.room
-          gameState.currentGame = res.room.gameState
-          gs.value = res.room.gameState || {}
+          if (res.room.status === 'readying') {
+            gameState.currentGame = null
+            gs.value = {}
+          } else {
+            gameState.currentGame = res.room.gameState
+            gs.value = res.room.gameState || {}
+          }
           socket.emit('room:join', { roomId: res.room.roomId })
           router.push(`/game/${res.room.roomId}`)
         }
@@ -1299,8 +1304,14 @@
       }
       if (res?.room) {
         gameState.currentRoom = res.room
-        gameState.currentGame = res.room.gameState
-        gs.value = res.room.gameState || {}
+        // 如果是重新准备阶段，清空旧游戏状态
+        if (res.room.status === 'readying') {
+          gameState.currentGame = null
+          gs.value = {}
+        } else {
+          gameState.currentGame = res.room.gameState
+          gs.value = res.room.gameState || {}
+        }
         readySubmitting.value = false
         updateReadyDeadline()
       }

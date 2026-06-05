@@ -770,6 +770,7 @@ function prepareRoomRematch(room, playerId) {
       }
     ];
   }));
+  room.gameState = null;
   room.readyDeadline = null;
   room.updatedAt = Date.now();
 
