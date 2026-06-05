@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 
 const store = require('../store');
+const { getBlockingRoom } = require('../index');
 
 test('同名玩家再次注册会复用已有账号', () => {
   const nickname = `重复玩家 ${Date.now()}`;
@@ -55,4 +56,26 @@ test('同一局战绩重复写入时只保留一条', async () => {
 
   assert.equal(matching.length, 1);
   store.removePlayer(player.id);
+});
+
+test('settled stale rooms do not keep players blocked', () => {
+  const player = store.createPlayer(`stale-room-player-${Date.now()}`, 1);
+  const opponent = store.createPlayer(`stale-room-opponent-${Date.now()}`, 1);
+  const room = store.createRoom('gomoku', [player, opponent], { status: 'playing' });
+
+  room.gameState = {
+    phase: 'finished',
+    finalWinner: player.id,
+    winningPlayers: [player.id]
+  };
+  room.settlementApplied = true;
+  store.saveRoom(room);
+
+  assert.equal(getBlockingRoom(player.id), null);
+  assert.equal(store.getPlayer(player.id).currentRoom, null);
+  assert.equal(store.getRoom(room.id).status, 'finished');
+
+  store.removeRoom(room.id);
+  store.removePlayer(player.id);
+  store.removePlayer(opponent.id);
 });

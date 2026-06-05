@@ -1356,6 +1356,14 @@
     }
   }
 
+  function finishBackToLobby() {
+    clearOpponentDisconnectedNotice()
+    gameState.currentRoom = null
+    setCurrentGame(null)
+    gs.value = {}
+    router.push('/lobby')
+  }
+
   async function backToLobby() {
     // 确保身份有效
     if (!player.value) {
@@ -1366,15 +1374,13 @@
     if (isZhaJinHuaFoldedOut.value) {
       zhaJinHuaFoldedOut.value = false
       zhaJinHuaFoldedGameType.value = ''
-      gameState.currentRoom = null
-      setCurrentGame(null)
-      router.push('/lobby')
+      finishBackToLobby()
       return
     }
 
     const room = currentRoom.value
     if (!room?.roomId) {
-      router.push('/lobby')
+      finishBackToLobby()
       return
     }
 
@@ -1395,11 +1401,11 @@
       }
       if (res?.requiresConfirmation) {
         socket.emit('room:leave_current', { confirmForfeit: true }, () => {
-          router.push('/lobby')
+          finishBackToLobby()
         })
         return
       }
-      router.push('/lobby')
+      finishBackToLobby()
     })
   }
 

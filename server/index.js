@@ -161,8 +161,8 @@ io.on('connection', (socket) => {
     // 加入大巴房间（用于大巴广播）
     socket.join(`bus:${player.busNumber}`);
 
-    const room = store.getPlayerRoom(player.id);
-    const currentRoom = room && room.status !== 'finished' ? serializeRoom(room, player.id) : null;
+    const room = getActivePlayerRoom(player.id);
+    const currentRoom = room ? serializeRoom(room, player.id) : null;
     if (currentRoom) {
       markSeatConnection(room, player.id, 'online', { intent: 'active', disconnectedAt: null });
       store.saveRoom(room);
@@ -191,8 +191,8 @@ io.on('connection', (socket) => {
     socket.join(`player:${player.id}`);
     socket.join(`bus:${player.busNumber}`);
 
-    const room = store.getPlayerRoom(player.id);
-    const currentRoom = room && room.status !== 'finished' ? serializeRoom(room, player.id) : null;
+    const room = getActivePlayerRoom(player.id);
+    const currentRoom = room ? serializeRoom(room, player.id) : null;
     if (currentRoom) {
       markSeatConnection(room, player.id, 'online', { intent: 'active', disconnectedAt: null });
       store.saveRoom(room);
@@ -623,9 +623,53 @@ io.on('connection', (socket) => {
 });
 
 function getBlockingRoom(playerId) {
+  return getActivePlayerRoom(playerId);
+}
+
+function getActivePlayerRoom(playerId) {
   const room = store.getPlayerRoom(playerId);
   if (!room || room.status === 'finished') return null;
+  if (isRoomGameFinished(room)) {
+    recoverFinishedRoom(room);
+    return null;
+  }
   return room;
+}
+
+function isRoomGameFinished(room) {
+  return Boolean(
+    room?.gameState?.phase === 'finished' ||
+    room?.settlementApplied ||
+    room?.settledAt
+  );
+}
+
+function releaseFinishedRoom(room) {
+  if (!room) return;
+
+  room.status = 'finished';
+  room.finishedAt = room.finishedAt || Date.now();
+  room.players.forEach(pid => {
+    const player = store.getPlayer(pid);
+    if (player?.currentRoom === room.id) {
+      player.currentRoom = null;
+      store.savePlayer(player);
+    }
+  });
+  store.saveRoom(room);
+}
+
+function recoverFinishedRoom(room) {
+  if (!room || room.status === 'finished') return;
+
+  if (room.gameState?.phase === 'finished' && !room.settlementApplied) {
+    handleGameEnd(room);
+    return;
+  }
+
+  releaseFinishedRoom(room);
+  emitRoomUpdate(room);
+  broadcastUpdate();
 }
 
 function emitRoomUpdate(room) {
@@ -1461,7 +1505,14 @@ function startRoomMonitor() {
 
 // ========== 游戏结束处理 ==========
 function handleGameEnd(room) {
-  if (!room || room.status === 'finished' || room.settlementApplied) return;
+  if (!room || room.status === 'finished') return;
+
+  if (room.settlementApplied) {
+    releaseFinishedRoom(room);
+    emitRoomUpdate(room);
+    broadcastUpdate();
+    return;
+  }
 
   const config = getGameConfig(room.gameType);
   const winnerId = room.gameState.finalWinner ?? room.gameState.winner;
@@ -1469,9 +1520,7 @@ function handleGameEnd(room) {
   const pointsBefore = Object.fromEntries(
     room.players.map((pid) => [pid, Number(store.getPlayer(pid)?.points || 0)])
   );
-  room.settlementApplied = true;
-  room.settledAt = Date.now();
-  store.saveRoom(room);
+  try {
 
   // 根据游戏类型采用不同的积分结算规则
   if (room.gameType === 'zha_jin_hua' || room.gameType === 'mahjong') {
@@ -1494,17 +1543,18 @@ function handleGameEnd(room) {
     settleMultiplayer(room, winningPlayers);
   }
 
-  recordBattleHistory(room, config, winningPlayers, pointsBefore);
+    recordBattleHistory(room, config, winningPlayers, pointsBefore);
+    room.settlementApplied = true;
+    room.settledAt = Date.now();
+  } catch (error) {
+    console.error('[settlement]', error);
+    room.settlementFailed = {
+      message: error?.message || 'settlement failed',
+      failedAt: Date.now()
+    };
+  }
 
-  room.status = 'finished';
-  room.players.forEach(pid => {
-    const player = store.getPlayer(pid);
-    if (player?.currentRoom === room.id) {
-      player.currentRoom = null;
-      store.savePlayer(player);
-    }
-  });
-  store.saveRoom(room);
+  releaseFinishedRoom(room);
 
   // 广播结算
   const resultPlayers = room.players.map(pid => {
@@ -1761,12 +1811,47 @@ function recordBattleHistory(room, config, winningPlayers, pointsBefore) {
   });
 }
 
-function broadcastUpdate() {
-  io.emit('server:update', {
+const SERVER_UPDATE_THROTTLE_MS = 500;
+let serverUpdateTimer = null;
+let serverUpdatePending = false;
+
+function buildServerUpdatePayload() {
+  return {
     personal: store.getPersonalLeaderboard(),
     bus: store.getBusLeaderboard(),
     stats: store.getStats()
-  });
+  };
+}
+
+function emitServerUpdate() {
+  io.emit('server:update', buildServerUpdatePayload());
+}
+
+function broadcastUpdate({ immediate = false } = {}) {
+  if (immediate) {
+    if (serverUpdateTimer) {
+      clearTimeout(serverUpdateTimer);
+      serverUpdateTimer = null;
+    }
+    serverUpdatePending = false;
+    emitServerUpdate();
+    return;
+  }
+
+  serverUpdatePending = true;
+  if (serverUpdateTimer) return;
+
+  serverUpdateTimer = setTimeout(() => {
+    serverUpdateTimer = null;
+    if (!serverUpdatePending) return;
+    serverUpdatePending = false;
+    emitServerUpdate();
+  }, SERVER_UPDATE_THROTTLE_MS);
+  serverUpdateTimer.unref?.();
+}
+
+function broadcastUpdateNow() {
+  broadcastUpdate({ immediate: true });
 }
 
 // ========== 房间状态推送 ==========
@@ -1854,7 +1939,9 @@ if (require.main === module) {
 }
 
 module.exports = {
+  getBlockingRoom,
   handleActionTimeout,
+  handleGameEnd,
   maybeStartReadyRoom,
   prepareRoomRematch
 };

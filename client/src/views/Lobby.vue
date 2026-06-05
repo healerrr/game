@@ -103,10 +103,10 @@
   import cardMahjong from '../../img/card_mahjong.png'
   import cardQuickQa from '../../img/card_quick_qa_transparent.png'
   import cardScissorsRockPaper from '../../img/card_scissors_rock_paper.png'
-  import cardReactionRace from '../../img/card_reaction_race.png'
-  import cardDiceRoll from '../../img/card_dice_roll_new.png'
-  import cardGuessDice from '../../img/card_guess_dice.png'
-  import cardBlackjack from '../../img/card_blackjack.png'
+  import cardReactionRace from '../../img/card_reaction_race_525.jpg'
+  import cardDiceRoll from '../../img/card_dice_roll_new_525.jpg'
+  import cardGuessDice from '../../img/card_guess_dice_525.jpg'
+  import cardBlackjack from '../../img/card_blackjack_525.jpg'
 
   const router = useRouter()
   const player = computed(() => getPlayer())

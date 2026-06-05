@@ -376,6 +376,7 @@ async function driveGame(game, players) {
   const actionLog = [];
   let idleTicks = 0;
   let nextProgressAt = startedAt + 30000;
+  let guandanAbandonTriggered = false;
 
   while (Date.now() - startedAt < game.timeoutMs) {
     const snaps = await snapshots(players);
@@ -399,6 +400,13 @@ async function driveGame(game, players) {
     }
 
     const commonState = publicState(snaps, players);
+    if (game.key === 'guandan' && !guandanAbandonTriggered && commonState?.phase === 'play') {
+      guandanAbandonTriggered = true;
+      const response = await emit(players[3], 'room:leave_current', { confirmForfeit: true });
+      players[3].active = false;
+      actionLog.push({ player: players[3].nickname, action: 'abandon', error: response.error || null });
+      console.log(`[INFO] guandan triggered supported abandon path for ${players[3].nickname}: ${JSON.stringify(response)}`);
+    }
     if (Date.now() >= nextProgressAt) {
       console.log(`[PROGRESS] ${game.key} phase=${commonState?.phase || 'n/a'} stage=${commonState?.stage || 'n/a'} current=${commonState?.currentPlayer || 'n/a'} actions=${actionLog.length}`);
       nextProgressAt = Date.now() + 30000;
@@ -431,6 +439,11 @@ async function driveGame(game, players) {
         if (response.error) {
           if (String(response.error).startsWith('emit_timeout:')) {
             console.log(`[WARN] ${game.key} ${item.action.type} timeout for ${item.player.nickname}; polling state and retrying if needed`);
+            await sleep(1000);
+            continue;
+          }
+          if (game.key === 'guandan' && item.action.type === 'next_round' && String(response.error).includes('不在对局')) {
+            console.log(`[WARN] guandan next_round raced with settlement for ${item.player.nickname}; polling final state`);
             await sleep(1000);
             continue;
           }

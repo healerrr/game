@@ -60,7 +60,7 @@
   const router = useRouter()
   const nickname = ref('')
   const busNumber = ref(1)
-  const busCount = ref(4)
+  const busCount = ref(2)
   const stats = ref({ onlinePlayers: 0, totalPlayers: 0 })
   const submitting = ref(false)
   const submitError = ref('')
@@ -232,7 +232,7 @@
   .hero-area {
     width: 100%;
     aspect-ratio: 941 / 750;
-    background: url('/assets/ui-ref/landing.png') center top / 100% auto no-repeat;
+    background: url('/assets/ui-ref/landing.jpg') center top / 100% auto no-repeat;
   }
 
   .entry-card {
@@ -357,7 +357,7 @@
     width: 100%;
     aspect-ratio: 754 / 166;
     border-radius: 22px;
-    background: url('/assets/landing/banner-strip.png') center / cover no-repeat;
+    background: url('/assets/landing/banner-strip.jpg') center / cover no-repeat;
     border: 1px solid rgba(208, 228, 247, 0.96);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
   }
