@@ -79,3 +79,50 @@ test('settled stale rooms do not keep players blocked', () => {
   store.removePlayer(player.id);
   store.removePlayer(opponent.id);
 });
+
+test('missing current room pointer is cleared instead of blocking the player', () => {
+  const player = store.createPlayer(`missing-room-player-${Date.now()}`, 1);
+  player.currentRoom = `missing-room-${Date.now()}`;
+  store.savePlayer(player);
+
+  assert.equal(getBlockingRoom(player.id), null);
+  assert.equal(store.getPlayer(player.id).currentRoom, null);
+
+  store.removePlayer(player.id);
+});
+
+test('finished room status clears stale player currentRoom pointers', () => {
+  const player = store.createPlayer(`finished-room-player-${Date.now()}`, 1);
+  const opponent = store.createPlayer(`finished-room-opponent-${Date.now()}`, 1);
+  const room = store.createRoom('gomoku', [player, opponent], { status: 'playing' });
+
+  room.status = 'finished';
+  room.gameState = { phase: 'finished', finalWinner: player.id, winningPlayers: [player.id] };
+  store.saveRoom(room);
+
+  assert.equal(getBlockingRoom(player.id), null);
+  assert.equal(store.getPlayer(player.id).currentRoom, null);
+  assert.equal(store.getPlayer(opponent.id).currentRoom, null);
+
+  store.removeRoom(room.id);
+  store.removePlayer(player.id);
+  store.removePlayer(opponent.id);
+});
+
+test('idle ready rooms expire instead of blocking new games', () => {
+  const player = store.createPlayer(`idle-ready-player-${Date.now()}`, 1);
+  const room = store.createRoom('reaction_race', [player], {
+    mode: 'quick',
+    visibility: 'public'
+  });
+
+  room.updatedAt = Date.now() - (11 * 60 * 1000);
+  room.createdAt = room.updatedAt;
+  store.saveRoom(room);
+
+  assert.equal(getBlockingRoom(player.id), null);
+  assert.equal(store.getPlayer(player.id).currentRoom, null);
+  assert.equal(store.getRoom(room.id), undefined);
+
+  store.removePlayer(player.id);
+});

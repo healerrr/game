@@ -108,6 +108,7 @@ function readPositiveIntEnv(name, fallback) {
 const READY_TIMEOUT_MS = readPositiveIntEnv('READY_TIMEOUT_MS', 10000);
 const DISCONNECT_GRACE_MS = readPositiveIntEnv('DISCONNECT_GRACE_MS', 45000);
 const ACTION_TIMEOUT_FALLBACK_MS = readPositiveIntEnv('ACTION_TIMEOUT_FALLBACK_MS', 30000);
+const READY_ROOM_IDLE_TIMEOUT_MS = readPositiveIntEnv('READY_ROOM_IDLE_TIMEOUT_MS', 10 * 60 * 1000);
 
 // 获取活跃房间列表
 app.get('/api/rooms/active', (req, res) => {
@@ -286,9 +287,37 @@ io.on('connection', (socket) => {
       return;
     }
 
+    if (room.status === 'finished' || isRoomGameFinished(room)) {
+      recoverFinishedRoom(room);
+      if (typeof callback === 'function') callback({ error: '房间已结束，请重新开始' });
+      return;
+    }
+
+    const blockingRoom = getBlockingRoom(currentPlayer.id);
+    if (blockingRoom && blockingRoom.id !== room.id) {
+      if (typeof callback === 'function') {
+        callback({ error: '你仍在未结束房间中，暂时不能加入其他房间', currentRoom: serializeRoom(blockingRoom, currentPlayer.id) });
+      }
+      return;
+    }
+
     // 确保玩家在房间列表中
     if (!room.players.includes(currentPlayer.id)) {
+      const config = getGameConfig(room.gameType);
+      if (room.status !== 'readying') {
+        if (typeof callback === 'function') callback({ error: '房间已开始' });
+        return;
+      }
+      if (config && room.players.length >= config.maxPlayers) {
+        if (typeof callback === 'function') callback({ error: '房间已满' });
+        return;
+      }
       room.players.push(currentPlayer.id);
+    }
+
+    if (currentPlayer.currentRoom !== room.id) {
+      currentPlayer.currentRoom = room.id;
+      store.savePlayer(currentPlayer);
     }
 
     // 进入房间默认准备
@@ -657,13 +686,44 @@ function getBlockingRoom(playerId) {
 }
 
 function getActivePlayerRoom(playerId) {
-  const room = store.getPlayerRoom(playerId);
-  if (!room || room.status === 'finished') return null;
+  const player = store.getPlayer(playerId);
+  if (!player?.currentRoom) return null;
+
+  const room = store.getRoom(player.currentRoom);
+  if (!room) {
+    clearPlayerCurrentRoom(player);
+    return null;
+  }
+
+  if (!room.players?.includes(playerId)) {
+    clearPlayerCurrentRoom(player);
+    return null;
+  }
+
+  if (room.status === 'finished') {
+    releaseFinishedRoom(room);
+    return null;
+  }
+
   if (isRoomGameFinished(room)) {
     recoverFinishedRoom(room);
     return null;
   }
+
+  if (isStaleReadyRoom(room)) {
+    expireStaleReadyRoom(room);
+    return null;
+  }
+
   return room;
+}
+
+function clearPlayerCurrentRoom(playerOrId) {
+  const player = typeof playerOrId === 'string' ? store.getPlayer(playerOrId) : playerOrId;
+  if (!player?.currentRoom) return;
+
+  player.currentRoom = null;
+  store.savePlayer(player);
 }
 
 function isRoomGameFinished(room) {
@@ -672,6 +732,34 @@ function isRoomGameFinished(room) {
     room?.settlementApplied ||
     room?.settledAt
   );
+}
+
+function isStaleReadyRoom(room) {
+  if (!room || room.status !== 'readying' || room.gameState) return false;
+
+  const updatedAt = Number(room.updatedAt || room.createdAt || 0);
+  if (!updatedAt || Date.now() - updatedAt < READY_ROOM_IDLE_TIMEOUT_MS) return false;
+
+  const activeHumanPlayers = (room.players || []).filter(pid => {
+    const player = store.getPlayer(pid);
+    return player && !player.isBot && player.online !== false;
+  });
+
+  return activeHumanPlayers.length <= 1;
+}
+
+function expireStaleReadyRoom(room) {
+  if (!room) return;
+
+  room.players.forEach(pid => {
+    io.to(`player:${pid}`).emit('room:kicked', {
+      roomId: room.id,
+      reason: 'ready_room_idle_timeout',
+      message: '房间长时间未开始，已返回大厅'
+    });
+  });
+  store.removeRoom(room.id);
+  broadcastUpdate();
 }
 
 function releaseFinishedRoom(room) {

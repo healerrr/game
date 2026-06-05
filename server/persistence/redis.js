@@ -11,6 +11,15 @@ let socketSubClient = null;
 let stateSubClient = null;
 let instanceId = null;
 
+function createRedisClient() {
+  return createClient({
+    url: buildRedisUrl(),
+    socket: {
+      reconnectStrategy: false
+    }
+  });
+}
+
 function hasRedisConfig() {
   return Boolean(process.env.REDIS_URL || process.env.REDIS_HOST);
 }
@@ -41,7 +50,7 @@ async function initRedis(id, onStateEvent) {
 
   instanceId = id;
 
-  commandClient = createClient({ url: buildRedisUrl() });
+  commandClient = createRedisClient();
   socketPubClient = commandClient.duplicate();
   socketSubClient = commandClient.duplicate();
   stateSubClient = commandClient.duplicate();
@@ -51,22 +60,28 @@ async function initRedis(id, onStateEvent) {
   attachErrorLogger(socketSubClient, 'socket-sub');
   attachErrorLogger(stateSubClient, 'state-sub');
 
-  await Promise.all([
-    commandClient.connect(),
-    socketPubClient.connect(),
-    socketSubClient.connect(),
-    stateSubClient.connect()
-  ]);
+  try {
+    await Promise.all([
+      commandClient.connect(),
+      socketPubClient.connect(),
+      socketSubClient.connect(),
+      stateSubClient.connect()
+    ]);
 
-  await stateSubClient.subscribe(STATE_CHANNEL, (message) => {
-    try {
-      const event = JSON.parse(message);
-      if (!event || event.source === instanceId) return;
-      onStateEvent(event);
-    } catch (error) {
-      console.error(`[redis:state-sub] Failed to parse state event: ${error.message}`);
-    }
-  });
+    await stateSubClient.subscribe(STATE_CHANNEL, (message) => {
+      try {
+        const event = JSON.parse(message);
+        if (!event || event.source === instanceId) return;
+        onStateEvent(event);
+      } catch (error) {
+        console.error(`[redis:state-sub] Failed to parse state event: ${error.message}`);
+      }
+    });
+  } catch (error) {
+    console.error(`[redis] unavailable, falling back to in-memory transient state: ${error.message}`);
+    await closeRedis();
+    return false;
+  }
 
   return true;
 }

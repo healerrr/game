@@ -433,7 +433,13 @@ class Store {
   getPlayerRoom(playerId) {
     const player = this.players.get(playerId);
     if (!player || !player.currentRoom) return null;
-    return this.rooms.get(player.currentRoom);
+    const room = this.rooms.get(player.currentRoom);
+    if (!room) {
+      player.currentRoom = null;
+      this.savePlayer(player);
+      return null;
+    }
+    return room;
   }
 
   getRoomsForPlayer(playerId) {

@@ -74,7 +74,7 @@ test('剪刀石头布三局两胜先到2分才结算', () => {
   assert.equal(state.phase, 'reveal');
   assert.equal(state.scores.p1, 1);
   assert.equal(state.finalWinner, undefined);
-  assert.equal(state.timer, 1);
+  assert.equal(state.timer, 3);
 
   engine.nextRound(state);
   engine.update(state, { type: 'choose', choice: 'paper' }, 'p1');
