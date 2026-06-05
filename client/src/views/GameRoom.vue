@@ -654,6 +654,7 @@
   let diceRollPreviewTimer = null
   let guessDiceAnimationTimer = null
   let guessDicePreviewTimer = null
+  let rpsAutoAdvanceTimer = null
 
   const gameType = computed(() => gameState.currentRoom?.gameType)
   const roomPlayers = computed(() => gameState.currentRoom?.players || [])
@@ -1531,6 +1532,7 @@
     clearDiceRollAnimation()
     clearGuessDiceAnimation()
     clearOpponentDisconnectedNotice()
+    if (rpsAutoAdvanceTimer) clearTimeout(rpsAutoAdvanceTimer)
     if (stateHandler) window.removeEventListener('game:state', stateHandler)
     if (resultHandler) window.removeEventListener('game:result', resultHandler)
     if (dcHandler) window.removeEventListener('game:opponent_disconnected', dcHandler)
@@ -1581,6 +1583,20 @@
     }
   })
 
+  // rps reveal 阶段：2.5 秒后自动推进到下一轮/结算
+  watch(() => [gameType.value, gs.value?.phase], ([type, phase]) => {
+    if (rpsAutoAdvanceTimer) {
+      clearTimeout(rpsAutoAdvanceTimer)
+      rpsAutoAdvanceTimer = null
+    }
+    if (type === 'rock_paper_scissors' && phase === 'reveal') {
+      rpsAutoAdvanceTimer = setTimeout(() => {
+        rpsAutoAdvanceTimer = null
+        socket.emit('game:action', { action: { type: 'next_round' } })
+      }, 2500)
+    }
+  })
+
   watch(() => [gameType.value, gs.value?.phase, gs.value?.dice, currentRoom.value?.roomId || currentRoom.value?.id], ([type, phase, diceValue, activeRoomId]) => {
     if (type !== 'guess_dice') {
       lastGuessDiceResultKey.value = ''
@@ -1611,6 +1627,10 @@
     zhaJinHuaFoldedOut.value = false
     zhaJinHuaFoldedGameType.value = ''
     lastGuessDiceResultKey.value = ''
+    if (rpsAutoAdvanceTimer) {
+      clearTimeout(rpsAutoAdvanceTimer)
+      rpsAutoAdvanceTimer = null
+    }
     clearDiceRollAnimation()
     clearGuessDiceAnimation()
   })

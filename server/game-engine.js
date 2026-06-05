@@ -62,7 +62,7 @@ class RockPaperScissors {
     };
 
     state.phase = 'reveal';
-    state.timer = 1;
+    state.timer = 3;
     state.timerStarted = Date.now();
     return state;
   }
