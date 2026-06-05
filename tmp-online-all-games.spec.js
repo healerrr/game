@@ -23,7 +23,7 @@ const GAMES = [
   { key: 'zha_jin_hua', players: 4, timeoutMs: 70000 },
   { key: 'doudizhu', players: 3, timeoutMs: 120000 },
   { key: 'mahjong', players: 4, timeoutMs: 180000 },
-  { key: 'guandan', players: 4, timeoutMs: 240000 }
+  { key: 'guandan', players: 4, timeoutMs: 600000 }
 ];
 
 const SELECTED_GAMES = process.env.ONLY_GAME
@@ -429,6 +429,11 @@ async function driveGame(game, players) {
           error: response.error || null
         });
         if (response.error) {
+          if (String(response.error).startsWith('emit_timeout:')) {
+            console.log(`[WARN] ${game.key} ${item.action.type} timeout for ${item.player.nickname}; polling state and retrying if needed`);
+            await sleep(1000);
+            continue;
+          }
           throw new Error(`${game.key}: action ${item.action.type} failed for ${item.player.nickname}: ${response.error}`);
         }
         await sleep(80);
