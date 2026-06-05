@@ -144,7 +144,7 @@ async function createPlayer(browser, runId, gameKey, index) {
           if (settled) return;
           settled = true;
           resolve({ error: `emit_timeout:${event}` });
-        }, 10000);
+        }, 30000);
         socket.emit(event, payload, (response = {}) => {
           if (settled) return;
           settled = true;

@@ -578,6 +578,7 @@
     border: none;
     background: transparent;
     text-align: left;
+    padding-bottom: 24px;
   }
 
   .game-tile:disabled {
@@ -589,7 +590,6 @@
     border-radius: 20px;
     overflow: hidden;
     aspect-ratio: 1 / 1.42;
-    padding-bottom: 24px;
   }
 
   .game-tile__image {
