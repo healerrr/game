@@ -50,7 +50,7 @@ app.get('/api/games', (req, res) => {
 // 获取排行榜
 app.get('/api/leaderboard', (req, res) => {
   res.json({
-    personal: store.getPersonalLeaderboard(),
+    personal: decoratePersonalLeaderboard(store.getPersonalLeaderboard()),
     bus: store.getBusLeaderboard(),
     stats: store.getStats()
   });
@@ -434,14 +434,19 @@ io.on('connection', (socket) => {
     const room = payload?.roomId ? store.getRoom(payload.roomId) : null;
     const players = Array.from(store.players.values())
       .filter(p => !p.isBot && p.id !== currentPlayer.id)
-      .map(p => ({
-        id: p.id,
-        nickname: p.nickname,
-        busNumber: p.busNumber,
-        online: Boolean(p.online),
-        busy: Boolean(getBlockingRoom(p.id)),
-        invited: Boolean(room?.invites?.includes(p.id))
-      }));
+      .map(p => {
+        const blockingRoom = getBlockingRoom(p.id);
+        return {
+          id: p.id,
+          nickname: p.nickname,
+          busNumber: p.busNumber,
+          online: Boolean(p.online),
+          busy: Boolean(blockingRoom),
+          busyStatus: blockingRoom?.status || null,
+          busyText: getPlayerBusyText(blockingRoom),
+          invited: Boolean(room?.invites?.includes(p.id))
+        };
+      });
     callback({ players });
   });
 
@@ -683,6 +688,42 @@ io.on('connection', (socket) => {
 
 function getBlockingRoom(playerId) {
   return getActivePlayerRoom(playerId);
+}
+
+function getPlayerBusyText(room) {
+  if (!room) return '';
+  if (room.status === 'playing') return '游戏中';
+  if (room.status === 'readying' || room.status === 'waiting') return '候场中';
+  return '忙碌';
+}
+
+function getLeaderboardPlayerStatus(playerId) {
+  const player = store.getPlayer(playerId);
+  if (!player?.online) {
+    return { playerStatus: 'offline', playerStatusText: '离线' };
+  }
+
+  const room = getActivePlayerRoom(playerId);
+  if (!room) {
+    return { playerStatus: 'idle', playerStatusText: '空闲' };
+  }
+
+  if (room.status === 'playing') {
+    return { playerStatus: 'playing', playerStatusText: '游戏中' };
+  }
+
+  if (room.status === 'readying' || room.status === 'waiting') {
+    return { playerStatus: 'readying', playerStatusText: '候场中' };
+  }
+
+  return { playerStatus: 'busy', playerStatusText: '忙碌' };
+}
+
+function decoratePersonalLeaderboard(personal = []) {
+  return personal.map(item => ({
+    ...item,
+    ...getLeaderboardPlayerStatus(item.id)
+  }));
 }
 
 function getActivePlayerRoom(playerId) {
@@ -1880,7 +1921,7 @@ let serverUpdatePending = false;
 
 function buildServerUpdatePayload() {
   return {
-    personal: store.getPersonalLeaderboard(),
+    personal: decoratePersonalLeaderboard(store.getPersonalLeaderboard()),
     bus: store.getBusLeaderboard(),
     stats: store.getStats()
   };

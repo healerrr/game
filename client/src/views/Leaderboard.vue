@@ -32,7 +32,12 @@
         </div>
         <div class="rank-info">
           <span class="rank-name">{{ item.nickname }}</span>
-          <span class="rank-bus">{{ item.busNumber }}号车</span>
+          <div class="rank-meta">
+            <span class="rank-bus">{{ item.busNumber }}号车</span>
+            <span class="rank-status" :class="statusClass(item.playerStatus)">
+              {{ item.playerStatusText || '空闲' }}
+            </span>
+          </div>
         </div>
         <div class="rank-stats">
           <span class="rank-points">{{ item.points }}分</span>
@@ -97,6 +102,10 @@ const stats = computed(() => gameState.stats)
 function rankClass(rank) {
   if (rank <= 3) return 'top3'
   return ''
+}
+
+function statusClass(status) {
+  return `status-${status || 'idle'}`
 }
 </script>
 
@@ -202,6 +211,46 @@ function rankClass(rank) {
 .rank-bus {
   font-size: 12px;
   color: var(--text-muted);
+}
+
+.rank-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 2px;
+}
+
+.rank-status {
+  min-height: 20px;
+  padding: 0 7px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.rank-status.status-playing {
+  background: #ffe9e9;
+  color: #c83c3c;
+}
+
+.rank-status.status-readying,
+.rank-status.status-waiting {
+  background: #fff7db;
+  color: #a36700;
+}
+
+.rank-status.status-idle {
+  background: #e8fbf1;
+  color: #168a4c;
+}
+
+.rank-status.status-offline {
+  background: #edf3fb;
+  color: #6b82ac;
 }
 
 .rank-stats {
@@ -402,6 +451,46 @@ function rankClass(rank) {
   font-size: 13px;
   color: #6683ad;
   font-weight: 700;
+}
+
+.rank-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 3px;
+}
+
+.rank-status {
+  min-height: 22px;
+  padding: 0 8px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.rank-status.status-playing {
+  background: #ffe9e9;
+  color: #c83c3c;
+}
+
+.rank-status.status-readying,
+.rank-status.status-waiting {
+  background: #fff7db;
+  color: #a36700;
+}
+
+.rank-status.status-idle {
+  background: #e8fbf1;
+  color: #168a4c;
+}
+
+.rank-status.status-offline {
+  background: #edf3fb;
+  color: #6b82ac;
 }
 
 .rank-points {

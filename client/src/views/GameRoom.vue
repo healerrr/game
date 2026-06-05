@@ -1257,17 +1257,20 @@
   }
 
   function inviteCandidatePresenceText(candidate) {
-    if (candidate.busy) return '忙碌'
+    if (candidate.busy) return candidate.busyText || '忙碌'
     return candidate.online ? '在线' : '离线'
   }
 
   function inviteCandidatePresenceClass(candidate) {
+    if (candidate.busyStatus === 'playing') return 'busy-playing'
+    if (candidate.busyStatus === 'readying' || candidate.busyStatus === 'waiting') return 'busy-ready'
     if (candidate.busy) return 'busy'
     return candidate.online ? 'online' : 'offline'
   }
 
   function inviteCandidateActionText(candidate) {
     if (candidate.invited) return '已邀请'
+    if (candidate.busy) return candidate.busyText || '忙碌'
     return '邀请'
   }
 
@@ -2721,6 +2724,16 @@
   .invite-presence.busy {
     background: #fff2df;
     color: #b96b09;
+  }
+
+  .invite-presence.busy-ready {
+    background: #fff7db;
+    color: #a36700;
+  }
+
+  .invite-presence.busy-playing {
+    background: #ffe9e9;
+    color: #c83c3c;
   }
 
   .invite-action {
