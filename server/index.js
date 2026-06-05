@@ -809,6 +809,15 @@ function releaseFinishedRoom(room) {
   room.status = 'finished';
   room.finishedAt = room.finishedAt || Date.now();
   store.saveRoom(room);
+
+  // 清理所有玩家对已结算房间的引用，避免 blocking 卡住
+  (room.players || []).forEach(pid => {
+    const p = store.getPlayer(pid);
+    if (p && p.currentRoom === room.id) {
+      p.currentRoom = null;
+      store.savePlayer(p);
+    }
+  });
 }
 
 function recoverFinishedRoom(room) {
@@ -1758,10 +1767,11 @@ function settleGuandan(room, winningPlayers) {
   const winnerTeam = room.gameState?.settlement?.winnerTeam
     || Object.keys(teams).find(key => teams[key]?.some(pid => winningPlayers.includes(pid)));
   const loserTeam = Object.keys(teams).find(key => key !== winnerTeam);
-  const winnerLevel = room.gameState?.teamLevels?.[winnerTeam] || room.gameState?.settlement?.nextLevel || '1';
+  const settlement = room.gameState?.settlement;
+  const winnerLevel = settlement?.currentLevel || room.gameState?.teamLevels?.[winnerTeam] || '2';
   const loserLevel = room.gameState?.teamLevels?.[loserTeam] || '2';
-  const levelDiff = Number.isFinite(Number(room.gameState?.settlement?.levelDiff))
-    ? Number(room.gameState.settlement.levelDiff)
+  const levelDiff = Number.isFinite(Number(settlement?.levelDiff))
+    ? Number(settlement.levelDiff)
     : Math.max(0, getLevelScore(winnerLevel) - getLevelScore(loserLevel));
   const levelBonus = Math.max(0, levelDiff) * 10;
   const payoutDelta = entryFee + levelBonus;
