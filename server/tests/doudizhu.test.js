@@ -30,8 +30,8 @@ test('斗地主识别王炸和普通炸弹', () => {
   assert.equal(comparePattern(rocket, bomb) > 0, true);
 });
 
-test('斗地主门票为50分', () => {
-  assert.equal(getGameConfig('doudizhu').entryFee, 50);
+test('斗地主门票为20分', () => {
+  assert.equal(getGameConfig('doudizhu').entryFee, 20);
 });
 
 test('斗地主识别三带一、顺子和飞机带对', () => {

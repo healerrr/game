@@ -1846,7 +1846,7 @@ const GAME_CONFIG = {
   },
   doudizhu: {
     name: '斗地主',
-    entryFee: 50,
+    entryFee: 20,
     category: 'card',
     minPlayers: 3,
     maxPlayers: 3,
