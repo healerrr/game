@@ -1063,9 +1063,9 @@ watch(() => props.gs?.currentPlayer, () => {
 }
 
 .hand-cards {
-  --card-gap: clamp(4px, 0.65vw, 7px);
-  --card-w: clamp(42px, 4.2vw, 52px);
-  --card-h: clamp(60px, 5.97vw, 74px);
+  --card-gap: clamp(2px, 0.35vw, 3px);
+  --card-w: clamp(28px, 2.8vw, 38px);
+  --card-h: clamp(40px, 3.98vw, 54px);
   min-width: 0;
   min-height: 0;
   display: flex;
@@ -1293,9 +1293,9 @@ watch(() => props.gs?.currentPlayer, () => {
   }
 
   .hand-cards {
-    --card-gap: clamp(3px, 0.5vw, 6px);
-    --card-w: clamp(37px, 3.8vw, 46px);
-    --card-h: clamp(53px, 5.4vw, 65px);
+    --card-gap: clamp(1.5px, 0.3vw, 3px);
+    --card-w: clamp(26px, 2.6vw, 33px);
+    --card-h: clamp(37px, 3.69vw, 47px);
     padding-top: 10px;
     padding-right: 82px;
     padding-left: 6px;

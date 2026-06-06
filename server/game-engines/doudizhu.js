@@ -1,7 +1,7 @@
 const { createStandardDeck, shuffle } = require('./shared/cards');
 
 const SEAT_ORDER = ['south', 'east', 'west'];
-const BASE_SCORE = 50;
+const BASE_SCORE = 20;
 const RANK_VALUES = {
   '3': 3,
   '4': 4,
@@ -273,7 +273,10 @@ function syncHandCounts(state) {
 }
 
 function getDoudizhuScoreUnit(state, baseScore = BASE_SCORE) {
-  return Number(baseScore || BASE_SCORE);
+  const base = Number(baseScore || BASE_SCORE);
+  const bidMultiplier = Math.max(1, Number(state?.currentBid || 0));
+  const bombCount = Math.max(0, Number(state?.bombCount || 0));
+  return base * bidMultiplier * (bombCount > 0 ? 2 : 1);
 }
 
 function recordBombIfNeeded(state, pattern) {

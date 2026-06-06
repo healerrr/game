@@ -116,7 +116,7 @@ test('斗地主抢地主成功后地主获得三张底牌并先出', () => {
   assert.equal(state.hands.p1.length, 17);
   assert.equal(state.hands.p3.length, 17);
   assert.equal(state.currentPlayer, 'p2');
-  assert.equal(state.scoreUnit, 50);
+  assert.equal(state.scoreUnit, 40); // 底分20 × 叫2分
 });
 
 test('斗地主叫三分立即成为地主', () => {
@@ -129,7 +129,7 @@ test('斗地主叫三分立即成为地主', () => {
   assert.equal(state.landlord, 'p1');
   assert.equal(state.hands.p1.length, 20);
   assert.equal(state.currentPlayer, 'p1');
-  assert.equal(state.scoreUnit, 50);
+  assert.equal(state.scoreUnit, 60); // 底分20 × 叫3分
 });
 
 test('斗地主三家不叫时默认第一个玩家当地主', () => {
@@ -148,14 +148,11 @@ test('斗地主三家不叫时默认第一个玩家当地主', () => {
   assert.equal(state.hands.p2.length, 17);
   assert.equal(state.hands.p3.length, 17);
   assert.equal(state.currentPlayer, 'p1');
-  assert.equal(state.scoreUnit, 50);
-});
-
-test('doudizhu bid score controls settlement unit', () => {
-  assert.equal(getDoudizhuScoreUnit({ currentBid: 1, bombCount: 0 }, 50), 50);
-  assert.equal(getDoudizhuScoreUnit({ currentBid: 2, bombCount: 0 }, 50), 100);
-  assert.equal(getDoudizhuScoreUnit({ currentBid: 3, bombCount: 0 }, 50), 150);
-  assert.equal(getDoudizhuScoreUnit({ currentBid: 2, bombCount: 1 }, 50), 200);
+  assert.equal(state.scoreUnit, 20);
+  assert.equal(getDoudizhuScoreUnit({ currentBid: 1, bombCount: 0 }, 20), 20);
+  assert.equal(getDoudizhuScoreUnit({ currentBid: 2, bombCount: 0 }, 20), 40);
+  assert.equal(getDoudizhuScoreUnit({ currentBid: 3, bombCount: 0 }, 20), 60);
+  assert.equal(getDoudizhuScoreUnit({ currentBid: 2, bombCount: 1 }, 20), 80);
 });
 
 test('斗地主地主先出完时只有地主获胜', () => {
@@ -205,13 +202,13 @@ test('斗地主出现炸弹或王炸后结算底分固定变为100', () => {
   state.lastPattern = null;
   state.finishedOrder = [];
   state.bombCount = 0;
-  state.scoreUnit = 50;
+  state.scoreUnit = 20;
 
   engine.update(state, { type: 'play', cards: state.hands.p1.slice(0, 4) }, 'p1');
   engine.update(state, { type: 'play', cards: state.hands.p2.slice(0, 4) }, 'p2');
   engine.update(state, { type: 'play', cards: state.hands.p3.slice(0, 2) }, 'p3');
 
   assert.equal(state.bombCount, 3);
-  assert.equal(state.scoreUnit, 50);
-  assert.equal(getDoudizhuScoreUnit(state, 50), 50);
+  assert.equal(state.scoreUnit, 40);
+  assert.equal(getDoudizhuScoreUnit(state, 20), 40);
 });
