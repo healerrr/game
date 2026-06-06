@@ -402,7 +402,13 @@ io.on('connection', (socket) => {
 
   socket.on('game:forfeit', (payload = {}, callback) => {
     if (!currentPlayer) return callback?.({ error: '请先注册' });
-    const room = store.getPlayerRoom(currentPlayer.id);
+    let room = store.getPlayerRoom(currentPlayer.id);
+    if (!room && currentPlayer.currentRoom) {
+      const staleRoom = store.getRoom(currentPlayer.currentRoom);
+      if (staleRoom && (staleRoom.status === 'playing' || staleRoom.status === 'finished')) {
+        room = staleRoom;
+      }
+    }
     if (!room) return callback?.({ error: '你不在对局中' });
     if (room.status !== 'playing') return callback?.({ error: '当前对局尚未开始' });
 
@@ -575,6 +581,17 @@ io.on('connection', (socket) => {
     if (!action?.type) return callback?.({ error: '操作无效' });
 
     let room = store.getPlayerRoom(currentPlayer.id);
+    if (!room && currentPlayer.currentRoom) {
+      const staleRoom = store.getRoom(currentPlayer.currentRoom);
+      if (staleRoom && staleRoom.status === 'playing' && staleRoom.gameState?.phase !== 'finished') {
+        staleRoom.players = staleRoom.players || [];
+        if (!staleRoom.players.includes(currentPlayer.id)) staleRoom.players.push(currentPlayer.id);
+        currentPlayer.currentRoom = staleRoom.id;
+        store.savePlayer(currentPlayer);
+        store.saveRoom(staleRoom);
+        room = staleRoom;
+      }
+    }
     if (!room) return callback?.({ error: '你不在对局中' });
 
     const lock = await store.acquireLock(`room:${room.id}`, 3000);
