@@ -273,10 +273,7 @@ function syncHandCounts(state) {
 }
 
 function getDoudizhuScoreUnit(state, baseScore = BASE_SCORE) {
-  const base = Number(baseScore || BASE_SCORE);
-  const bidMultiplier = Math.max(1, Number(state?.currentBid || 0));
-  const bombCount = Math.max(0, Number(state?.bombCount || 0));
-  return base * bidMultiplier * (bombCount > 0 ? 2 : 1);
+  return Number(baseScore || BASE_SCORE);
 }
 
 function recordBombIfNeeded(state, pattern) {

@@ -116,7 +116,7 @@ test('斗地主抢地主成功后地主获得三张底牌并先出', () => {
   assert.equal(state.hands.p1.length, 17);
   assert.equal(state.hands.p3.length, 17);
   assert.equal(state.currentPlayer, 'p2');
-  assert.equal(state.scoreUnit, 100);
+  assert.equal(state.scoreUnit, 50);
 });
 
 test('斗地主叫三分立即成为地主', () => {
@@ -129,7 +129,7 @@ test('斗地主叫三分立即成为地主', () => {
   assert.equal(state.landlord, 'p1');
   assert.equal(state.hands.p1.length, 20);
   assert.equal(state.currentPlayer, 'p1');
-  assert.equal(state.scoreUnit, 150);
+  assert.equal(state.scoreUnit, 50);
 });
 
 test('斗地主三家不叫时默认第一个玩家当地主', () => {
@@ -212,6 +212,6 @@ test('斗地主出现炸弹或王炸后结算底分固定变为100', () => {
   engine.update(state, { type: 'play', cards: state.hands.p3.slice(0, 2) }, 'p3');
 
   assert.equal(state.bombCount, 3);
-  assert.equal(state.scoreUnit, 100);
-  assert.equal(getDoudizhuScoreUnit(state, 50), 100);
+  assert.equal(state.scoreUnit, 50);
+  assert.equal(getDoudizhuScoreUnit(state, 50), 50);
 });
