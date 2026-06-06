@@ -146,8 +146,8 @@ const handDrag = {
 // --- Constants ---
 const SEAT_ORDER = ['south', 'east', 'north', 'west']
 const RANK_VALUES = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14, 'SJ': 16, 'BJ': 17 }
-const HAND_CARD_BASE_H = 60
-const HAND_STACK_STEP = 14
+const HAND_CARD_BASE_H = 50
+const HAND_STACK_STEP = 10
 const SUIT_ORDER = { diamond: 0, club: 1, heart: 2, spade: 3, joker: 4 }
 const SMART_GROUP_WEIGHT = {
   rocket: 900,
