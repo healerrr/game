@@ -671,6 +671,26 @@ io.on('connection', (socket) => {
       // 如果在房间中，通知其余玩家
       const room = store.getPlayerRoom(latestPlayer.id);
       if (room) {
+        // readying 房间：离线玩家直接踢出，空房间销毁
+        if (room.status === 'readying') {
+          store.removePlayerFromRoom(room.id, latestPlayer.id);
+          const remainingPlayers = room.players.filter(pid => pid !== latestPlayer.id);
+          if (remainingPlayers.length === 0) {
+            store.removeRoom(room.id);
+          } else {
+            remainingPlayers.forEach(pid => {
+              io.to(`player:${pid}`).emit('room:player_left', {
+                playerId: latestPlayer.id,
+                nickname: latestPlayer.nickname,
+                reason: 'disconnected'
+              });
+            });
+            emitRoomUpdate(room);
+          }
+          broadcastUpdate();
+          return;
+        }
+
         markSeatConnection(room, latestPlayer.id, 'offline', { disconnectedAt: Date.now() });
         store.saveRoom(room);
         emitRoomUpdate(room);
