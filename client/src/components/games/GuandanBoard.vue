@@ -146,8 +146,8 @@ const handDrag = {
 // --- Constants ---
 const SEAT_ORDER = ['south', 'east', 'north', 'west']
 const RANK_VALUES = { '2': 2, '3': 3, '4': 4, '5': 5, '6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14, 'SJ': 16, 'BJ': 17 }
-const HAND_CARD_BASE_H = 50
-const HAND_STACK_STEP = 10
+const HAND_CARD_BASE_H = 42
+const HAND_STACK_STEP = 8
 const SUIT_ORDER = { diamond: 0, club: 1, heart: 2, spade: 3, joker: 4 }
 const SMART_GROUP_WEIGHT = {
   rocket: 900,
@@ -578,7 +578,7 @@ function buildSmartArrangeGroups(hand, level) {
   while ((found = findPureBomb(remaining, level))) takeGroup('bomb', found)
   while ((found = findWildBomb(remaining, level))) takeGroup('bomb', found)
   while ((found = findRepeatedSequence(remaining, level, 3, 2))) takeGroup('steel', found)
-  while ((found = findRepeatedSequence(remaining, level, 2, 3))) takeGroup('pair_straight', found)
+  while ((found = findRepeatedSequence(remaining, level, 2, 3, 6))) takeGroup('pair_straight', found)
   while ((found = findRepeatedSequence(remaining, level, 1, 5))) takeGroup('straight', found)
   while ((found = findSamePowerCards(remaining, level, 3))) takeGroup('triple', found)
   while ((found = findSamePowerCards(remaining, level, 2))) takeGroup('pair', found)
@@ -691,7 +691,7 @@ function findWildBomb(cards, level) {
   return [...entry.cards, ...wilds.slice(0, 4 - entry.cards.length)]
 }
 
-function findRepeatedSequence(cards, level, copies, minRun) {
+function findRepeatedSequence(cards, level, copies, minRun, maxRun) {
   const byPower = new Map(
     rankGroupEntries(cards, level)
       .filter(entry => entry.power <= 14 && entry.cards.length >= copies)
@@ -710,12 +710,15 @@ function findRepeatedSequence(cards, level, copies, minRun) {
   })
   if (run.length >= minRun) runs.push(run)
 
-  if (!runs.length) return null
-  runs.sort((a, b) => {
+  // 按 maxRun 截断
+  const clamped = runs.map(run => maxRun && run.length > maxRun ? run.slice(0, maxRun) : run).filter(r => r.length >= minRun)
+
+  if (!clamped.length) return null
+  clamped.sort((a, b) => {
     if (a.length !== b.length) return b.length - a.length
     return b[b.length - 1] - a[a.length - 1]
   })
-  return runs[0].flatMap(power => byPower.get(power))
+  return clamped[0].flatMap(power => byPower.get(power))
 }
 
 function findSamePowerCards(cards, level, copies) {
